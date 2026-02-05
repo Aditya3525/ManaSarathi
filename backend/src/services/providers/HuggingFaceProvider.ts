@@ -1,18 +1,20 @@
+import { HfInference } from "@huggingface/inference";
 import { BaseAIProvider } from './BaseAIProvider';
 import { AIMessage, AIResponse, AIConfig, ConversationContext, AIProviderConfig } from '../../types/ai';
 
 export class HuggingFaceProvider extends BaseAIProvider {
-  private apiKey: string;
-  private baseUrl: string = 'https://api-inference.huggingface.co/models';
-  private model: string = 'Guilherme34/Psychologist-3b';
+  private hf: HfInference;
+  private model: string = 'meta-llama/Llama-3.2-1B-Instruct';
 
   constructor(config: AIProviderConfig) {
     super('huggingface', config);
-    this.apiKey = this.getCurrentApiKey() || '';
+    const apiKey = this.getCurrentApiKey() || '';
     
-    if (!this.apiKey) {
+    if (!apiKey) {
       throw new Error('HuggingFace API key is required');
     }
+
+    this.hf = new HfInference(apiKey);
   }
 
   async generateResponse(
@@ -25,63 +27,18 @@ export class HuggingFaceProvider extends BaseAIProvider {
     try {
       console.log(`🤗 HuggingFace: Generating response with ${this.model}`);
       
-      // Format the conversation for the psychology model
-      const prompt = this.formatPromptForPsychologist(messages, context);
+      // Format messages for chat completion
+      const chatMessages = this.formatMessagesForChat(messages);
       
-      const apiKey = this.getCurrentApiKey();
-      if (!apiKey) {
-        throw new Error('No HuggingFace API key available');
-      }
-
-      const response = await fetch(`${this.baseUrl}/${this.model}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: config?.maxTokens || 256,
-            temperature: config?.temperature || 0.7,
-            top_p: 0.95,
-            do_sample: true,
-            return_full_text: false,
-            repetition_penalty: 1.1
-          },
-          options: {
-            wait_for_model: true,
-            use_cache: false
-          }
-        }),
+      const response = await this.hf.chatCompletion({
+        model: this.model,
+        messages: chatMessages,
+        max_tokens: config?.maxTokens || 500,
+        temperature: config?.temperature || 0.7,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('HuggingFace API Error:', errorText);
-        
-        if (response.status === 503) {
-          throw new Error('Model is loading, please try again in a few moments');
-        }
-        throw new Error(`HuggingFace API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json() as any;
-      console.log('🤗 HuggingFace raw response:', data);
-
-      // Handle different response formats
-      let content = '';
-      if (Array.isArray(data) && data.length > 0) {
-        content = data[0].generated_text || '';
-      } else if (data.generated_text) {
-        content = data.generated_text;
-      } else {
-        throw new Error('Unexpected response format from HuggingFace');
-      }
-
-      // Clean up the response
-      content = this.cleanPsychologistResponse(content);
-
+      const content = response.choices[0]?.message?.content || '';
+      
       const endTime = Date.now();
       const processingTime = endTime - startTime;
 
@@ -92,12 +49,12 @@ export class HuggingFaceProvider extends BaseAIProvider {
         provider: 'huggingface',
         model: this.model,
         usage: {
-          prompt_tokens: Math.ceil(prompt.length / 4), // Rough estimate
-          completion_tokens: Math.ceil(content.length / 4),
-          total_tokens: Math.ceil((prompt.length + content.length) / 4)
+          prompt_tokens: response.usage?.prompt_tokens || 0,
+          completion_tokens: response.usage?.completion_tokens || 0,
+          total_tokens: response.usage?.total_tokens || 0
         },
         processingTime,
-        finish_reason: 'stop',
+        finish_reason: response.choices[0]?.finish_reason || 'stop',
         success: true,
         apiKeyUsed: this.currentApiKeyIndex
       };
@@ -119,57 +76,18 @@ export class HuggingFaceProvider extends BaseAIProvider {
     }
   }
 
-  private formatPromptForPsychologist(messages: AIMessage[], context?: ConversationContext): string {
-    // Format the prompt specifically for the Psychologist-3b model
-    const systemPrompt = `You are a compassionate and professional wellbeing counselor. Your role is to:
-- Listen actively and provide empathetic responses
-- Offer therapeutic insights and coping strategies
-- Ask thoughtful follow-up questions
-- Maintain professional boundaries
-- Encourage professional help when needed
-- Be supportive and non-judgmental
+  private formatMessagesForChat(messages: AIMessage[]): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+    const systemMessage = {
+      role: 'system' as const,
+      content: "You are MaanaSarathi, a supportive and empathetic mental health companion. Provide helpful, non-diagnostic guidance. Be compassionate, professional, and encourage seeking professional help when appropriate."
+    };
 
-Remember: You are an AI assistant providing emotional support, not a replacement for professional therapy.`;
+    const formattedMessages = messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
 
-    // Build conversation context
-    let conversationContext = '';
-    if (messages && messages.length > 0) {
-      conversationContext = messages.map((msg: AIMessage) => 
-        `${msg.role === 'user' ? 'Client' : 'Counselor'}: ${msg.content}`
-      ).join('\n');
-    }
-
-    // Get the latest user message
-    const latestMessage = messages[messages.length - 1];
-    const userMessage = latestMessage?.role === 'user' ? latestMessage.content : '';
-
-    // Format the complete prompt
-    const prompt = `${systemPrompt}
-
-Previous conversation:
-${conversationContext}
-
-Client: ${userMessage}
-Counselor:`;
-
-    return prompt;
-  }
-
-  private cleanPsychologistResponse(response: string): string {
-    // Clean up the response from the psychology model
-    let cleaned = response
-      .replace(/^(Counselor:|Client:|Human:|Assistant:)/gi, '') // Remove role prefixes
-      .replace(/\n\s*\n/g, '\n') // Remove excessive newlines
-      .replace(/^\s+|\s+$/g, '') // Trim whitespace
-      .replace(/\[.*?\]/g, '') // Remove any bracketed instructions
-      .replace(/\*.*?\*/g, ''); // Remove asterisk annotations
-
-    // Ensure response is appropriate length
-    if (cleaned.length > 500) {
-      cleaned = cleaned.substring(0, 500) + '...';
-    }
-
-    return cleaned;
+    return [systemMessage, ...formattedMessages];
   }
 
   async testConnection(): Promise<boolean> {
@@ -177,19 +95,14 @@ Counselor:`;
       const apiKey = this.getCurrentApiKey();
       if (!apiKey) return false;
 
-      const response = await fetch(`${this.baseUrl}/${this.model}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: 'Hello',
-          parameters: { max_new_tokens: 10 }
-        }),
+      // Simple test with minimal tokens
+      await this.hf.chatCompletion({
+        model: this.model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 10
       });
       
-      return response.ok || response.status === 503; // 503 means model is loading but available
+      return true;
     } catch (error) {
       console.error('❌ HuggingFace connection test failed:', error);
       return false;

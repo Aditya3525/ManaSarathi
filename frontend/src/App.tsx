@@ -173,7 +173,6 @@ const DEFAULT_COMBINED_SELECTION = (() => {
   return defaults.length > 0 ? defaults : Array.from(OVERALL_ASSESSMENT_ID_SET);
 })();
 
-const ONBOARDING_STORAGE_KEY = 'mw-onboarding-progress';
 const DASHBOARD_TOUR_STORAGE_KEY = 'mw-dashboard-tour-pending';
 
 function AppInner() {
@@ -792,11 +791,6 @@ function AppInner() {
         if (updatedUser) {
           console.log('Onboarding completed, updated user:', updatedUser);
           setUser(updatedUser);
-          try {
-            localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-          } catch (storageError) {
-            console.warn('Failed to clear onboarding draft:', storageError);
-          }
           updateDashboardTourPending(true);
         } else {
           console.log('No updated user returned from API');
@@ -805,11 +799,6 @@ function AppInner() {
         console.log('No approach selected, skipping API call');
         if (user) {
           updateUser({ isOnboarded: true });
-        }
-        try {
-          localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-        } catch (storageError) {
-          console.warn('Failed to clear onboarding draft:', storageError);
         }
         updateDashboardTourPending(true);
       }

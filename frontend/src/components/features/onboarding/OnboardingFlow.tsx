@@ -1,13 +1,11 @@
-import { ArrowRight, ArrowLeft, Shield, Heart, Users, CheckCircle, Save, Check } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import { ArrowRight, ArrowLeft, Shield, Heart, Users, CheckCircle, Check, AlertTriangle, X } from 'lucide-react';
+import React, { useState } from 'react';
 
-import { useToast } from '../../../contexts/ToastContext';
 import { useDevice } from '../../../hooks/use-device';
 import { setupSecurityQuestion } from '../../../services/auth';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
 import { Checkbox } from '../../ui/checkbox';
-
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Progress } from '../../ui/progress';
@@ -51,21 +49,10 @@ interface ProfileData {
   approach?: 'western' | 'eastern' | 'hybrid';
 }
 
-const ONBOARDING_STORAGE_KEY = 'mw-onboarding-progress';
-
-type StoredProgress = {
-  email: string | null;
-  currentStep: number;
-  profileData: ProfileData;
-  securityQuestionSaved: boolean;
-  hasSkippedProfileDetails: boolean;
-  savedAt: string;
-};
-
 export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingFlowProps) {
   // Device detection for responsive behavior
   const device = useDevice();
-  const { isMobile, isTablet, isDesktop } = device;
+  const { isMobile, isTablet } = device;
   
   const [currentStep, setCurrentStep] = useState(0);
   const [profileData, setProfileData] = useState<ProfileData>({
@@ -80,104 +67,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
   const [securityQuestionSaved, setSecurityQuestionSaved] = useState(false);
   const [securityQuestionError, setSecurityQuestionError] = useState<string | null>(null);
   const [isSavingSecurityQuestion, setIsSavingSecurityQuestion] = useState(false);
-  const [hasSkippedProfileDetails, setHasSkippedProfileDetails] = useState(false);
-  const [hasLoadedStoredProgress, setHasLoadedStoredProgress] = useState(false);
-  const [hasShownWelcomeBack, setHasShownWelcomeBack] = useState(false);
-  const { push } = useToast();
-
-  const sanitizedEmail = user?.email?.toLowerCase() || null;
-
-  const saveProgressToStorage = useCallback((showToast = false) => {
-    try {
-      const payload: StoredProgress = {
-        email: sanitizedEmail,
-        currentStep,
-        profileData,
-        securityQuestionSaved,
-        hasSkippedProfileDetails,
-        savedAt: new Date().toISOString()
-      };
-      localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(payload));
-      if (showToast) {
-        push({
-          title: 'Progress saved',
-          description: 'We stored your onboarding steps. You can return anytime to continue.',
-          type: 'success'
-        });
-      }
-    } catch (error) {
-      console.error('Failed to persist onboarding progress:', error);
-      if (showToast) {
-        push({
-          title: 'Unable to save progress',
-          description: 'Please try again or keep the page open until you finish.',
-          type: 'error'
-        });
-      }
-    }
-  }, [currentStep, hasSkippedProfileDetails, profileData, push, sanitizedEmail, securityQuestionSaved]);
-
-  useEffect(() => {
-    // Only run once on mount
-    if (hasShownWelcomeBack) return;
-
-    try {
-      const storedRaw = localStorage.getItem(ONBOARDING_STORAGE_KEY);
-      if (!storedRaw) {
-        setHasLoadedStoredProgress(true);
-        setHasShownWelcomeBack(true);
-        return;
-      }
-
-      const stored: StoredProgress = JSON.parse(storedRaw);
-
-      if (stored.email && stored.email !== sanitizedEmail) {
-        setHasLoadedStoredProgress(true);
-        setHasShownWelcomeBack(true);
-        return;
-      }
-
-      // Check if there's actual progress to restore
-      const hasProgress = stored.currentStep > 0 || 
-        stored.profileData?.firstName || 
-        stored.profileData?.approach;
-
-      if (stored.profileData) {
-        setProfileData(prev => ({ ...prev, ...stored.profileData }));
-      }
-      if (typeof stored.currentStep === 'number') {
-        setCurrentStep(stored.currentStep);
-      }
-      if (typeof stored.securityQuestionSaved === 'boolean') {
-        setSecurityQuestionSaved(stored.securityQuestionSaved);
-      }
-      if (typeof stored.hasSkippedProfileDetails === 'boolean') {
-        setHasSkippedProfileDetails(stored.hasSkippedProfileDetails);
-      }
-
-      // Only show toast if there's actual progress to restore
-      if (hasProgress) {
-        setTimeout(() => {
-          push({
-            title: 'Welcome back',
-            description: 'We restored your previous onboarding progress so you can continue where you left off.',
-            type: 'info'
-          });
-        }, 150);
-      }
-    } catch (error) {
-      console.error('Failed to restore onboarding progress:', error);
-    } finally {
-      setHasLoadedStoredProgress(true);
-      setHasShownWelcomeBack(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - only run once on mount to prevent infinite toast loop
-
-  useEffect(() => {
-    if (!hasLoadedStoredProgress) return;
-    saveProgressToStorage();
-  }, [currentStep, profileData, saveProgressToStorage, securityQuestionSaved, hasLoadedStoredProgress, hasSkippedProfileDetails]);
 
   const validateStep1 = () => {
     const errors: {[key: string]: string} = {};
@@ -244,9 +133,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
       const ok = validateBirthday(profileData.birthday);
       if (!ok) return;
       
-      if (!hasSkippedProfileDetails) {
-        if (!validateStep1()) return;
-      }
+      if (!validateStep1()) return;
     }
     if (currentStep === totalSteps - 1) {
       // Complete onboarding with all profile data
@@ -260,13 +147,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
         emergencyContact: profileData.emergencyContact?.trim() || undefined,
         emergencyPhone: profileData.emergencyPhone?.trim() || undefined
       };
-      
-      // Clear localStorage onboarding progress upon completion
-      try {
-        localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-      } catch (error) {
-        console.error('Failed to clear onboarding progress:', error);
-      }
       
       onComplete(completionData);
     } else {
@@ -293,65 +173,10 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
     }
   };
 
-  const handleStartFresh = () => {
-    const confirmReset = window.confirm('Are you sure you want to start fresh? This will clear all your saved progress and start from the beginning.');
-    if (!confirmReset) return;
-    
-    try {
-      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-      
-      // Reset all state
-      setCurrentStep(0);
-      setProfileData({
-        firstName: user?.firstName || '',
-        lastName: user?.lastName || '',
-        dataConsent: false,
-        clinicianSharing: false,
-      });
-      setSecurityQuestionSaved(false);
-      setHasSkippedProfileDetails(false);
-      setValidationErrors({});
-      setBirthdayError(null);
-      
-      push({
-        title: 'Starting fresh',
-        description: 'Your onboarding progress has been cleared.',
-        type: 'success'
-      });
-    } catch (error) {
-      console.error('Failed to clear onboarding progress:', error);
-      push({
-        title: 'Error',
-        description: 'Failed to clear progress. Please try again.',
-        type: 'error'
-      });
-    }
-  };
-
-  const handleSaveAndExit = () => {
-    console.log('Save & Exit clicked - saving progress...');
-    saveProgressToStorage(true);
-    // Use onExit callback to navigate - parent component handles routing
-    // Clear onboarding progress will happen in parent if needed
-    console.log('Calling onExit callback, onExit exists:', !!onExit);
-    if (onExit) {
-      onExit();
-    } else {
-      console.error('onExit callback is not defined!');
-    }
-  };
-
   const handleBackToLanding = () => {
-    // Exit without saving - go back to landing page and logout
+    // Exit - go back to landing page and logout
     const confirmExit = window.confirm('Are you sure you want to exit? You will be logged out and your progress will not be saved.');
     if (!confirmExit) return;
-    
-    // Clear onboarding progress before exiting
-    try {
-      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to clear onboarding progress:', error);
-    }
     
     // Use onBack callback if provided (logs out), otherwise fallback to onExit
     if (onBack) {
@@ -361,17 +186,10 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
     }
   };
 
-  const handleSkipProfileStep = () => {
-    setHasSkippedProfileDetails(true);
-    setValidationErrors({});
-    setBirthdayError(null);
-    setCurrentStep(Math.min(currentStep + 1, totalSteps - 1));
-  };
-
   // Responsive header component
   const renderHeader = () => {
     if (isMobile) {
-      // Mobile: Back button, step indicator, Save & Exit button
+      // Mobile: Back button, step indicator
       return (
         <div className="flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
           <Button
@@ -388,19 +206,12 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
             Step {currentStep + 1}/{totalSteps}
           </div>
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleSaveAndExit}
-            className="h-9 flex items-center gap-1"
-          >
-            <Save className="h-4 w-4" />
-            <span className="text-sm">Save & Exit</span>
-          </Button>
+          {/* Empty div to balance the flex layout */}
+          <div className="w-16" />
         </div>
       );
     } else if (isTablet) {
-      // Tablet: Back button on left, Save & Exit on right
+      // Tablet: Back button on left
       return (
         <div className="flex items-center justify-between mb-6">
           <Button
@@ -411,21 +222,11 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveAndExit}
-            className="flex items-center gap-2"
-          >
-            <Save className="h-4 w-4" />
-            Save & Exit
           </Button>
         </div>
       );
     } else {
-      // Desktop: Show header with Back and Save & Exit
+      // Desktop: Show header with Back
       return (
         <div className="flex items-center justify-between mb-6">
           <Button
@@ -436,16 +237,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveAndExit}
-            className="flex items-center gap-2"
-          >
-            <Save className="h-4 w-4" />
-            Save & Exit
           </Button>
         </div>
       );
@@ -476,7 +267,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                 </p>
                 <p className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" />
-                  You can skip any step and return later
+                  Complete all steps to get started
                 </p>
               </div>
             </div>
@@ -515,9 +306,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                       if (validationErrors.firstName) {
                         setValidationErrors(prev => ({ ...prev, firstName: '' }));
                       }
-                      if (hasSkippedProfileDetails) {
-                        setHasSkippedProfileDetails(false);
-                      }
                     }}
                     placeholder="Your first name"
                     required
@@ -537,9 +325,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                       setProfileData(prev => ({ ...prev, lastName: e.target.value }));
                       if (validationErrors.lastName) {
                         setValidationErrors(prev => ({ ...prev, lastName: '' }));
-                      }
-                      if (hasSkippedProfileDetails) {
-                        setHasSkippedProfileDetails(false);
                       }
                     }}
                     placeholder="Your last name"
@@ -585,9 +370,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                     if (validationErrors.gender) {
                       setValidationErrors(prev => ({ ...prev, gender: '' }));
                     }
-                    if (hasSkippedProfileDetails) {
-                      setHasSkippedProfileDetails(false);
-                    }
                   }}
                   required
                   className={isMobile ? 'space-y-3' : ''}
@@ -625,9 +407,6 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                       setProfileData(prev => ({ ...prev, region: e.target.value }));
                       if (validationErrors.region) {
                         setValidationErrors(prev => ({ ...prev, region: '' }));
-                      }
-                      if (hasSkippedProfileDetails) {
-                        setHasSkippedProfileDetails(false);
                       }
                     }}
                     className={`border-input flex w-full rounded-md border bg-input-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -1028,7 +807,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
   return (
     <div className={`min-h-screen bg-background ${isMobile ? 'p-0' : 'p-6'} flex items-center justify-center`}>
       <div className={`w-full ${isMobile ? 'max-w-full' : isTablet ? 'max-w-3xl' : 'max-w-2xl'}`}>
-        {/* Header with Back and Save & Exit buttons */}
+        {/* Header with Back button */}
         {renderHeader()}
 
         {/* Progress Bar (hidden on mobile - shown in header) */}

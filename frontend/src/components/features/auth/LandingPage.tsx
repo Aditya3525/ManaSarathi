@@ -1,33 +1,33 @@
 import {
+  ArrowRight,
+  BarChart3,
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   Brain,
   Users,
   Shield,
   CheckCircle,
   Sparkles,
-  ArrowRight,
   MessageCircle,
   Target,
   TrendingUp,
-  Star,
-  BarChart3,
   Lock,
-  Smile,
-  CalendarCheck,
   Globe,
   Moon,
   Sun,
   AlertTriangle,
   Menu,
-  X,
-  ChevronLeft,
-  ChevronRight
+  Smile,
+  Star,
+  X
 } from 'lucide-react';
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
+import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
-import { ImageWithFallback } from '../../common/ImageWithFallback';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -38,6 +38,10 @@ import { Label } from '../../ui/label';
 import { Separator } from '../../ui/separator';
 
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
+import { HeroSection } from './HeroSection';
+import { MetricsSection } from './MetricsSection';
+import { TestimonialsSection } from './TestimonialsSection';
+import { ImageWithFallback } from '../../common/ImageWithFallback';
 
 interface LandingPageProps {
   onSignUp: (userData: { name: string; email: string; password: string }) => void;
@@ -49,6 +53,7 @@ interface LandingPageProps {
 
 export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginError }: LandingPageProps) {
   const device = useDevice();
+  const analytics = useAnalytics();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -59,12 +64,11 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
-  const [activeMetricIndex, setActiveMetricIndex] = useState(0);
-  const [activeTestimonialIndex, setActiveTestimonialIndex] = useState(0);
+
+  // Carousel state for features section
   const [activeFeaturesIndex, setActiveFeaturesIndex] = useState(0);
   
-  const metricsContainerRef = useRef<HTMLDivElement>(null);
-  const testimonialsContainerRef = useRef<HTMLDivElement>(null);
+  // Features carousel ref
   const featuresContainerRef = useRef<HTMLDivElement>(null);
 
   const isStartJourneyOpen = activeModal === 'start';
@@ -74,151 +78,37 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
 
-  // Sticky header on scroll
+  // Sticky header on scroll + scroll depth tracking
   useEffect(() => {
+    let scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
+    
     const handleScroll = () => {
       setIsHeaderSticky(window.scrollY > 100);
+      
+      // Track scroll depth
+      const scrollPercent = Math.round(
+        (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100
+      );
+      
+      Object.keys(scrollDepthTracked).forEach((depth) => {
+        const depthNum = parseInt(depth);
+        if (scrollPercent >= depthNum && !scrollDepthTracked[depthNum]) {
+          scrollDepthTracked[depthNum] = true;
+          analytics.trackScrollDepth(depthNum);
+        }
+      });
     };
+    
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Metrics carousel intersection observer
-  useEffect(() => {
-    const container = metricsContainerRef.current;
-    if (!container || !device.isMobile) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Array.from(container.children).indexOf(entry.target);
-            if (index !== -1) setActiveMetricIndex(index);
-          }
-        });
-      },
-      { root: container, threshold: 0.5 }
-    );
-
-    Array.from(container.children).forEach((child) => observer.observe(child));
-    return () => observer.disconnect();
-  }, [device.isMobile]);
-
-  // Testimonials carousel intersection observer
-  useEffect(() => {
-    const container = testimonialsContainerRef.current;
-    if (!container || !device.isMobile) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Array.from(container.children).indexOf(entry.target);
-            if (index !== -1) setActiveTestimonialIndex(index);
-          }
-        });
-      },
-      { root: container, threshold: 0.5 }
-    );
-
-    Array.from(container.children).forEach((child) => observer.observe(child));
-    return () => observer.disconnect();
-  }, [device.isMobile]);
-
-  // Auto-slide testimonials carousel
-  useEffect(() => {
-    if (!device.isMobile) return;
-    
-    const interval = setInterval(() => {
-      const container = testimonialsContainerRef.current;
-      if (!container) return;
-      
-      setActiveTestimonialIndex((prev) => {
-        const next = (prev + 1) % 3; // Loop back to 0 after 2
-        const child = container.children[next] as HTMLElement;
-        child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        return next;
-      });
-    }, 2000); // 2 second delay
-
-    return () => clearInterval(interval);
-  }, [device.isMobile]);
-
-  // Features carousel intersection observer
-  useEffect(() => {
-    const container = featuresContainerRef.current;
-    if (!container || !device.isMobile) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Array.from(container.children).indexOf(entry.target);
-            if (index !== -1) setActiveFeaturesIndex(index);
-          }
-        });
-      },
-      { root: container, threshold: 0.5 }
-    );
-
-    Array.from(container.children).forEach((child) => observer.observe(child));
-    return () => observer.disconnect();
-  }, [device.isMobile]);
-
-  // Auto-slide features carousel
-  useEffect(() => {
-    if (!device.isMobile) return;
-    
-    const interval = setInterval(() => {
-      const container = featuresContainerRef.current;
-      if (!container) return;
-      
-      setActiveFeaturesIndex((prev) => {
-        const next = (prev + 1) % 4; // Loop back to 0 after 3
-        const child = container.children[next] as HTMLElement;
-        child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        return next;
-      });
-    }, 1800); // 1.8 second delay
-
-    return () => clearInterval(interval);
-  }, [device.isMobile]);
+  }, [analytics]);
 
   const closeModal = () => setActiveModal(null);
   const openModal = (modal: Exclude<typeof activeModal, null>) => {
     setActiveModal(modal);
     setMobileMenuOpen(false); // Close mobile menu when opening a modal
+    analytics.trackButtonClick(`open_${modal}_modal`, 'landing_page');
   };
-
-  const impactStats = useMemo(
-    () => [
-      {
-        icon: Smile,
-        value: '92%',
-        label: 'Feel calmer in 2 weeks',
-        helper: 'Based on post-program self-reports'
-      },
-      {
-        icon: BarChart3,
-        value: '4.8/5',
-        label: 'Average member rating',
-        helper: 'Across 5k+ coaching sessions'
-      },
-      {
-        icon: CalendarCheck,
-        value: '3x',
-        label: 'Faster habit formation',
-        helper: 'When pairing practices with AI nudges'
-      },
-      {
-        icon: Shield,
-        value: '100%',
-        label: 'HIPAA-ready infrastructure',
-        helper: 'Built with privacy and compliance first'
-      }
-    ],
-    []
-  );
 
   const differentiators = useMemo(
     () => [
@@ -275,6 +165,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && email && password) {
+      analytics.trackFormSubmit('signup', true);
       onSignUp({ name, email, password });
     }
   };
@@ -282,6 +173,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (email && loginPassword) {
+      analytics.trackFormSubmit('login', true);
       onLogin({ email, password: loginPassword });
     }
   };
@@ -289,11 +181,13 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminEmail && adminPassword && onAdminLogin) {
+      analytics.trackFormSubmit('admin_login', true);
       onAdminLogin({ email: adminEmail, password: adminPassword });
     }
   };
 
   const handleGoogleAuth = () => {
+    analytics.trackButtonClick('google_oauth', 'landing_page');
     // Redirect to Google OAuth endpoint - use smart URL detection
     const hostname = window.location.hostname;
     const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
@@ -311,6 +205,14 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Skip to content link for accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:m-4 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
+      
       {/* Responsive Sticky Header */}
       <header 
         className={`
@@ -429,243 +331,74 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         )}
       </header>
 
-      <main>
-        <section className="relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-accent/20 px-6 py-20 lg:py-28">
-          {/* Animated Gradient Orbs */}
-          <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-            <div className="absolute -top-1/2 -right-1/4 h-[600px] w-[600px] rounded-full bg-primary/5 blur-3xl animate-pulse" />
-            <div className="absolute -bottom-1/2 -left-1/4 h-[600px] w-[600px] rounded-full bg-accent/5 blur-3xl animate-pulse" style={{animationDelay: '1s'}} />
-          </div>
-          <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-gradient-to-l from-background/80 to-transparent lg:block" aria-hidden="true" />
-          <div className="relative mx-auto grid max-w-7xl gap-16 lg:grid-cols-2 lg:items-center">
-            <div className="space-y-10">
-              <div className="space-y-6">
-                <Badge variant="secondary" className="flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary shadow-sm hover:shadow-md transition-all hover:scale-105">
-                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-                  New: Mini-IPIP personality insights
-                </Badge>
-                <h1 className="text-4xl font-bold leading-tight text-foreground lg:text-6xl xl:text-7xl">
-                  <span className="block bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">MaanaSarathi</span>
-                  <span className="block mt-2">Your personal wellbeing companion</span>
-                </h1>
-                <p className="text-lg leading-relaxed text-muted-foreground lg:text-xl max-w-2xl">
-                  Pair clinically grounded assessments with daily micro-practices, reflective journaling, and an empathetic AI guide who meets you exactly where you are.
-                </p>
-              </div>
+      <main id="main-content">
+        <HeroSection 
+          onStartJourney={() => openModal('start')} 
+          onSignUp={() => openModal('signup')} 
+        />
 
-              <ul className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-primary" />
-                  Evidence-based assessments (GAD-7, Mini-IPIP, PHQ-9)
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-primary" />
-                  Personalized daily plan with breathwork, therapy tips, and journaling
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-primary" />
-                  Clinician-reviewed content with culturally mindful guidance
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-primary" />
-                  Secure data sharing controls whenever you invite your care team
-                </li>
-              </ul>
+        <MetricsSection />
 
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <Button size="lg" className="px-8 py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 group" onClick={() => openModal('start')}>
-                  Start your journey
-                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Button variant="outline" size="lg" className="px-8 py-6 text-lg font-medium border-2 hover:border-primary/50 transition-all" onClick={() => openModal('signup')}>
-                  Create account
-                </Button>
-              </div>
-
-              <div className="space-y-3 pt-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trusted by teams at</p>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground/80">
-                  <span className="font-semibold text-foreground hover:text-primary transition-colors cursor-default">Mindful Care</span>
-                  <span>•</span>
-                  <span className="font-semibold text-foreground hover:text-primary transition-colors cursor-default">Wellness Institute</span>
-                  <span>•</span>
-                  <span className="font-semibold text-foreground hover:text-primary transition-colors cursor-default">Serenity Health</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative">
-              <ImageWithFallback
-                src="https://images.unsplash.com/photo-1687180948607-9ba1dd045e10?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWVkaXRhdGlvbiUyMHdlbGxuZXNzfGVufDF8fHx8MTc1NjcxMDg4Nnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                alt="Peaceful meditation scene representing wellbeing"
-                className="h-[500px] w-full rounded-3xl object-cover shadow-2xl"
-              />
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-primary/10 to-transparent" aria-hidden="true" />
-              <div className="absolute bottom-6 left-6 right-6 rounded-2xl bg-background/80 p-4 shadow-lg backdrop-blur">
-                <p className="text-sm font-medium text-foreground">“The app is like having a compassionate coach in my pocket.”</p>
-                <span className="text-xs text-muted-foreground">— Priya, Product Designer</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Metrics Section - Responsive Carousel on Mobile */}
-        <section className="border-y bg-muted/20 px-4 py-12 sm:px-6" id="metrics">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="sr-only">Impact Metrics</h2>
-            
-            {/* Mobile: Swipeable Carousel */}
-            <div className="md:hidden">
-              <div 
-                ref={metricsContainerRef}
-                className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                role="region"
-                aria-label="Impact metrics carousel"
-              >
-                {impactStats.map(({ icon: Icon, value, label, helper }, index) => (
-                  <Card 
-                    key={label}
-                    className="min-w-[85vw] flex-shrink-0 snap-center border-none bg-background shadow-sm ring-1 ring-border/60"
-                    role="group"
-                    aria-roledescription="slide"
-                    aria-label={`Metric ${index + 1} of ${impactStats.length}: ${label}`}
-                  >
-                    <CardContent className="flex flex-col items-center p-6 text-center">
-                      <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <Icon className="h-6 w-6" />
-                      </span>
-                      <p className="text-4xl font-bold text-foreground">{value}</p>
-                      <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-foreground">{label}</p>
-                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{helper}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              
-              {/* Pagination Dots */}
-              <div className="mt-4 flex justify-center gap-2" role="tablist" aria-label="Metrics pagination">
-                {impactStats.map((stat, index) => (
-                  <button
-                    key={stat.label}
-                    role="tab"
-                    aria-selected={activeMetricIndex === index}
-                    aria-label={`View metric ${index + 1} of ${impactStats.length}: ${stat.label}`}
-                    className={`h-2 w-2 rounded-full transition-all ${
-                      activeMetricIndex === index 
-                        ? 'w-6 bg-primary' 
-                        : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
-                    }`}
-                    onClick={() => {
-                      const container = metricsContainerRef.current;
-                      const child = container?.children[index] as HTMLElement;
-                      child?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest',
-                        inline: 'center'
-                      });
-                      setActiveMetricIndex(index);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Tablet: 2x2 Grid */}
-            <div className="hidden grid-cols-2 gap-6 md:grid lg:hidden">
-              {impactStats.map(({ icon: Icon, value, label, helper }) => (
-                <Card key={label} className="border-none bg-background shadow-sm ring-1 ring-border/60">
-                  <CardContent className="flex flex-col items-center p-6 text-center">
-                    <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Icon className="h-6 w-6" />
-                    </span>
-                    <p className="text-4xl font-bold text-foreground">{value}</p>
-                    <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-foreground">{label}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">{helper}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Desktop: 4-column Grid */}
-            <div className="hidden gap-6 lg:grid lg:grid-cols-4">
-              {impactStats.map(({ icon: Icon, value, label, helper }) => (
-                <Card key={label} className="border-none bg-background shadow-sm ring-1 ring-border/60">
-                  <CardHeader className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <span className="rounded-full bg-primary/10 p-3 text-primary">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <CardTitle className="text-3xl font-semibold">{value}</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      {label}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">{helper}</CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works Section - Mobile Vertical List */}
-        <section id="how-it-works" className="bg-muted/30 px-4 py-12 sm:px-6 md:py-16 lg:py-24">
+        {/* How It Works Section - Enhanced with better icons */}
+        <section id="how-it-works" className="bg-muted/30 px-4 py-12 sm:px-6 md:py-16 lg:py-24" aria-labelledby="how-it-works-heading">
           <div className="mx-auto max-w-7xl">
             <div className="mb-12 space-y-3 text-center md:mb-16 md:space-y-4">
-              <h2 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">How it works</h2>
-              <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg md:text-xl">
+              <h2 id="how-it-works-heading" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+                How it works
+              </h2>
+              <p className="mx-auto max-w-2xl text-base font-medium text-foreground/70 sm:text-lg md:text-xl">
                 Three simple steps to understand and improve your wellbeing
               </p>
             </div>
 
             {/* Mobile: Vertical List with Connector Line */}
-            <ol className="relative space-y-8 md:hidden">
+            <ol className="relative space-y-8 md:hidden" role="list">
               {/* Connector Line */}
               <div 
-                className="absolute left-6 top-10 bottom-10 w-0.5 bg-border"
+                className="absolute left-6 top-10 bottom-10 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-primary/20"
                 aria-hidden="true"
               />
 
               <li className="relative flex gap-4">
-                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary">
+                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary shadow-md">
                   1
                 </div>
                 <div className="flex-1 pt-1">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Brain className="h-5 w-5 text-primary" />
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <Brain className="h-6 w-6 text-primary" aria-hidden="true" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground">Assess</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <h3 className="text-lg font-bold text-foreground">Assess</h3>
+                  <p className="mt-2 text-base leading-relaxed text-foreground/70">
                     Take science-based assessments to understand your anxiety, stress levels, and personality strengths.
                   </p>
                 </div>
               </li>
 
               <li className="relative flex gap-4">
-                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary">
+                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary shadow-md">
                   2
                 </div>
                 <div className="flex-1 pt-1">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Sparkles className="h-5 w-5 text-primary" />
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <Sparkles className="h-6 w-6 text-primary" aria-hidden="true" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground">Understand</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <h3 className="text-lg font-bold text-foreground">Understand</h3>
+                  <p className="mt-2 text-base leading-relaxed text-foreground/70">
                     Receive clear, personalized insights and recommendations based on your mental health profile.
                   </p>
                 </div>
               </li>
 
               <li className="relative flex gap-4">
-                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary">
+                <div className="z-10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary shadow-md">
                   3
                 </div>
                 <div className="flex-1 pt-1">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Target className="h-5 w-5 text-primary" />
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <Target className="h-6 w-6 text-primary" aria-hidden="true" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground">Act</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <h3 className="text-lg font-bold text-foreground">Act</h3>
+                  <p className="mt-2 text-base leading-relaxed text-foreground/70">
                     Follow your personalized plan combining therapy, meditation, and mindfulness practices with AI guidance.
                   </p>
                 </div>
@@ -674,46 +407,46 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
             {/* Tablet+: Card Grid */}
             <div className="hidden gap-6 md:grid md:gap-8 lg:grid-cols-3">
-              <Card className="relative overflow-hidden border-2 transition-colors hover:border-primary/20">
+              <Card className="group relative overflow-hidden border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6 text-center md:p-8">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                    <Brain className="h-8 w-8 text-primary" />
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Brain className="h-8 w-8 text-primary" aria-hidden="true" />
                   </div>
-                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
+                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold shadow-md">
                     1
                   </div>
-                  <h3 className="text-xl">Assess</h3>
-                  <p className="text-muted-foreground">
+                  <h3 className="text-xl font-bold text-foreground">Assess</h3>
+                  <p className="text-base text-foreground/70">
                     Take science-based assessments to understand your anxiety, stress levels, and personality strengths.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden border-2 transition-colors hover:border-primary/20">
+              <Card className="group relative overflow-hidden border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6 text-center md:p-8">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                    <Sparkles className="h-8 w-8 text-primary" />
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Sparkles className="h-8 w-8 text-primary" aria-hidden="true" />
                   </div>
-                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
+                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold shadow-md">
                     2
                   </div>
-                  <h3 className="text-xl">Understand</h3>
-                  <p className="text-muted-foreground">
+                  <h3 className="text-xl font-bold text-foreground">Understand</h3>
+                  <p className="text-base text-foreground/70">
                     Receive clear, personalized insights and recommendations based on your wellbeing profile.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden border-2 transition-colors hover:border-primary/20">
+              <Card className="group relative overflow-hidden border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6 text-center md:p-8">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                    <Target className="h-8 w-8 text-primary" />
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Target className="h-8 w-8 text-primary" aria-hidden="true" />
                   </div>
-                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
+                  <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold shadow-md">
                     3
                   </div>
-                  <h3 className="text-xl">Act</h3>
-                  <p className="text-muted-foreground">
+                  <h3 className="text-xl font-bold text-foreground">Act</h3>
+                  <p className="text-base text-foreground/70">
                     Follow your personalized plan combining therapy, meditation, and mindfulness practices with AI guidance.
                   </p>
                 </CardContent>
@@ -722,12 +455,14 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           </div>
         </section>
 
-        {/* Features Section - Mobile Horizontal Carousel */}
-        <section id="features" className="px-4 py-12 sm:px-6 md:py-16 lg:py-24">
+        {/* Features Section - Enhanced Cards with Hover */}
+        <section id="features" className="px-4 py-12 sm:px-6 md:py-16 lg:py-24" aria-labelledby="features-heading">
           <div className="mx-auto max-w-7xl">
             <div className="mb-8 space-y-3 text-center md:mb-12 md:space-y-4 lg:mb-16">
-              <h2 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">Complete wellbeing support</h2>
-              <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg md:text-xl">
+              <h2 id="features-heading" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+                Complete wellbeing support
+              </h2>
+              <p className="mx-auto max-w-2xl text-base font-medium text-foreground/70 sm:text-lg md:text-xl">
                 Everything you need for your wellbeing journey in one compassionate platform
               </p>
             </div>
@@ -737,57 +472,81 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               <div 
                 ref={featuresContainerRef}
                 className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="region"
+                aria-label="Features carousel"
               >
-                <Card className="min-w-[90vw] flex-shrink-0 snap-center border-2 transition-colors hover:border-primary/20">
+                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
                   <CardContent className="space-y-3 p-6">
-                    <MessageCircle className="h-10 w-10 text-primary" />
-                    <h3 className="text-lg font-semibold">AI Therapist Chat</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
+                    <p className="text-base leading-relaxed text-foreground/70">
                       24/7 conversational support with empathetic, clinically informed AI guidance.
                     </p>
+                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
+                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </CardContent>
                 </Card>
 
-                <Card className="min-w-[90vw] flex-shrink-0 snap-center border-2 transition-colors hover:border-primary/20">
+                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
                   <CardContent className="space-y-3 p-6">
-                    <TrendingUp className="h-10 w-10 text-primary" />
-                    <h3 className="text-lg font-semibold">Progress Tracking</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
+                    <p className="text-base leading-relaxed text-foreground/70">
                       Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
                     </p>
+                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
+                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </CardContent>
                 </Card>
 
-                <Card className="min-w-[90vw] flex-shrink-0 snap-center border-2 transition-colors hover:border-primary/20">
+                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
                   <CardContent className="space-y-3 p-6">
-                    <Heart className="h-10 w-10 text-primary" />
-                    <h3 className="text-lg font-semibold">Mindful Practices</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
+                    <p className="text-base leading-relaxed text-foreground/70">
                       Guided meditation, yoga, and breathing sessions curated for your current energy.
                     </p>
+                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
+                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </CardContent>
                 </Card>
 
-                <Card className="min-w-[90vw] flex-shrink-0 snap-center border-2 transition-colors hover:border-primary/20">
+                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
                   <CardContent className="space-y-3 p-6">
-                    <Users className="h-10 w-10 text-primary" />
-                    <h3 className="text-lg font-semibold">Expert Content</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Users className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
+                    <p className="text-base leading-relaxed text-foreground/70">
                       A curated library of therapeutic videos and articles authored with clinicians.
                     </p>
+                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
+                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Progress Indicators */}
-              <div className="mt-6 flex justify-center gap-2">
+              <div className="mt-6 flex justify-center gap-2" role="tablist" aria-label="Features pagination">
                 {[0, 1, 2, 3].map((index) => (
                   <div
                     key={index}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                    role="tab"
+                    aria-selected={activeFeaturesIndex === index}
+                    className={`h-2 rounded-full transition-all duration-300 ${
                       activeFeaturesIndex === index 
                         ? 'w-8 bg-primary' 
-                        : 'w-1.5 bg-muted-foreground/30'
+                        : 'w-2 bg-muted-foreground/30'
                     }`}
                     aria-label={`Feature ${index + 1} of 4`}
                   />
@@ -797,86 +556,126 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
             {/* Tablet: 2x2 Grid */}
             <div className="hidden gap-6 md:grid md:grid-cols-2 lg:hidden">
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <MessageCircle className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">AI Therapist Chat</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
+                  <p className="text-base text-foreground/70">
                     24/7 conversational support with empathetic, clinically informed AI guidance.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <TrendingUp className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Progress Tracking</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
+                  <p className="text-base text-foreground/70">
                     Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <Heart className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Mindful Practices</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
+                  <p className="text-base text-foreground/70">
                     Guided meditation, yoga, and breathing sessions curated for your current energy.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <Users className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Expert Content</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
+                  <p className="text-base text-foreground/70">
                     A curated library of therapeutic videos and articles authored with clinicians.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
             </div>
 
             {/* Desktop: 4-column Grid */}
             <div className="hidden gap-6 lg:grid lg:grid-cols-4">
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <MessageCircle className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">AI Therapist Chat</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
+                  <p className="text-base text-foreground/70">
                     24/7 conversational support with empathetic, clinically informed AI guidance.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <TrendingUp className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Progress Tracking</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
+                  <p className="text-base text-foreground/70">
                     Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <Heart className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Mindful Practices</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
+                  <p className="text-base text-foreground/70">
                     Guided meditation, yoga, and breathing sessions curated for your current energy.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
 
-              <Card className="border-2 transition-colors hover:border-primary/20">
+              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
                 <CardContent className="space-y-4 p-6">
-                  <Users className="h-10 w-10 text-primary" />
-                  <h3 className="text-lg font-semibold">Expert Content</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
+                  <p className="text-base text-foreground/70">
                     A curated library of therapeutic videos and articles authored with clinicians.
                   </p>
+                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </CardContent>
               </Card>
             </div>
@@ -886,7 +685,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         <section className="bg-muted/20 px-6 py-16 lg:py-24">
           <div className="mx-auto max-w-7xl space-y-12">
             <div className="space-y-3 text-center">
-              <h2 className="text-3xl lg:text-4xl">Why people choose Wellbeing AI</h2>
+              <h2 className="text-3xl lg:text-4xl">Why people choose MaanaSarathi</h2>
               <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
                 Built alongside psychologists, coaches, and neurodiverse advocates to support modern wellbeing needs.
               </p>
@@ -908,206 +707,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           </div>
         </section>
 
-        <section className="relative overflow-hidden bg-gradient-to-br from-background via-accent/5 to-background px-4 py-16 sm:px-6 md:py-20 lg:py-28" id="testimonials">
-          {/* Decorative Elements */}
-          <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-            <div className="absolute top-1/4 -left-12 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-            <div className="absolute bottom-1/4 -right-12 h-64 w-64 rounded-full bg-accent/5 blur-3xl" />
-          </div>
-
-          <div className="relative mx-auto max-w-7xl">
-            {/* Header */}
-            <div className="mb-12 space-y-4 text-center md:mb-16">
-              <Badge variant="secondary" className="mb-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
-                <Heart className="mr-1.5 inline-block h-3.5 w-3.5" />
-                User Stories
-              </Badge>
-              <h2 className="text-3xl font-bold sm:text-4xl lg:text-5xl">
-                Trusted by <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">thousands</span>
-              </h2>
-              <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-lg lg:text-xl">
-                Real stories from members who rediscovered calm, confidence, and joy in their daily lives.
-              </p>
-            </div>
-
-            {/* Mobile: Enhanced Swipeable Cards */}
-            <div className="md:hidden">
-              <div 
-                ref={testimonialsContainerRef}
-                className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-6 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                role="region"
-                aria-label="Testimonials carousel"
-                aria-roledescription="carousel"
-              >
-                {[{
-                  quote: 'This app helped me understand my anxiety patterns and gave me practical tools to manage them. The AI chat feature feels like having a therapist available anytime.',
-                  name: 'Sarah Mitchell',
-                  role: 'Product Designer',
-                  rating: 5
-                },
-                {
-                  quote: 'The personalized meditation recommendations were spot-on. I\'ve never been more consistent with my mindfulness practice. The progress tracking keeps me motivated.',
-                  name: 'David Chen',
-                  role: 'Software Engineer',
-                  rating: 5
-                },
-                {
-                  quote: 'Finally, a wellbeing app that doesn\'t feel clinical. The interface is beautiful and the guidance feels genuinely caring. It\'s become part of my daily routine.',
-                  name: 'Maria Rodriguez',
-                  role: 'Teacher',
-                  rating: 5
-                }].map(({ quote, name, role, rating }, index) => (
-                  <div 
-                    key={name} 
-                    className="min-w-[90vw] flex-shrink-0 snap-center"
-                    role="group"
-                    aria-roledescription="slide"
-                    aria-label={`Testimonial ${index + 1} of 3`}
-                  >
-                    <Card className="group relative overflow-hidden border-2 border-primary/10 bg-background/95 shadow-lg backdrop-blur hover:border-primary/20 hover:shadow-xl transition-all">
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
-                      <CardContent className="relative space-y-5 p-6">
-                        {/* Quote Icon */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <MessageCircle className="h-6 w-6" />
-                          </div>
-                          <div className="flex items-center gap-1" aria-label={`${rating} star rating`}>
-                            {Array.from({ length: rating }).map((_, i) => (
-                              <Star key={i} className="h-4 w-4 fill-primary text-primary" aria-hidden="true" />
-                            ))}
-                          </div>
-                        </div>
-                        
-                        {/* Quote */}
-                        <blockquote className="text-base leading-relaxed text-foreground">
-                          &ldquo;{quote}&rdquo;
-                        </blockquote>
-                        
-                        {/* Author */}
-                        <div className="flex items-center gap-3 pt-2 border-t border-border/50">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-bold text-primary">
-                            {name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">{name}</p>
-                            <p className="text-xs text-muted-foreground">{role}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                ))}
-              </div>
-
-              {/* Enhanced Navigation */}
-              <div className="mt-8 flex flex-col items-center gap-4">
-                {/* Progress Bar */}
-                <div className="w-full max-w-xs">
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300 ease-out"
-                      style={{ width: `${((activeTestimonialIndex + 1) / 3) * 100}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex items-center justify-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 rounded-full border-2"
-                    onClick={() => {
-                      const newIndex = Math.max(0, activeTestimonialIndex - 1);
-                      const container = testimonialsContainerRef.current;
-                      const child = container?.children[newIndex] as HTMLElement;
-                      child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                      setActiveTestimonialIndex(newIndex);
-                    }}
-                    aria-label="Previous testimonial"
-                    disabled={activeTestimonialIndex === 0}
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </Button>
-
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50">
-                    <span className="text-sm font-semibold text-foreground">{activeTestimonialIndex + 1}</span>
-                    <span className="text-sm text-muted-foreground">/</span>
-                    <span className="text-sm text-muted-foreground">3</span>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 rounded-full border-2"
-                    onClick={() => {
-                      const newIndex = Math.min(2, activeTestimonialIndex + 1);
-                      const container = testimonialsContainerRef.current;
-                      const child = container?.children[newIndex] as HTMLElement;
-                      child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                      setActiveTestimonialIndex(newIndex);
-                    }}
-                    aria-label="Next testimonial"
-                    disabled={activeTestimonialIndex === 2}
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-                Testimonial {activeTestimonialIndex + 1} of 3
-              </div>
-            </div>
-
-            {/* Tablet+: Original 3-column Grid */}
-            <div className="hidden gap-8 md:grid md:grid-cols-3">
-              {[{
-                quote: 'This app helped me understand my anxiety patterns and gave me practical tools to manage them. The AI chat feature feels like having a therapist available anytime.',
-                name: 'Sarah M.'
-              },
-              {
-                quote: 'The personalized meditation recommendations were spot-on. I\'ve never been more consistent with my mindfulness practice.',
-                name: 'David L.'
-              },
-              {
-                quote: 'Finally, a mental health app that doesn\'t feel clinical. The interface is beautiful and the guidance feels genuinely caring.',
-                name: 'Maria R.'
-              }].map(({ quote, name }) => (
-                <Card key={name} className="h-full border border-primary/10 bg-background/90 shadow-sm">
-                  <CardContent className="space-y-4 p-6 text-left">
-                    <div className="flex items-center gap-1 text-primary">
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <Star key={index} className="h-4 w-4 fill-current" aria-hidden="true" />
-                      ))}
-                    </div>
-                    <p className="text-muted-foreground italic">“{quote}”</p>
-                    <p className="text-sm font-medium text-foreground">— {name}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Trust Indicators */}
-            <div className="mt-12 flex flex-wrap items-center justify-center gap-8 md:mt-16 lg:mt-20">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary lg:text-4xl">5,000+</p>
-                <p className="mt-1 text-sm text-muted-foreground">Active Members</p>
-              </div>
-              <div className="h-12 w-px bg-border" aria-hidden="true" />
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary lg:text-4xl">4.8/5</p>
-                <p className="mt-1 text-sm text-muted-foreground">Average Rating</p>
-              </div>
-              <div className="h-12 w-px bg-border" aria-hidden="true" />
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary lg:text-4xl">92%</p>
-                <p className="mt-1 text-sm text-muted-foreground">Feel Better</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        <TestimonialsSection />
 
         <section className="bg-muted/30 px-6 py-16 lg:py-24">
           <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1.2fr_1fr]">
@@ -1162,22 +762,38 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           </div>
         </section>
 
-        <section id="faq" className="px-6 py-16 lg:py-24">
+        <section id="faq" className="px-6 py-16 lg:py-24" aria-labelledby="faq-heading">
           <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
             <div className="px-4 text-center sm:px-0">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl">Frequently asked questions</h2>
-              <p className="mt-3 text-base sm:text-lg text-muted-foreground">
-                Still wondering if Wellbeing AI is right for you? We&apos;ve got answers.
+              <h2 id="faq-heading" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+                Frequently asked questions
+              </h2>
+              <p className="mt-3 text-base font-medium text-foreground/70 sm:text-lg">
+                Still wondering if MaanaSarathi is right for you? We&apos;ve got answers.
               </p>
             </div>
 
-            <Accordion type="single" collapsible className="rounded-xl border border-border/60 bg-background">
-              {faqs.map(({ question, answer }) => (
-                <AccordionItem key={question} value={question}>
-                  <AccordionTrigger className="px-3 text-left text-sm font-semibold text-foreground sm:px-4 sm:text-base">
+            <Accordion 
+              type="single" 
+              collapsible 
+              className="rounded-xl border border-border/60 bg-background shadow-sm"
+            >
+              {faqs.map(({ question, answer }, index) => (
+                <AccordionItem 
+                  key={question} 
+                  value={question}
+                  className="border-b border-border/40 last:border-b-0"
+                >
+                  <AccordionTrigger 
+                    className="px-4 py-4 text-left text-base font-semibold text-foreground transition-colors hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:px-6 sm:text-lg [&[data-state=open]]:text-primary"
+                    aria-controls={`faq-content-${index}`}
+                  >
                     {question}
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 text-sm text-muted-foreground sm:px-4 sm:text-base">
+                  <AccordionContent 
+                    id={`faq-content-${index}`}
+                    className="px-4 pb-4 text-base leading-relaxed text-foreground/70 sm:px-6"
+                  >
                     {answer}
                   </AccordionContent>
                 </AccordionItem>
@@ -1186,22 +802,31 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           </div>
         </section>
 
-        <section className="px-6 pb-16">
+        <section className="px-4 pb-12 sm:px-6 sm:pb-16" aria-labelledby="cta-heading">
           <Card className="mx-auto max-w-5xl overflow-hidden border-none bg-gradient-to-br from-primary/15 via-primary/5 to-accent/10 shadow-lg">
-            <div className="grid gap-6 p-6 text-center sm:p-8 sm:text-left md:grid-cols-[1.5fr_1fr] md:items-center">
+            <div className="grid gap-6 p-6 text-center sm:p-8 sm:text-left md:grid-cols-[1.5fr_1fr] md:items-center lg:p-10">
               <div className="space-y-3 sm:space-y-4">
-                <h2 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                <h2 id="cta-heading" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                   Ready to feel more grounded?
                 </h2>
-                <p className="text-sm text-muted-foreground sm:text-base">
+                <p className="text-base font-medium text-foreground/70 sm:text-lg">
                   Start your tailored journey in minutes with assessments, AI coaching, and practices selected just for you.
                 </p>
               </div>
               <div className="flex flex-col justify-center gap-3 md:items-end">
-                <Button size="lg" className="h-12 w-full md:w-auto" onClick={() => openModal('signup')}>
+                <Button 
+                  size="lg" 
+                  className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:bg-primary/90 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8" 
+                  onClick={() => openModal('signup')}
+                >
                   Create your free account
                 </Button>
-                <Button variant="outline" size="lg" className="h-12 w-full border-primary text-primary md:w-auto" onClick={() => openModal('login')}>
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="h-12 w-full rounded-xl border-2 border-primary text-base font-semibold text-primary transition-all duration-200 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8" 
+                  onClick={() => openModal('login')}
+                >
                   I already have an account
                 </Button>
               </div>
@@ -1210,8 +835,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         </section>
       </main>
 
-      <footer className="border-t bg-muted/20 px-4 py-8 sm:px-6 md:px-8 md:py-12 lg:py-16">
-        <div className="mx-auto max-w-7xl space-y-6 md:space-y-12">
+      <footer className="border-t bg-muted/20 px-4 py-10 sm:px-6 md:px-8 md:py-12 lg:py-16">
+        <div className="mx-auto max-w-7xl space-y-8 md:space-y-12">
           {/* Priority Actions Section (Mobile First) */}
           <div className="space-y-4 lg:hidden">
             {/* Crisis Support - Always Visible */}
@@ -1272,7 +897,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary" />
-                <span className="text-lg font-semibold text-foreground">Wellbeing AI</span>
+                <span className="text-lg font-semibold text-foreground">MaanaSarathi</span>
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground max-w-xs">
                 Evidence-based wellbeing support, anytime, anywhere.
@@ -1351,38 +976,38 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             {/* Product Column */}
             <nav className="space-y-4" aria-labelledby="footer-product">
               <h4 id="footer-product" className="text-sm font-semibold text-foreground">Product</h4>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <ul className="space-y-1 text-sm text-foreground/70">
                 <li>
-                  <a href="#features" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="#features" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Features
                   </a>
                 </li>
                 <li>
-                  <a href="#how-it-works" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="#how-it-works" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     How it works
                   </a>
                 </li>
                 <li>
                   <button 
                     type="button" 
-                    className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4" 
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline" 
                     onClick={() => openModal('start')}
                   >
                     AI Chat
                   </button>
                 </li>
                 <li>
-                  <a href="#features" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="#features" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Assessments
                   </a>
                 </li>
                 <li>
-                  <a href="#features" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="#features" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Practices
                   </a>
                 </li>
                 <li>
-                  <a href="/pricing" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/pricing" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Pricing
                   </a>
                 </li>
@@ -1392,29 +1017,29 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             {/* Company Column */}
             <nav className="space-y-4" aria-labelledby="footer-company">
               <h4 id="footer-company" className="text-sm font-semibold text-foreground">Company</h4>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <ul className="space-y-1 text-sm text-foreground/70">
                 <li>
-                  <a href="/about" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/about" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     About us
                   </a>
                 </li>
                 <li>
-                  <a href="/careers" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/careers" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Careers
                   </a>
                 </li>
                 <li>
-                  <a href="/blog" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/blog" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Blog
                   </a>
                 </li>
                 <li>
-                  <a href="/press" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/press" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Press Kit
                   </a>
                 </li>
                 <li>
-                  <a href="/partners" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/partners" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Partners
                   </a>
                 </li>
@@ -1424,36 +1049,36 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             {/* Resources Column */}
             <nav className="space-y-4" aria-labelledby="footer-resources">
               <h4 id="footer-resources" className="text-sm font-semibold text-foreground">Resources</h4>
-              <ul className="space-y-3 text-sm text-muted-foreground">
+              <ul className="space-y-1 text-sm text-foreground/70">
                 <li>
-                  <a href="#faq" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="#faq" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Help Center
                   </a>
                 </li>
                 <li>
-                  <a href="/contact" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/contact" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Contact Support
                   </a>
                 </li>
                 <li>
-                  <a href="/privacy" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/privacy" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Privacy Policy
                   </a>
                 </li>
                 <li>
-                  <a href="/terms" className="inline-flex items-center transition-colors hover:text-primary hover:underline underline-offset-4">
+                  <a href="/terms" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
                     Terms of Service
                   </a>
                 </li>
                 <li>
-                  <a href="/crisis" className="inline-flex items-center text-red-600 transition-colors hover:text-red-700 hover:underline underline-offset-4">
+                  <a href="/crisis" className="inline-flex items-center py-2 text-red-600 transition-colors hover:text-red-700 underline-offset-4 hover:underline">
                     Crisis Resources
                   </a>
                 </li>
                 <li>
                   <button
                     type="button"
-                    className="inline-flex items-center text-xs opacity-50 transition-opacity hover:opacity-100"
+                    className="inline-flex items-center py-2 text-xs opacity-50 transition-opacity hover:opacity-100"
                     onClick={() => openModal('admin')}
                   >
                     Admin Access
@@ -1465,7 +1090,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             {/* Newsletter Column - Enhanced with validation & consent */}
             <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <h4 className="text-sm font-semibold text-foreground">Stay Connected</h4>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-foreground/70">
                 Monthly wellbeing tips and mindfulness practices.
               </p>
               <form 
@@ -1476,7 +1101,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 }}
               >
                 <div className="space-y-2">
-                  <Label htmlFor="newsletter-email" className="text-xs text-muted-foreground">
+                  <Label htmlFor="newsletter-email" className="text-xs text-foreground/70">
                     Email address
                   </Label>
                   <Input 
@@ -1526,7 +1151,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Bottom Bar - Legal & Copyright */}
           <div className="flex flex-col gap-4 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
             <p className="flex items-center gap-1">
-              © {new Date().getFullYear()} Wellbeing AI. All rights reserved.
+              © {new Date().getFullYear()} MaanaSarathi. All rights reserved.
             </p>
             
             {/* Legal Links */}

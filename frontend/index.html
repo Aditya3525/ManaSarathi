@@ -6,15 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#6366f1" />
-    <meta name="description" content="Your AI-powered companion for mental wellbeing, offering personalized support, assessments, and wellness plans." />
+    <meta name="theme-color" content="#0f7f72" />
+    <meta name="description" content="MaanaSarathi - Your AI-powered companion for mental wellbeing, offering personalized support, assessments, guided meditations, and evidence-based wellness plans. Start your free 7-day journey today." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MaanaSarathi" />
     <meta name="mobile-web-app-capable" content="yes" />
     
+    <!-- Open Graph / Social Meta Tags -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MaanaSarathi" />
+    <meta property="og:title" content="MaanaSarathi - AI-Powered Mental Wellbeing Companion" />
+    <meta property="og:description" content="Personalized mental wellness support with AI therapy chat, guided meditations, and progress tracking. Join 5,000+ members feeling better." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:url" content="https://maanasarathi.com" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MaanaSarathi - AI-Powered Mental Wellbeing" />
+    <meta name="twitter:description" content="Your calm companion for mental wellness. AI therapy chat, guided meditations, and personalized progress tracking." />
+    <meta name="twitter:image" content="/og-image.png" />
+    
+    <!-- Additional SEO -->
+    <meta name="robots" content="index, follow" />
+    <meta name="keywords" content="mental health, wellbeing, AI therapy, meditation, anxiety, stress management, mindfulness, mental wellness app" />
+    <link rel="canonical" href="https://maanasarathi.com" />
+    
     <!-- Manifest -->
     <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     
     <!-- Apple Touch Icons -->
     <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
@@ -33,25 +56,80 @@
     <link rel="apple-touch-startup-image" href="/splash/ipadpro1.png" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/splash/ipadpro2.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" />
     
-    <title>MaanaSarathi - Mental Wellbeing AI</title>
+    <title>MaanaSarathi - AI-Powered Mental Wellbeing Companion</title>
+    
+    <!-- Structured Data (JSON-LD) for SEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "MaanaSarathi",
+      "alternateName": "Maana Sarathi Mental Wellbeing",
+      "description": "AI-powered mental wellbeing companion offering personalized therapy chat, guided meditations, assessments, and progress tracking.",
+      "url": "https://maanasarathi.com",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free 7-day trial"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "5000",
+        "bestRating": "5",
+        "worstRating": "1"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "MaanaSarathi",
+        "url": "https://maanasarathi.com"
+      },
+      "featureList": [
+        "AI Therapy Chat",
+        "Guided Meditations",
+        "Progress Tracking",
+        "Personalized Assessments",
+        "Mindfulness Practices",
+        "Expert Content Library"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "MaanaSarathi",
+      "url": "https://maanasarathi.com",
+      "logo": "https://maanasarathi.com/logo.png",
+      "sameAs": [
+        "https://twitter.com/maanasarathi",
+        "https://linkedin.com/company/maanasarathi",
+        "https://instagram.com/maanasarathi"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "email": "support@maanasarathi.com"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- PWA Service Worker Registration -->
+    <!-- PWA Service Worker Registration (disabled on localhost to avoid dev cache issues) -->
     <script>
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && !location.hostname.includes('localhost')) {
         window.addEventListener('load', () => {
           navigator.serviceWorker
             .register('/sw.js')
             .then(registration => {
               console.log('SW registered:', registration);
-              
-              // Check for updates every hour
-              setInterval(() => {
-                registration.update();
-              }, 3600000);
+              setInterval(() => registration.update(), 3600000);
             })
             .catch(error => {
               console.log('SW registration failed:', error);

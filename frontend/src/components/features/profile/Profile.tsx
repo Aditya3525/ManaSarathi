@@ -299,8 +299,9 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
       if (!resp.success || !resp.data) {
         throw new Error(resp.error || 'Update failed');
       }
-      // Merge returned user (authoritative) with any other existing local fields
-  setUser(prev => (prev ? { ...prev, ...resp.data!.user } : resp.data!.user));
+      // Merge returned user with existing user data to preserve all fields (like isOnboarded)
+      const updatedUser = { ...user, ...resp.data.user };
+      setUser(updatedUser as ProfileUser);
       setSaveSuccess(true);
       setIsEditing(false);
     } catch (e) {
@@ -373,7 +374,9 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
         throw new Error(response.error || 'Failed to update security question');
       }
 
-  setUser(prev => (prev ? { ...prev, ...response.data!.user } : response.data!.user));
+      // Merge returned user with existing user data to preserve all fields (like isOnboarded)
+      const updatedUser = { ...user, ...response.data.user };
+      setUser(updatedUser as ProfileUser);
 
       setSecurityQuestionSuccess('Security question updated successfully.');
       setSecurityQuestionForm({
@@ -457,7 +460,9 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
         throw new Error(response.error || 'Unable to update approach');
       }
 
-  setUser(prev => (prev ? { ...prev, ...response.data!.user } : response.data!.user));
+      // Merge returned user with existing user data to preserve all fields (like isOnboarded)
+      const updatedUser = { ...user, ...response.data.user };
+      setUser(updatedUser as ProfileUser);
 
       setApproachUpdateSuccess('Approach preference updated successfully.');
       setApproachForm({ password: '', approach: response.data!.user.approach as 'western' | 'eastern' | 'hybrid' });

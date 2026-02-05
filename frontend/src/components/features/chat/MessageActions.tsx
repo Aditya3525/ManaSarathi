@@ -1,4 +1,4 @@
-import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RefreshCw, Check, Volume2 } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { useToast } from '../../../contexts/ToastContext';
@@ -10,6 +10,7 @@ interface MessageActionsProps {
   onLike?: (messageId: string) => void;
   onDislike?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onSpeak?: (content: string) => void;
   feedback?: 'liked' | 'disliked' | null;
 }
 
@@ -19,6 +20,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   onLike,
   onDislike,
   onRegenerate,
+  onSpeak,
   feedback = null,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -87,6 +89,19 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           <Copy className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
         )}
       </Button>
+
+      {/* Speak Button */}
+      {onSpeak && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onSpeak(content)}
+          className="h-7 w-7 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+          title="Read aloud"
+        >
+          <Volume2 className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+        </Button>
+      )}
 
       {/* Like Button */}
       {onLike && (

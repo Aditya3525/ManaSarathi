@@ -15,11 +15,16 @@ vi.mock('@prisma/client', () => ({
   }))
 }));
 
-vi.mock('../src/services/llmProvider', () => ({
-  llmService: {
-    getProviderStatus: getProviderStatusMock
-  }
-}));
+vi.mock('../src/services/llmProvider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/llmProvider')>();
+  return {
+    ...actual,
+    llmService: {
+      ...actual.llmService,
+      getProviderStatus: getProviderStatusMock
+    }
+  };
+});
 
 let app: Express;
 
@@ -37,7 +42,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('GET /health/ready', () => {
+describe('GET /api/health/ready', () => {
   it('returns ready when dependencies are healthy', async () => {
     queryRawMock.mockResolvedValueOnce([{ ok: 1 }]);
     getProviderStatusMock.mockResolvedValueOnce({
@@ -45,7 +50,7 @@ describe('GET /health/ready', () => {
       ollama: { available: true, name: 'Ollama', cooldownActive: false, cooldownExpiresAt: null }
     });
 
-    const response = await request(app).get('/health/ready');
+    const response = await request(app).get('/api/health/ready');
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ready');
@@ -60,7 +65,7 @@ describe('GET /health/ready', () => {
       gemini: { available: true, name: 'Gemini', cooldownActive: false, cooldownExpiresAt: null }
     });
 
-    const response = await request(app).get('/health/ready');
+    const response = await request(app).get('/api/health/ready');
 
     expect(response.status).toBe(503);
     expect(response.body.status).toBe('degraded');
@@ -68,3 +73,4 @@ describe('GET /health/ready', () => {
     expect(response.body.checks.database.error).toContain('database offline');
   });
 });
+

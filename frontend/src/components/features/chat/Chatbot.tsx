@@ -64,6 +64,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   const [isLoadingStarters, setIsLoadingStarters] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false); // Manual voice control - off by default
   const [messageFeedback, setMessageFeedback] = useState<Record<string, 'liked' | 'disliked' | null>>({});
   const [currentlyTypingMessageId, setCurrentlyTypingMessageId] = useState<string | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -310,8 +311,10 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
 
         setMessages(prev => [...prev, botResponse]);
         
-        // Speak the bot response
-        speakText(resolvedContent);
+        // Speak the bot response only if voice is enabled
+        if (voiceEnabled) {
+          speakText(resolvedContent);
+        }
       } else {
         console.error('❌ Chat API failed:', response.error);
         // Fallback to local response if API fails
@@ -585,6 +588,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
                 onLike={handleLike}
                 onDislike={handleDislike}
                 onRegenerate={handleRegenerate}
+                onSpeak={speakText}
                 feedback={messageFeedback[message.id] || null}
               />
             )}
@@ -618,7 +622,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   };
 
   const chatContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header - Fixed */}
       <div className={`flex-shrink-0 border-b p-4 ${isModal ? '' : 'bg-gradient-to-r from-primary/10 to-accent/10'}`}>
         <div className="flex items-center justify-between">
@@ -658,6 +662,19 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Voice Toggle Button */}
+            <Button 
+              variant={voiceEnabled ? "default" : "ghost"} 
+              size="sm"
+              onClick={() => {
+                if (isSpeaking) stopSpeaking();
+                setVoiceEnabled(!voiceEnabled);
+              }}
+              title={voiceEnabled ? "Voice replies ON - Click to disable" : "Voice replies OFF - Click to enable"}
+              className={voiceEnabled ? "bg-primary text-primary-foreground" : ""}
+            >
+              {voiceEnabled ? "🔊" : "🔇"}
+            </Button>
             {isModal && onClose && (
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="h-4 w-4" />
@@ -766,15 +783,25 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-6 w-6 p-0"
-                onClick={isSpeaking ? stopSpeaking : undefined}
-                title={isSpeaking ? "Stop speaking" : "Voice output"}
+                className={`h-6 w-6 p-0 ${isSpeaking ? 'bg-blue-100' : ''}`}
+                onClick={() => {
+                  if (isSpeaking) {
+                    stopSpeaking();
+                  } else {
+                    // Find the last bot message and speak it
+                    const lastBotMessage = [...messages].reverse().find(m => m.type === 'bot');
+                    if (lastBotMessage) {
+                      speakText(lastBotMessage.content);
+                    }
+                  }
+                }}
+                title={isSpeaking ? "Stop speaking" : "Read last message aloud"}
               >
                 {isSpeaking ? (
                   <div className="h-4 w-4 relative">
                     <div className="absolute inset-0 animate-pulse bg-blue-500 rounded-full opacity-50" />
-                    <div className="relative h-full w-full flex items-center justify-center">
-                      🔊
+                    <div className="relative h-full w-full flex items-center justify-center text-sm">
+                      ⏹️
                     </div>
                   </div>
                 ) : (
@@ -813,13 +840,13 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   }
 
   return (
-    <div className="min-h-screen bg-background flex h-screen">
+    <div className="fixed inset-0 bg-background flex">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-80 border-r">
+      <div className="hidden lg:block w-80 border-r flex-shrink-0">
         <ConversationHistorySidebar
           activeConversationId={currentConversationId}
           onSelectConversation={handleSelectConversation}
-          className="h-screen"
+          className="h-full"
         />
       </div>
 
@@ -839,7 +866,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       </Sheet>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-screen">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         {chatContent}
       </div>
 

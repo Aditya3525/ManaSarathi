@@ -339,126 +339,105 @@ export function Practices({ onNavigate }: PracticesProps) {
 
     // Fullscreen minimal layout for YouTube practices
     if (youtubeUrl) {
+      // Restart YouTube practice: reset session and start playback
+      function restartYouTubePractice() {
+        setCurrentSession(prev => prev ? {
+          ...prev,
+          currentTime: 0,
+          isPlaying: true,
+          isCompleted: false
+        } : null);
+      }
+
       return (
-        <div className="fixed inset-0 bg-black text-white flex flex-col">
-          <div className="absolute top-4 left-4 z-20">
-            <Button variant="outline" size="sm" onClick={closePractice} className="bg-black/60 backdrop-blur border-white/20 text-white hover:bg-black/70">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        <div className="fixed inset-0 bg-slate-950 text-white flex flex-col">
+          {/* Top bar with back button */}
+          <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={closePractice}
+              className="text-white hover:bg-white/20"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
           </div>
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1">
-              <MediaPlayer
-                youtubeUrl={youtubeUrl}
-                autoPlay
-                fillScreen
-                className="rounded-none"
-                onTimeUpdate={(c,d)=>{
-                  setCurrentSession(prev=> prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
-                }}
-                onEnded={()=> completePractice()}
-              />
-            </div>
-            <div className="p-4 space-y-4 bg-gradient-to-t from-black/80 via-black/60 to-black/20">
-              <div>
-                <h2 className="text-2xl font-semibold">{currentSession.practice.title}</h2>
-                <p className="text-sm text-white/70">with {currentSession.practice.instructor}</p>
-              </div>
-              <div className="space-y-2">
-                <Progress value={progress} className="h-1 bg-white/20" />
-                <div className="flex justify-between text-xs text-white/70 font-mono">
-                  <span>{formatTime(currentSession.currentTime)}</span>
-                  <span>{formatTime(totalSeconds)}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={resetPractice}
-                  disabled={currentSession.currentTime === 0}
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  onClick={togglePlayPause}
-                  disabled={currentSession.isCompleted}
-                  className="rounded-full w-14 h-14 bg-white text-black hover:bg-white/90"
-                >
-                  {currentSession.isPlaying ? (
-                    <Pause className="h-6 w-6" />
-                  ) : (
-                    <Play className="h-6 w-6" />
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={completePractice}
-                  disabled={currentSession.isCompleted}
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                >
-                  <SkipForward className="h-4 w-4" />
-                </Button>
-                <div className="flex-1 flex items-center gap-2 ml-4">
-                  {currentSession.volume === 0 ? (
-                    <VolumeX className="h-4 w-4 text-white/70" />
-                  ) : (
-                    <Volume2 className="h-4 w-4 text-white/70" />
-                  )}
-                  <Slider
-                    value={[currentSession.volume]}
-                    onValueChange={handleVolumeChange}
-                    max={1}
-                    step={0.1}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </div>
+
+          {/* YouTube Player - takes most of the screen */}
+          <div className="flex-1 relative bg-black">
+            <MediaPlayer
+              youtubeUrl={youtubeUrl}
+              title={currentSession.practice.title}
+              autoPlay
+              fillScreen
+              className="rounded-none"
+              playing={currentSession.isPlaying}
+              onTimeUpdate={(c,d)=>{
+                setCurrentSession(prev=> prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
+              }}
+              onEnded={()=> completePractice()}
+            />
           </div>
 
-          {showPostPractice && (
-            <div className="fixed inset-0 z-30 bg-black/70 backdrop-blur flex items-center justify-center p-4">
-              <Card className="w-full max-w-md bg-white text-black">
-                <CardHeader>
-                  <CardTitle className="text-center flex items-center justify-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    Practice Complete!
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-center text-muted-foreground">
-                    Great job completing &ldquo;{currentSession.practice.title}&rdquo;. How do you feel now?
+          {/* Bottom Info Panel - Clean design with practice details */}
+          <div className="bg-slate-900 border-t border-white/10">
+            <div className="max-w-4xl mx-auto px-6 py-5">
+              {/* Title and Instructor */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-semibold text-white truncate">
+                    {currentSession.practice.title}
+                  </h2>
+                  <p className="text-sm text-white/60 mt-1">
+                    with {currentSession.practice.instructor} • {currentSession.practice.duration} min
                   </p>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-5 gap-2">
-                      {[1,2,3,4,5].map(r => (
-                        <Button
-                          key={r}
-                          variant={postPracticeRating === r ? 'default' : 'outline'}
-                          className="aspect-square"
-                          onClick={() => setPostPracticeRating(r)}
-                        >
-                          {r === 1 ? '😔' : r === 2 ? '😐' : r === 3 ? '🙂' : r === 4 ? '😊' : '🤗'}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button className="flex-1" onClick={() => { closePractice(); }}>
-                        Complete
-                      </Button>
-                      <Button variant="outline" onClick={() => startPractice(currentSession.practice)}>
-                        Practice Again
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={restartYouTubePractice}
+                    className="bg-slate-700 hover:bg-slate-800 text-white font-bold border border-slate-600"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    <span className="text-white font-bold">Restart</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={completePractice}
+                    disabled={currentSession.isCompleted}
+                    className="bg-primary hover:bg-primary/90 text-white font-semibold"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Complete
+                  </Button>
+                </div>
+              </div>
+
+              {/* Description */}
+              {currentSession.practice.description && (
+                <p className="text-sm text-white/70 mt-3 line-clamp-2">
+                  {currentSession.practice.description}
+                </p>
+              )}
+
+              {/* Tags */}
+              {currentSession.practice.tags && currentSession.practice.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {currentSession.practice.tags.slice(0, 5).map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant="secondary"
+                      className="bg-slate-800 text-white/80"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       );
     }
@@ -472,7 +451,7 @@ export function Practices({ onNavigate }: PracticesProps) {
               <ImageWithFallback
                 src={currentSession.practice.image}
                 alt={currentSession.practice.title}
-                className="w-24 h-24 rounded-full mx-auto object-cover"
+                className="w-24 h-24 rounded-full mx-auto object-cover shadow-lg"
               />
               <h2 className="text-xl font-semibold">{currentSession.practice.title}</h2>
               <p className="text-sm text-muted-foreground">
@@ -480,50 +459,40 @@ export function Practices({ onNavigate }: PracticesProps) {
               </p>
             </div>
 
-            {/* Media Player */}
+            {/* Media Player - now with controlled playback */}
             <div className="space-y-4">
               <MediaPlayer
                 audioUrl={format === 'Audio' || format === 'Audio/Video' ? audioUrl : undefined}
                 videoUrl={format === 'Video' || format === 'Audio/Video' ? videoUrl : undefined}
                 youtubeUrl={youtubeUrl}
+                poster={currentSession.practice.image}
+                title={currentSession.practice.title}
+                artist={currentSession.practice.instructor}
                 autoPlay
+                playing={currentSession.isPlaying}
+                volume={currentSession.volume}
+                variant="full"
                 onTimeUpdate={(c,d)=>{
                   setCurrentSession(prev=> prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
                 }}
                 onEnded={()=> completePractice()}
+                onPlay={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: true } : prev)}
+                onPause={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: false } : prev)}
+                onVolumeChange={(v) => setCurrentSession(prev => prev ? { ...prev, volume: v } : prev)}
               />
-              {/* Progress (simulated for now) */}
-              <div className="space-y-3">
-                <Progress value={progress} className="h-2" />
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{formatTime(currentSession.currentTime)}</span>
-                  <span>{formatTime(totalSeconds)}</span>
-                </div>
-              </div>
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-4">
+            {/* Quick action buttons - MediaPlayer handles main controls */}
+            <div className="flex items-center justify-center gap-3 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={resetPractice}
                 disabled={currentSession.currentTime === 0}
+                className="gap-2"
               >
                 <RotateCcw className="h-4 w-4" />
-              </Button>
-
-              <Button
-                size="lg"
-                className="rounded-full w-16 h-16"
-                onClick={togglePlayPause}
-                disabled={currentSession.isCompleted}
-              >
-                {currentSession.isPlaying ? (
-                  <Pause className="h-6 w-6" />
-                ) : (
-                  <Play className="h-6 w-6" />
-                )}
+                Restart
               </Button>
 
               <Button
@@ -531,33 +500,17 @@ export function Practices({ onNavigate }: PracticesProps) {
                 size="sm"
                 onClick={completePractice}
                 disabled={currentSession.isCompleted}
+                className="gap-2"
               >
                 <SkipForward className="h-4 w-4" />
+                Complete
               </Button>
-            </div>
-
-            {/* Volume Control */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                {currentSession.volume === 0 ? (
-                  <VolumeX className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Volume2 className="h-4 w-4 text-muted-foreground" />
-                )}
-                <Slider
-                  value={[currentSession.volume]}
-                  onValueChange={handleVolumeChange}
-                  max={1}
-                  step={0.1}
-                  className="flex-1"
-                />
-              </div>
             </div>
 
             {/* Exit */}
             <Button
-              variant="outline"
-              className="w-full"
+              variant="ghost"
+              className="w-full text-muted-foreground hover:text-foreground"
               onClick={closePractice}
             >
               Exit Practice

@@ -17,7 +17,10 @@ import {
   BarChart3,
   Users,
   Stethoscope,
-  Activity
+  Activity,
+  HelpCircle,
+  AlertTriangle,
+  Inbox
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -45,6 +48,9 @@ import { PracticeForm, PracticeRecord } from './PracticeForm';
 import { PracticesList, Practice } from './PracticesList';
 import { TherapistManagement } from './TherapistManagement';
 import { UserManagement } from './UserManagement';
+import { FAQManagement } from './FAQManagement';
+import { CrisisResourceManagement } from './CrisisResourceManagement';
+import { SupportTicketManagement } from './SupportTicketManagement';
 
 type ToastPush = (toast: { title: string; description?: string; type: 'success' | 'error' | 'warning' | 'info'; duration?: number }) => void;
 
@@ -234,7 +240,7 @@ const useAdminDashboardData = (
   };
 };
 
-type Tab = 'practices' | 'content' | 'assessments' | 'therapists' | 'analytics' | 'advanced-analytics' | 'diagnostics' | 'users' | 'activity';
+type Tab = 'practices' | 'content' | 'assessments' | 'therapists' | 'faqs' | 'crisis-resources' | 'support-tickets' | 'analytics' | 'advanced-analytics' | 'diagnostics' | 'users' | 'activity';
 
 export const AdminDashboard: React.FC = () => {
   console.log('🎯 AdminDashboard loaded with Assessments tab support');
@@ -454,6 +460,21 @@ export const AdminDashboard: React.FC = () => {
         icon: Stethoscope
       },
       {
+        value: 'faqs' as const,
+        label: 'FAQs',
+        icon: HelpCircle
+      },
+      {
+        value: 'crisis-resources' as const,
+        label: 'Crisis Resources',
+        icon: AlertTriangle
+      },
+      {
+        value: 'support-tickets' as const,
+        label: 'Support Tickets',
+        icon: Inbox
+      },
+      {
         value: 'analytics' as const,
         label: 'Analytics',
         icon: BarChart3
@@ -634,6 +655,18 @@ export const AdminDashboard: React.FC = () => {
 
     if (tab === 'therapists') {
       return <TherapistManagement onRefresh={refreshAll} />;
+    }
+
+    if (tab === 'faqs') {
+      return <FAQManagement />;
+    }
+
+    if (tab === 'crisis-resources') {
+      return <CrisisResourceManagement />;
+    }
+
+    if (tab === 'support-tickets') {
+      return <SupportTicketManagement />;
     }
 
     if (tab === 'analytics') {

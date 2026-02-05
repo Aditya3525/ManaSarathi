@@ -5149,6 +5149,7 @@
   --info-foreground: #04111A;
   --border: #2B2E31;
   --input: #2B2E31;
+  --input-background: #1A1D20;
   --ring: #7DD3FC;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
@@ -5168,6 +5169,20 @@
   --gradient-calm-sky: linear-gradient(135deg, #4BA3C3, #6EE7B7);
   --gradient-healing-glow: linear-gradient(135deg, #4BA3C3, #A78BFA);
   --gradient-ai-aura: linear-gradient(135deg, #6EE7B7, #38BDF8);
+}
+
+/* Improve native selects/options in dark mode for readability */
+@layer base {
+  .dark select,
+  .dark option,
+  .dark optgroup {
+    background-color: var(--input-background);
+    color: var(--foreground);
+  }
+
+  .dark select:focus {
+    background-color: var(--input);
+  }
 }
 
 /* ==========================================

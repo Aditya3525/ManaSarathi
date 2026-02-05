@@ -6,8 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Badge } from '../ui/badge';
+import { Label } from '../ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '../ui/dialog';
 import { 
   ArrowLeft,
   Phone,
@@ -28,7 +37,9 @@ import {
   Mail,
   Loader2,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Calendar,
+  User
 } from 'lucide-react';
 import { 
   crisisResourcesApi, 
@@ -39,7 +50,8 @@ import {
   type FAQ,
   type Therapist,
   type FAQCategory,
-  type TicketCategory
+  type TicketCategory,
+  type TherapistBooking
 } from '../../services/helpSafetyApi';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -58,6 +70,12 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
   const [selectedFaqCategory, setSelectedFaqCategory] = useState<FAQCategory | 'all'>('all');
   const { push } = useToast();
   const queryClient = useQueryClient();
+
+  // Booking dialog state
+  const [bookingTherapist, setBookingTherapist] = useState<Therapist | null>(null);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingTime, setBookingTime] = useState('');
+  const [bookingMessage, setBookingMessage] = useState('');
 
   // Fetch crisis resources
   const { data: crisisResources = [], isLoading: loadingCrisis } = useQuery({
@@ -114,6 +132,72 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
       });
     }
   });
+
+  // Therapist booking mutation
+  const bookingMutation = useMutation({
+    mutationFn: (data: { 
+      therapistId: string; 
+      requestedDate: string; 
+      requestedTime: string; 
+      message?: string 
+    }) => therapistApi.requestBooking(
+      data.therapistId, 
+      data.requestedDate, 
+      data.requestedTime, 
+      data.message
+    ),
+    onSuccess: () => {
+      push({
+        type: 'success',
+        title: 'Booking Requested',
+        description: 'Your consultation request has been submitted. The therapist will confirm your appointment shortly.',
+      });
+      setBookingTherapist(null);
+      setBookingDate('');
+      setBookingTime('');
+      setBookingMessage('');
+      queryClient.invalidateQueries({ queryKey: ['therapists'] });
+    },
+    onError: (error: Error) => {
+      push({
+        type: 'error',
+        title: 'Booking Failed',
+        description: error.message || 'Failed to request booking. Please try again.',
+      });
+    }
+  });
+
+  // Handle booking submission
+  const handleBookingSubmit = () => {
+    if (!bookingTherapist || !bookingDate || !bookingTime) {
+      push({
+        type: 'error',
+        title: 'Validation Error',
+        description: 'Please select a date and time for your consultation.',
+      });
+      return;
+    }
+
+    bookingMutation.mutate({
+      therapistId: bookingTherapist.id,
+      requestedDate: bookingDate,
+      requestedTime: bookingTime,
+      message: bookingMessage || undefined
+    });
+  };
+
+  // Get minimum date (today)
+  const getMinDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  // Generate time slots
+  const timeSlots = [
+    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30'
+  ];
 
   // Filter FAQs by search query
   const filteredFAQs = allFaqs.filter(faq => 
@@ -650,7 +734,11 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                               )}
                             </div>
 
-                            <Button size="sm">
+                            <Button 
+                              size="sm"
+                              onClick={() => setBookingTherapist(therapist)}
+                            >
+                              <Calendar className="h-3 w-3 mr-1" />
                               Request Consultation
                             </Button>
                           </div>
@@ -817,6 +905,107 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Therapist Booking Dialog */}
+      <Dialog open={!!bookingTherapist} onOpenChange={(open) => !open && setBookingTherapist(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Consultation</DialogTitle>
+            <DialogDescription>
+              Book a consultation with {bookingTherapist?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {bookingTherapist && (
+            <div className="space-y-4 py-4">
+              {/* Therapist Info */}
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">{bookingTherapist.name}</p>
+                  <p className="text-sm text-muted-foreground">{bookingTherapist.title}</p>
+                </div>
+              </div>
+
+              {/* Date Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="booking-date">Preferred Date *</Label>
+                <Input
+                  id="booking-date"
+                  type="date"
+                  min={getMinDate()}
+                  value={bookingDate}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Time Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="booking-time">Preferred Time *</Label>
+                <div className="grid grid-cols-4 gap-2">
+                  {timeSlots.map((slot) => (
+                    <Button
+                      key={slot}
+                      type="button"
+                      variant={bookingTime === slot ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setBookingTime(slot)}
+                      className="text-xs"
+                    >
+                      {slot}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Message */}
+              <div className="space-y-2">
+                <Label htmlFor="booking-message">
+                  Reason for consultation (optional)
+                </Label>
+                <Textarea
+                  id="booking-message"
+                  placeholder="Briefly describe what you'd like to discuss..."
+                  value={bookingMessage}
+                  onChange={(e) => setBookingMessage(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Note */}
+              <p className="text-xs text-muted-foreground">
+                * The therapist will confirm your appointment. You'll receive a notification 
+                once your booking is confirmed.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setBookingTherapist(null)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleBookingSubmit}
+              disabled={bookingMutation.isPending || !bookingDate || !bookingTime}
+            >
+              {bookingMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Submitting...
+                </>
+              ) : (
+                'Request Booking'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -189,7 +189,8 @@ export class ConversationService {
     // Try to generate with AI if available
     if (genAI) {
       try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash-lite';
+        const model = genAI.getGenerativeModel({ model: geminiModel });
         const prompt = `Generate a short 3-5 word title for this conversation. Return ONLY the title, no quotes, no extra text:\n\n"${content}"`;
         
         const result = await model.generateContent(prompt);

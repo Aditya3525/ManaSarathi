@@ -3,6 +3,21 @@ import { AIProviderType } from '../src/types/ai';
 
 const ORIGINAL_ENV = { ...process.env };
 
+function clearProviderEnv() {
+  // Ensure tests are deterministic regardless of developer machine env vars.
+  const keysToClear = [
+    'GEMINI_API_KEY_1', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3',
+    'HUGGINGFACE_API_KEY_1', 'HUGGINGFACE_API_KEY_2', 'HUGGINGFACE_API_KEY', 'HF_TOKEN',
+    'OPENAI_API_KEY_1', 'OPENAI_API_KEY_2', 'OPENAI_API_KEY_3',
+    'ANTHROPIC_API_KEY_1', 'ANTHROPIC_API_KEY_2',
+    'OLLAMA_ENABLED',
+  ];
+  for (const key of keysToClear) {
+    // Use empty string instead of delete to reliably override any inherited env.
+    (process.env as any)[key] = '';
+  }
+}
+
 async function createService() {
   // Reload the module so environment updates apply.
   const module = await import('../src/services/llmProvider');
@@ -20,6 +35,8 @@ const enableGemini = () => {
 beforeEach(() => {
   vi.resetModules();
   process.env = { ...ORIGINAL_ENV };
+  clearProviderEnv();
+  delete (process.env as any).AI_PROVIDER_PRIORITY;
 });
 
 describe('LLMService fallback priority', () => {

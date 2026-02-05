@@ -16,6 +16,12 @@ export const systemHealthMiddleware = (req: Request, res: Response, next: NextFu
 
   // Override the end function to capture response time
   res.end = function (this: Response, ...args: any[]): Response {
+    // Keep tests deterministic and avoid noise from analytics writes when Prisma is mocked.
+    if (process.env.NODE_ENV === 'test') {
+      // @ts-ignore - Express response.end has complex overloads
+      return originalEnd.apply(this, args);
+    }
+
     const responseTime = Date.now() - startTime;
     const endMemory = process.memoryUsage();
     const memoryDelta = endMemory.heapUsed - startMemory.heapUsed;
@@ -62,6 +68,7 @@ export const systemHealthMiddleware = (req: Request, res: Response, next: NextFu
  * Periodic system health check (call this from a cron job or interval)
  */
 export const recordSystemHealth = async () => {
+  if (process.env.NODE_ENV === 'test') return;
   try {
     const memory = process.memoryUsage();
     const uptime = process.uptime();

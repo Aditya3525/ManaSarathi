@@ -169,7 +169,8 @@ export class LLMService {
     const huggingfaceKeys = sanitizeKeys([
       process.env.HUGGINGFACE_API_KEY_1,
       process.env.HUGGINGFACE_API_KEY_2,
-      process.env.HUGGINGFACE_API_KEY
+      process.env.HUGGINGFACE_API_KEY,
+      process.env.HF_TOKEN
     ]);
 
     if (huggingfaceKeys.length > 0) {
