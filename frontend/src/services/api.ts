@@ -1,9 +1,7 @@
 import { getApiBaseUrl } from '../config/apiConfig';
 
 // API Configuration - uses shared dynamic URL detection
-// Ensure the base URL always ends with /api
-const _rawUrl = import.meta.env.VITE_API_URL || getApiBaseUrl();
-const API_BASE_URL = _rawUrl.endsWith('/api') ? _rawUrl : `${_rawUrl.replace(/\/+$/, '')}/api`;
+const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export interface User {

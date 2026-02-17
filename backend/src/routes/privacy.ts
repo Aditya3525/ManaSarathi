@@ -34,11 +34,11 @@ router.get('/settings', async (req: any, res) => {
 
     // Fetch new fields via raw query to avoid TypeScript Prisma client stale types
     const rawUser = await prisma.$queryRaw<Array<{
-      anonymousAnalytics: number | null;
-      marketingEmails: number | null;
-      researchParticipation: number | null;
+      anonymousAnalytics: boolean | null;
+      marketingEmails: boolean | null;
+      researchParticipation: boolean | null;
       consentUpdatedAt: string | null;
-    }>>`SELECT anonymousAnalytics, marketingEmails, researchParticipation, consentUpdatedAt FROM users WHERE id = ${userId}`;
+    }>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
 
     const extra = rawUser[0] || {} as any;
 
@@ -72,27 +72,27 @@ router.put('/settings', async (req: any, res) => {
 
     const { dataSharing, clinicianAccess, anonymousAnalytics, marketingEmails, researchParticipation } = req.body;
 
-    // Build SET clauses dynamically
-    const setClauses: string[] = ['consentUpdatedAt = datetime(\'now\')'];
-    if (dataSharing !== undefined) setClauses.push(`dataConsent = ${dataSharing ? 1 : 0}`);
-    if (clinicianAccess !== undefined) setClauses.push(`clinicianSharing = ${clinicianAccess ? 1 : 0}`);
-    if (anonymousAnalytics !== undefined) setClauses.push(`anonymousAnalytics = ${anonymousAnalytics ? 1 : 0}`);
-    if (marketingEmails !== undefined) setClauses.push(`marketingEmails = ${marketingEmails ? 1 : 0}`);
-    if (researchParticipation !== undefined) setClauses.push(`researchParticipation = ${researchParticipation ? 1 : 0}`);
+    // Build SET clauses dynamically (PostgreSQL-compatible)
+    const setClauses: string[] = ['"consentUpdatedAt" = CURRENT_TIMESTAMP'];
+    if (dataSharing !== undefined) setClauses.push(`"dataConsent" = ${dataSharing ? 'true' : 'false'}`);
+    if (clinicianAccess !== undefined) setClauses.push(`"clinicianSharing" = ${clinicianAccess ? 'true' : 'false'}`);
+    if (anonymousAnalytics !== undefined) setClauses.push(`"anonymousAnalytics" = ${anonymousAnalytics ? 'true' : 'false'}`);
+    if (marketingEmails !== undefined) setClauses.push(`"marketingEmails" = ${marketingEmails ? 'true' : 'false'}`);
+    if (researchParticipation !== undefined) setClauses.push(`"researchParticipation" = ${researchParticipation ? 'true' : 'false'}`);
 
     await prisma.$executeRawUnsafe(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = '${userId}'`
+      `UPDATE "User" SET ${setClauses.join(', ')} WHERE "id" = '${userId}'`
     );
 
     // Fetch updated values
     const rawUser = await prisma.$queryRaw<Array<{
-      dataConsent: number;
-      clinicianSharing: number;
-      anonymousAnalytics: number | null;
-      marketingEmails: number | null;
-      researchParticipation: number | null;
+      dataConsent: boolean;
+      clinicianSharing: boolean;
+      anonymousAnalytics: boolean | null;
+      marketingEmails: boolean | null;
+      researchParticipation: boolean | null;
       consentUpdatedAt: string | null;
-    }>>`SELECT dataConsent, clinicianSharing, anonymousAnalytics, marketingEmails, researchParticipation, consentUpdatedAt FROM users WHERE id = ${userId}`;
+    }>>`SELECT "dataConsent", "clinicianSharing", "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
 
     const row = rawUser[0];
 
@@ -154,7 +154,7 @@ router.post('/export-data', async (req: any, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    const privacyRaw = await prisma.$queryRaw<Array<any>>`SELECT anonymousAnalytics, marketingEmails, researchParticipation, consentUpdatedAt FROM users WHERE id = ${userId}`;
+    const privacyRaw = await prisma.$queryRaw<Array<any>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
     const privacyExtra = privacyRaw[0] || {};
 
     // Fetch only requested sections in parallel

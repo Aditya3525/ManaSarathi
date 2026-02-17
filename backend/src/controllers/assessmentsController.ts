@@ -710,9 +710,9 @@ export const submitAssessment = async (req: any, res: Response) => {
 
     const insightId = randomUUID();
     await prisma.$executeRawUnsafe(
-      `INSERT INTO assessment_insights (id, userId, summary, overallTrend, aiSummary, wellness_score, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(userId) DO UPDATE SET summary = excluded.summary, overallTrend = excluded.overallTrend, aiSummary = excluded.aiSummary, wellness_score = excluded.wellness_score, updatedAt = CURRENT_TIMESTAMP`,
+      `INSERT INTO "AssessmentInsight" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       insightId,
       userId,
   JSON.stringify(insightsPayload),
@@ -793,9 +793,9 @@ export const getAssessmentHistory = async (req: any, res: Response) => {
 
     const historyInsightId = randomUUID();
     await prisma.$executeRawUnsafe(
-      `INSERT INTO assessment_insights (id, userId, summary, overallTrend, aiSummary, wellness_score, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(userId) DO UPDATE SET summary = excluded.summary, overallTrend = excluded.overallTrend, aiSummary = excluded.aiSummary, wellness_score = excluded.wellness_score, updatedAt = CURRENT_TIMESTAMP`,
+      `INSERT INTO "AssessmentInsight" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       historyInsightId,
       userId,
       JSON.stringify(insightsPayload),
@@ -1142,9 +1142,9 @@ export const submitCombinedAssessments = async (req: any, res: Response) => {
     const wellnessScoreValue = insightsPayload.insights.wellnessScore?.value ?? 0;
     const insightId = randomUUID();
     await prisma.$executeRawUnsafe(
-      `INSERT INTO assessment_insights (id, userId, summary, overallTrend, aiSummary, wellness_score, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(userId) DO UPDATE SET summary = excluded.summary, overallTrend = excluded.overallTrend, aiSummary = excluded.aiSummary, wellness_score = excluded.wellness_score, updatedAt = CURRENT_TIMESTAMP`,
+      `INSERT INTO "AssessmentInsight" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       insightId,
       userId,
   JSON.stringify(insightsPayload),

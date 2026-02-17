@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 
 import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || getApiBaseUrl();
+const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export interface DashboardData {

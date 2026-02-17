@@ -10,7 +10,8 @@
 export const getApiBaseUrl = (): string => {
     // Production: always use the env-var set at build time
     if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
+        const raw = import.meta.env.VITE_API_URL as string;
+        return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`;
     }
     // Development: dynamic hostname detection
     const hostname = window.location.hostname;
