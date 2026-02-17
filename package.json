@@ -1,5 +1,5 @@
 {
-  "name": "MaanSarathi",
+  "name": "maansarathi",
   "version": "1.0.0",
   "description": "MaanSarathi - Full Stack Monorepo",
   "private": true,
@@ -52,7 +52,7 @@
     "nodejs",
     "typescript",
     "monorepo",
-    "MaanSarathi"
+    "maansarathi"
   ],
   "author": "",
   "license": "MIT",

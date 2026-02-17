@@ -1,31 +1,3 @@
-{
-  "services": [
-    {
-      "type": "web",
-      "name": "MaanSarathi-backend",
-      "env": "node",
-      "region": "oregon",
-      "plan": "free",
-      "buildCommand": "npm install && npm run build",
-      "startCommand": "npm start",
-      "envVars": [
-        {
-          "key": "NODE_ENV",
-          "value": "production"
-        },
-        {
-          "key": "PORT",
-          "value": "10000"
-        }
-      ]
-    }
-  ],
-  "databases": [
-    {
-      "name": "MaanSarathi-db",
-      "databaseName": "mental_wellbeing",
-      "user": "mental_wellbeing_user",
-      "plan": "free"
-    }
-  ]
-}
+# This file is kept for reference only.
+# The root-level render.yaml is used for Render Blueprint deployment.
+# See: /render.yaml

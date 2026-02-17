@@ -1,5 +1,5 @@
 {
-  "name": "MaanSarathi-backend",
+  "name": "maansarathi-backend",
   "version": "1.0.0",
   "description": "Backend API for MaanSarathi",
   "main": "dist/server.js",

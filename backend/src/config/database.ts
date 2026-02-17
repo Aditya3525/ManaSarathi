@@ -24,8 +24,8 @@ const prismaClientSingleton = () => {
     },
   });
 
-  // Enable foreign key constraints for SQLite
-  // This ensures CASCADE deletes work properly
+  // Enable foreign key constraints for SQLite (dev fallback only)
+  // PostgreSQL handles this natively — this block is a no-op in production
   if (process.env.DATABASE_URL?.includes('sqlite')) {
     client.$executeRawUnsafe('PRAGMA foreign_keys = ON;').catch((err) => {
       logger.error({ err }, 'Failed to enable foreign key constraints');

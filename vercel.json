@@ -1,6 +1,9 @@
 {
-  "name": "mentalwellnessai2025",
+  "name": "maansarathi",
   "framework": "vite",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "echo skip",
   "rewrites": [
     {
       "source": "/(.*)",
