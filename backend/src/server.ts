@@ -100,6 +100,8 @@ app.use(cors({
       /^https?:\/\/192\.168\.\d+\.\d+/,
       /^https?:\/\/10\.\d+\.\d+\.\d+/,
       /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/,
+      // Allow all Vercel preview and production deployments
+      /\.vercel\.app$/,
       // Allow the production mobile app (native apps send no Origin)
       'https://maansarathi.app',
       'https://api.maansarathi.app',
