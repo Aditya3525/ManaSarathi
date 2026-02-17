@@ -103,10 +103,10 @@ router.get('/summary', async (req: Request, res: Response) => {
     for (let i = 0; i < allMoodEntries.length; i++) {
       const entryDate = new Date(allMoodEntries[i].createdAt);
       entryDate.setHours(0, 0, 0, 0);
-      
+
       const expectedDate = new Date(today);
       expectedDate.setDate(expectedDate.getDate() - i);
-      
+
       if (entryDate.getTime() === expectedDate.getTime()) {
         currentStreak++;
       } else {
@@ -160,8 +160,8 @@ router.get('/summary', async (req: Request, res: Response) => {
         memberSince: user.createdAt.toISOString()
       },
       assessmentScores: assessmentInsights ? {
-        anxiety: assessmentInsights.insights.byType['anxiety']?.latestScore || 
-                 assessmentInsights.insights.byType['anxiety_assessment']?.latestScore || null,
+        anxiety: assessmentInsights.insights.byType['anxiety']?.latestScore ||
+          assessmentInsights.insights.byType['anxiety_assessment']?.latestScore || null,
         stress: assessmentInsights.insights.byType['stress']?.latestScore || null,
         emotionalIntelligence: assessmentInsights.insights.byType['emotionalIntelligence']?.latestScore || null,
         wellnessScore: assessmentInsights.insights.wellnessScore?.value || null,
@@ -170,7 +170,7 @@ router.get('/summary', async (req: Request, res: Response) => {
         aiSummary: assessmentInsights.insights.aiSummary,
         updatedAt: assessmentInsights.insights.updatedAt
       } : null,
-      recentInsights: assessmentInsights ? 
+      recentInsights: assessmentInsights ?
         generateInsightsFromAssessments(assessmentInsights.insights.byType, assessmentInsights.insights.aiSummary) : [],
       weeklyProgress: {
         practices: {
@@ -230,73 +230,90 @@ router.get('/insights', async (req: Request, res: Response) => {
     }
 
     // Get combined insights (assessments + chatbot)
-    const combinedInsights = await enhancedInsightsService.getDashboardInsights(userId);
+    let combinedInsights = await enhancedInsightsService.getDashboardInsights(userId);
 
+    // If generation failed, try to fetch the last cached insight directly
     if (!combinedInsights) {
-      // Fallback to assessment-only insights if combined insights fail
-      const assessments = await prisma.assessmentResult.findMany({
-        where: { userId },
-        orderBy: { completedAt: 'desc' },
-        take: 20
-      });
+      const cached = await prisma.dashboardInsights.findUnique({ where: { userId } });
+      if (cached && cached.insightsData) {
+        try {
+          combinedInsights = JSON.parse(cached.insightsData);
+        } catch { }
+      }
+    }
 
-      if (assessments.length === 0) {
+    // If we have any insight (generated or cached), verify it has real data before returning
+    if (combinedInsights) {
+      const hasAssessmentData = combinedInsights.assessments.scores.length > 0;
+      const hasChatData = combinedInsights.chatbot.summaries.length > 0;
+
+      // Only return cached insights if they contain actual user data
+      if (hasAssessmentData || hasChatData) {
         return res.json({
           insights: [],
-          aiSummary: 'Complete your first assessment or chat with our AI to receive personalized insights.'
+          aiSummary: combinedInsights.aiSummary,
+          overallTrend: 'baseline',
+          wellnessScore: null,
+          assessments: {
+            count: combinedInsights.assessments.scores.length,
+            averageScore: combinedInsights.assessments.scores.length > 0
+              ? combinedInsights.assessments.scores.reduce((sum, s) => sum + s.score, 0) / combinedInsights.assessments.scores.length
+              : 0,
+            trend: 'stable',
+            recentScores: combinedInsights.assessments.scores.slice(0, 5).map(s => s.score)
+          },
+          chatbot: {
+            conversationCount: combinedInsights.chatbot.summaries.length,
+            averageEmotionalState: combinedInsights.chatbot.emotionalStates.length > 0
+              ? combinedInsights.chatbot.emotionalStates[0]
+              : 'neutral',
+            commonTopics: combinedInsights.chatbot.keyTopics,
+            lastConversationDate: combinedInsights.chatbot.lastDate?.toISOString()
+          },
+          generatedAt: combinedInsights.generatedAt?.toISOString?.() || new Date().toISOString(),
+          source: 'combined',
+          cached: true
         });
       }
+      // If cached data has no real content, fall through to assessment-only check
+    }
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { firstName: true, name: true }
-      });
+    // If no insight ever existed, fallback to assessment-only logic
+    const assessments = await prisma.assessmentResult.findMany({
+      where: { userId },
+      orderBy: { completedAt: 'desc' },
+      take: 20
+    });
 
-      const assessmentInsights = await buildAssessmentInsights(
-        assessments,
-        { userName: user?.firstName || user?.name }
-      );
-
-      const insights = generateInsightsFromAssessments(
-        assessmentInsights.insights.byType,
-        assessmentInsights.insights.aiSummary
-      );
-
+    if (assessments.length === 0) {
       return res.json({
-        insights,
-        aiSummary: assessmentInsights.insights.aiSummary,
-        overallTrend: assessmentInsights.insights.overallTrend,
-        wellnessScore: assessmentInsights.insights.wellnessScore,
-        source: 'assessments-only',
-        cached: false
+        insights: [],
+        aiSummary: 'Complete your first assessment or chat with our AI to receive personalized insights.'
       });
     }
 
-    // Return combined insights
-    res.json({
-      insights: [],
-      aiSummary: combinedInsights.aiSummary,
-      overallTrend: 'baseline',
-      wellnessScore: null,
-      assessments: {
-        count: combinedInsights.assessments.scores.length,
-        averageScore: combinedInsights.assessments.scores.length > 0 
-          ? combinedInsights.assessments.scores.reduce((sum, s) => sum + s.score, 0) / combinedInsights.assessments.scores.length 
-          : 0,
-        trend: 'stable',
-        recentScores: combinedInsights.assessments.scores.slice(0, 5).map(s => s.score)
-      },
-      chatbot: {
-        conversationCount: combinedInsights.chatbot.summaries.length,
-        averageEmotionalState: combinedInsights.chatbot.emotionalStates.length > 0 
-          ? combinedInsights.chatbot.emotionalStates[0] 
-          : 'neutral',
-        commonTopics: combinedInsights.chatbot.keyTopics,
-        lastConversationDate: combinedInsights.chatbot.lastDate?.toISOString()
-      },
-      generatedAt: combinedInsights.generatedAt.toISOString(),
-      source: 'combined',
-      cached: true
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, name: true }
+    });
+
+    const assessmentInsights = await buildAssessmentInsights(
+      assessments,
+      { userName: user?.firstName || user?.name }
+    );
+
+    const insights = generateInsightsFromAssessments(
+      assessmentInsights.insights.byType,
+      assessmentInsights.insights.aiSummary
+    );
+
+    return res.json({
+      insights,
+      aiSummary: assessmentInsights.insights.aiSummary,
+      overallTrend: assessmentInsights.insights.overallTrend,
+      wellnessScore: assessmentInsights.insights.wellnessScore,
+      source: 'assessments-only',
+      cached: false
     });
   } catch (error) {
     console.error('Error fetching insights:', error);
@@ -320,7 +337,7 @@ router.post('/insights/refresh', async (req: Request, res: Response) => {
     const combinedInsights = await enhancedInsightsService.getDashboardInsights(userId, true);
 
     if (!combinedInsights) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to generate insights',
         message: 'Unable to refresh insights at this time. Please try again later.'
       });
@@ -340,7 +357,7 @@ router.post('/insights/refresh', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error refreshing insights:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to refresh insights',
       message: 'An unexpected error occurred while refreshing insights.'
     });
@@ -414,10 +431,10 @@ router.get('/weekly-progress', async (req: Request, res: Response) => {
     for (let i = 0; i < allMoodEntries.length; i++) {
       const entryDate = new Date(allMoodEntries[i].createdAt);
       entryDate.setHours(0, 0, 0, 0);
-      
+
       const expectedDate = new Date(today);
       expectedDate.setDate(expectedDate.getDate() - i);
-      
+
       if (entryDate.getTime() === expectedDate.getTime()) {
         currentStreak++;
       } else {
@@ -472,12 +489,12 @@ router.get('/recommended-practice', async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { 
+      select: {
         id: true,
-        firstName: true, 
+        firstName: true,
         lastName: true,
-        name: true, 
-        approach: true 
+        name: true,
+        approach: true
       }
     });
 

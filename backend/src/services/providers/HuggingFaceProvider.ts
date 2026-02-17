@@ -27,8 +27,8 @@ export class HuggingFaceProvider extends BaseAIProvider {
     try {
       console.log(`🤗 HuggingFace: Generating response with ${this.model}`);
       
-      // Format messages for chat completion
-      const chatMessages = this.formatMessagesForChat(messages);
+      // Format messages for chat completion, preserving the rich system prompt
+      const chatMessages = this.formatMessagesForChat(messages, context);
       
       const response = await this.hf.chatCompletion({
         model: this.model,
@@ -76,13 +76,34 @@ export class HuggingFaceProvider extends BaseAIProvider {
     }
   }
 
-  private formatMessagesForChat(messages: AIMessage[]): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  private formatMessagesForChat(
+    messages: AIMessage[],
+    context?: ConversationContext
+  ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+    // Use the rich system prompt from chatService if it exists in messages[0],
+    // otherwise fall back to the base provider's context-aware prompt,
+    // and only use the hardcoded generic prompt as a last resort.
+    let systemContent: string;
+    let conversationMessages = messages;
+
+    if (messages.length > 0 && messages[0].role === 'system') {
+      systemContent = messages[0].content;
+      conversationMessages = messages.slice(1);
+    } else if (context) {
+      systemContent = this.createSystemPrompt(context);
+    } else {
+      systemContent =
+        'You are MaanSarathi, a supportive and empathetic mental health companion. ' +
+        'Provide helpful, non-diagnostic guidance. Be compassionate, professional, ' +
+        'and encourage seeking professional help when appropriate.';
+    }
+
     const systemMessage = {
       role: 'system' as const,
-      content: "You are MaanaSarathi, a supportive and empathetic mental health companion. Provide helpful, non-diagnostic guidance. Be compassionate, professional, and encourage seeking professional help when appropriate."
+      content: systemContent
     };
 
-    const formattedMessages = messages.map(msg => ({
+    const formattedMessages = conversationMessages.map(msg => ({
       role: msg.role,
       content: msg.content
     }));

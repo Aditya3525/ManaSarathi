@@ -15,7 +15,7 @@
 ### Option 2: Docker PostgreSQL (Recommended)
 ```bash
 # Run PostgreSQL in Docker
-docker run --name maanasarathi-postgres \
+docker run --name MaanSarathi-postgres \
   -e POSTGRES_DB=mental_wellbeing_db \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=password \

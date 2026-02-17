@@ -211,12 +211,12 @@ const getLastMoodCheckInDate = (entries: MoodEntry[]): string | undefined => {
  */
 const countMoodEntriesInRange = (entries: MoodEntry[], days: number): number => {
   if (!entries.length) return 0;
-  
+
   // Calculate cutoff as start of day N days ago
   // This ensures we count full days, not partial hours
   const todayStart = toStartOfDay(new Date());
   const cutoff = todayStart - (days - 1) * DAY_IN_MS;
-  
+
   const uniqueDays = new Set<number>();
   entries.forEach((entry) => {
     const entryDay = toStartOfDay(new Date(entry.createdAt));
@@ -765,7 +765,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   const renderLoadingState = () => (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <Skeleton className="h-10 w-2/5" />
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <Card key={index}>
             <CardContent className="p-6 space-y-4">
@@ -811,11 +811,11 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/5">
       <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-accent/20 border-b border-primary/10">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="flex items-center justify-between mb-6">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onNavigate('dashboard')}
               className="hover:bg-primary/10 transition-colors"
             >
@@ -834,7 +834,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                 <BarChart3 className="h-8 w-8 text-primary" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   Your Progress
                 </h1>
                 <p className="text-muted-foreground">
@@ -854,35 +854,35 @@ export function Progress({ user, onNavigate }: ProgressProps) {
       ) : error ? (
         renderErrorState()
       ) : (
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <Tabs defaultValue="overview" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-xl h-auto">
-              <TabsTrigger 
-                value="overview" 
-                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-3 font-medium transition-all"
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-muted/50 p-1 rounded-xl h-auto gap-1 sm:gap-0">
+              <TabsTrigger
+                value="overview"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-2.5 sm:py-3 font-medium transition-all min-h-[44px] text-sm"
               >
-                <BarChart3 className="h-4 w-4 mr-2" />
+                <BarChart3 className="h-4 w-4 mr-1.5 sm:mr-2" />
                 Overview
               </TabsTrigger>
-              <TabsTrigger 
-                value="trends" 
-                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-3 font-medium transition-all"
+              <TabsTrigger
+                value="trends"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-2.5 sm:py-3 font-medium transition-all min-h-[44px] text-sm"
               >
-                <TrendingUp className="h-4 w-4 mr-2" />
+                <TrendingUp className="h-4 w-4 mr-1.5 sm:mr-2" />
                 Trends
               </TabsTrigger>
-              <TabsTrigger 
-                value="goals" 
-                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-3 font-medium transition-all"
+              <TabsTrigger
+                value="goals"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-2.5 sm:py-3 font-medium transition-all min-h-[44px] text-sm"
               >
-                <Target className="h-4 w-4 mr-2" />
+                <Target className="h-4 w-4 mr-1.5 sm:mr-2" />
                 Goals
               </TabsTrigger>
-              <TabsTrigger 
-                value="achievements" 
-                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-3 font-medium transition-all"
+              <TabsTrigger
+                value="achievements"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md rounded-lg py-2.5 sm:py-3 font-medium transition-all min-h-[44px] text-sm"
               >
-                <Award className="h-4 w-4 mr-2" />
+                <Award className="h-4 w-4 mr-1.5 sm:mr-2" />
                 Achievements
               </TabsTrigger>
             </TabsList>
@@ -903,9 +903,9 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     </div>
                     <div className="text-2xl font-bold text-orange-600 mb-1">{currentStreak}</div>
                     <div className="text-xs text-muted-foreground mb-2">Day Streak</div>
-                    <ProgressBar 
-                      value={Math.min((currentStreak / 7) * 100, 100)} 
-                      className="h-1" 
+                    <ProgressBar
+                      value={Math.min((currentStreak / 7) * 100, 100)}
+                      className="h-1"
                       indicatorClassName="bg-orange-500"
                     />
                   </CardContent>
@@ -921,9 +921,9 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     </div>
                     <div className="text-2xl font-bold text-primary mb-1">{moodCheckinsWeek}</div>
                     <div className="text-xs text-muted-foreground mb-2">Check-ins</div>
-                    <ProgressBar 
-                      value={(moodCheckinsWeek / 7) * 100} 
-                      className="h-1" 
+                    <ProgressBar
+                      value={(moodCheckinsWeek / 7) * 100}
+                      className="h-1"
                       indicatorClassName="bg-primary"
                     />
                   </CardContent>
@@ -936,16 +936,16 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                         <Target className="h-5 w-5 text-green-500" />
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        {totalModules > 0 ? `${Math.round((modulesCompleted/totalModules)*100)}%` : '0%'}
+                        {totalModules > 0 ? `${Math.round((modulesCompleted / totalModules) * 100)}%` : '0%'}
                       </Badge>
                     </div>
                     <div className="text-2xl font-bold text-green-600 mb-1">
                       {modulesCompleted}/{totalModules || 2}
                     </div>
                     <div className="text-xs text-muted-foreground mb-2">Modules Done</div>
-                    <ProgressBar 
-                      value={totalModules > 0 ? (modulesCompleted / totalModules) * 100 : 0} 
-                      className="h-1" 
+                    <ProgressBar
+                      value={totalModules > 0 ? (modulesCompleted / totalModules) * 100 : 0}
+                      className="h-1"
                       indicatorClassName="bg-green-500"
                     />
                   </CardContent>
@@ -963,9 +963,9 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     </div>
                     <div className="text-2xl font-bold text-yellow-600 mb-1">{averageMoodDisplay}</div>
                     <div className="text-xs text-muted-foreground mb-2">Avg Mood</div>
-                    <ProgressBar 
-                      value={averageMoodPercent} 
-                      className="h-1" 
+                    <ProgressBar
+                      value={averageMoodPercent}
+                      className="h-1"
                       indicatorClassName="bg-yellow-500"
                     />
                   </CardContent>
@@ -986,8 +986,8 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     {activityItems.length ? (
                       <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                         {activityItems.slice(0, 5).map((item) => (
-                          <div 
-                            key={item.id} 
+                          <div
+                            key={item.id}
                             className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                           >
                             <div className={`w-2 h-2 rounded-full ${ACTIVITY_COLORS[item.type]} mt-2 flex-shrink-0`} />
@@ -1171,7 +1171,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                         <Badge variant="default" className="bg-pink-500/10 text-pink-700 border-pink-300">{averageMoodPercent}%</Badge>
                       </div>
                       <div className="relative h-2 bg-muted/30 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="absolute h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-500 rounded-full shadow-sm"
                           style={{ width: `${averageMoodPercent}%` }}
                         />
@@ -1194,7 +1194,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                         </Badge>
                       </div>
                       <div className="relative h-2 bg-muted/30 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="absolute h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-500 rounded-full shadow-sm"
                           style={{ width: `${planProgressPercent}%` }}
                         />
@@ -1217,7 +1217,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                         </Badge>
                       </div>
                       <div className="relative h-2 bg-muted/30 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="absolute h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500 rounded-full shadow-sm"
                           style={{ width: `${Math.min(100, assessmentsCompletedLast30Days * 25)}%` }}
                         />
@@ -1365,12 +1365,11 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                               <span className="font-bold text-lg">{progress}%</span>
                             </div>
                             <div className="relative h-3 bg-muted/30 rounded-full overflow-hidden">
-                              <div 
-                                className={`absolute h-full transition-all duration-500 rounded-full shadow-sm ${
-                                  isCompleted 
-                                    ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
+                              <div
+                                className={`absolute h-full transition-all duration-500 rounded-full shadow-sm ${isCompleted
+                                    ? 'bg-gradient-to-r from-green-500 to-emerald-500'
                                     : 'bg-gradient-to-r from-blue-500 to-cyan-500'
-                                }`}
+                                  }`}
                                 style={{ width: `${progress}%` }}
                               />
                             </div>
@@ -1428,19 +1427,17 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                   return (
                     <Card
                       key={achievement.id}
-                      className={`border-2 shadow-lg transition-all hover:scale-[1.02] ${
-                        isEarned 
-                          ? 'border-yellow-300 bg-gradient-to-br from-yellow-500/10 via-yellow-500/5 to-orange-500/10' 
+                      className={`border-2 shadow-lg transition-all hover:scale-[1.02] ${isEarned
+                          ? 'border-yellow-300 bg-gradient-to-br from-yellow-500/10 via-yellow-500/5 to-orange-500/10'
                           : 'opacity-70 hover:opacity-90 border-muted'
-                      }`}
+                        }`}
                     >
                       <CardContent className="p-6 text-center space-y-4">
                         <div
-                          className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto transition-all ${
-                            isEarned 
-                              ? 'bg-gradient-to-br from-yellow-500 to-orange-500 text-white shadow-lg' 
+                          className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto transition-all ${isEarned
+                              ? 'bg-gradient-to-br from-yellow-500 to-orange-500 text-white shadow-lg'
                               : 'bg-muted text-muted-foreground'
-                          }`}
+                            }`}
                         >
                           {achievement.icon}
                         </div>
@@ -1469,7 +1466,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                               <span className="font-semibold">{Math.round(achievement.progress ?? 0)}%</span>
                             </div>
                             <div className="relative h-2 bg-muted/30 rounded-full overflow-hidden">
-                              <div 
+                              <div
                                 className="absolute h-full bg-gradient-to-r from-primary to-accent transition-all duration-500 rounded-full"
                                 style={{ width: `${achievement.progress ?? 0}%` }}
                               />

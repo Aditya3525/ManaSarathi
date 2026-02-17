@@ -15,24 +15,24 @@ export const logMoodSchema = z.object({
       })
       .min(1, 'Mood cannot be empty')
       .max(50, 'Mood must not exceed 50 characters'),
-    
+
     notes: z
       .string()
       .max(500, 'Notes must not exceed 500 characters')
       .trim()
       .optional(),
-    
+
     score: z
       .number()
       .min(1, 'Score must be at least 1')
       .max(10, 'Score must not exceed 10')
       .optional(),
-    
+
     triggers: z
       .array(z.string().max(100))
       .max(10, 'Cannot have more than 10 triggers')
       .optional(),
-    
+
     timestamp: z
       .string()
       .datetime('Invalid date format')
@@ -53,7 +53,7 @@ export const getMoodHistorySchema = z.object({
         message: 'Days must be between 1 and 365',
       })
       .default('30'),
-    
+
     limit: z
       .string()
       .regex(/^\d+$/, 'Limit must be a positive number')
@@ -70,7 +70,7 @@ export const getMoodHistorySchema = z.object({
  */
 export const deleteMoodEntrySchema = z.object({
   params: z.object({
-    entryId: z.string().uuid('Invalid entry ID'),
+    id: z.string().min(1, 'Entry ID is required'),
   }),
 });
 

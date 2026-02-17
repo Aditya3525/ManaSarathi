@@ -84,7 +84,9 @@ const FAQ_CATEGORIES = [
   'SAFETY'
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+import { getServerBaseUrl } from '../config/apiConfig';
+
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || getServerBaseUrl();
 
 // Admin API for FAQs
 const faqAdminApi = {
@@ -136,15 +138,15 @@ interface FAQManagementProps {
 
 export function FAQManagement({ onRefresh }: FAQManagementProps) {
   const { push } = useNotificationStore();
-  
+
   // State
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  
+
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingFaq, setEditingFaq] = useState<FAQ | null>(null);
@@ -185,7 +187,7 @@ export function FAQManagement({ onRefresh }: FAQManagementProps) {
 
   // Filter FAQs
   const filteredFaqs = faqs.filter(faq => {
-    const matchesSearch = 
+    const matchesSearch =
       faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
       faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'all' || faq.category === filterCategory;
@@ -233,7 +235,7 @@ export function FAQManagement({ onRefresh }: FAQManagementProps) {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
-    
+
     setIsSubmitting(true);
     try {
       await faqAdminApi.delete(deleteConfirm.id);

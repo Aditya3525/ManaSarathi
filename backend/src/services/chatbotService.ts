@@ -230,7 +230,8 @@ Provide a compassionate, professional summary (max 150 words):`;
         ],
         { 
           maxTokens: 200, 
-          temperature: 0.5 
+          temperature: 0.5,
+          model: 'gpt-oss:20b-cloud'
         }
       );
 

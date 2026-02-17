@@ -226,7 +226,7 @@ export const MoodCalendarHeatmap: React.FC<MoodCalendarHeatmapProps> = ({
 
 				{/* Mood summary */}
 				{Object.keys(moodSummary).length > 0 && (
-					<div className="grid grid-cols-5 gap-3 pt-4">
+					<div className="grid grid-cols-3 sm:grid-cols-5 gap-3 pt-4">
 						{Object.entries(moodSummary)
 							.sort((a, b) => {
 								const order = ['Great', 'Good', 'Okay', 'Struggling', 'Anxious'];

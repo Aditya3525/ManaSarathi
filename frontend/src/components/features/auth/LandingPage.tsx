@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 
+import { getServerBaseUrl } from '../../../config/apiConfig';
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
@@ -67,7 +68,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   // Carousel state for features section
   const [activeFeaturesIndex, setActiveFeaturesIndex] = useState(0);
-  
+
   // Features carousel ref
   const featuresContainerRef = useRef<HTMLDivElement>(null);
 
@@ -81,15 +82,15 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   // Sticky header on scroll + scroll depth tracking
   useEffect(() => {
     let scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
-    
+
     const handleScroll = () => {
       setIsHeaderSticky(window.scrollY > 100);
-      
+
       // Track scroll depth
       const scrollPercent = Math.round(
         (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100
       );
-      
+
       Object.keys(scrollDepthTracked).forEach((depth) => {
         const depthNum = parseInt(depth);
         if (scrollPercent >= depthNum && !scrollDepthTracked[depthNum]) {
@@ -98,7 +99,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         }
       });
     };
-    
+
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [analytics]);
@@ -189,11 +190,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const handleGoogleAuth = () => {
     analytics.trackButtonClick('google_oauth', 'landing_page');
     // Redirect to Google OAuth endpoint - use smart URL detection
-    const hostname = window.location.hostname;
-    const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
-      ? 'http://localhost:5000' 
-      : `http://${hostname}:5000`;
-    window.location.href = `${apiUrl}/api/auth/google`;
+    window.location.href = `${getServerBaseUrl()}/api/auth/google`;
   };
 
   const handleToggleDarkMode = () => {
@@ -212,9 +209,9 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
       >
         Skip to main content
       </a>
-      
+
       {/* Responsive Sticky Header */}
-      <header 
+      <header
         className={`
           sticky top-0 z-50 border-b bg-background/95 backdrop-blur transition-shadow supports-[backdrop-filter]:bg-background/75
           ${isHeaderSticky ? 'shadow-md' : ''}
@@ -224,7 +221,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
             <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-primary sm:px-3">
-              MaanaSarathi
+              MaanSarathi
             </Badge>
             <span className="hidden text-xs text-muted-foreground sm:text-sm lg:inline-flex">
               Guided support for calmer days
@@ -262,8 +259,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             </Button>
 
             {/* Mobile: Compact Start Button */}
-            <Button 
-              className="h-9 px-3 text-sm font-medium sm:h-10 sm:px-4 lg:hidden" 
+            <Button
+              className="h-9 px-3 text-sm font-medium sm:h-10 sm:px-4 lg:hidden"
               onClick={() => openModal('start')}
             >
               Start free
@@ -297,31 +294,31 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         {mobileMenuOpen && (
           <div className="border-t bg-background px-4 py-4 lg:hidden">
             <nav className="flex flex-col gap-3">
-              <a 
-                href="#how-it-works" 
+              <a
+                href="#how-it-works"
                 className="flex h-11 min-h-[44px] items-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 How it works
               </a>
-              <a 
-                href="#features" 
+              <a
+                href="#features"
                 className="flex h-11 min-h-[44px] items-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Features
               </a>
-              <a 
-                href="#faq" 
+              <a
+                href="#faq"
                 className="flex h-11 min-h-[44px] items-center rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 FAQ
               </a>
               <Separator className="my-2" />
-              <Button 
-                variant="ghost" 
-                className="h-11 min-h-[44px] justify-start text-sm font-medium" 
+              <Button
+                variant="ghost"
+                className="h-11 min-h-[44px] justify-start text-sm font-medium"
                 onClick={() => openModal('login')}
               >
                 Log in
@@ -332,9 +329,9 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
       </header>
 
       <main id="main-content">
-        <HeroSection 
-          onStartJourney={() => openModal('start')} 
-          onSignUp={() => openModal('signup')} 
+        <HeroSection
+          onStartJourney={() => openModal('start')}
+          onSignUp={() => openModal('signup')}
         />
 
         <MetricsSection />
@@ -354,7 +351,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             {/* Mobile: Vertical List with Connector Line */}
             <ol className="relative space-y-8 md:hidden" role="list">
               {/* Connector Line */}
-              <div 
+              <div
                 className="absolute left-6 top-10 bottom-10 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-primary/20"
                 aria-hidden="true"
               />
@@ -469,7 +466,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
             {/* Mobile: Horizontal Carousel */}
             <div className="md:hidden">
-              <div 
+              <div
                 ref={featuresContainerRef}
                 className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 role="region"
@@ -543,11 +540,10 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                     key={index}
                     role="tab"
                     aria-selected={activeFeaturesIndex === index}
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      activeFeaturesIndex === index 
-                        ? 'w-8 bg-primary' 
-                        : 'w-2 bg-muted-foreground/30'
-                    }`}
+                    className={`h-2 rounded-full transition-all duration-300 ${activeFeaturesIndex === index
+                      ? 'w-8 bg-primary'
+                      : 'w-2 bg-muted-foreground/30'
+                      }`}
                     aria-label={`Feature ${index + 1} of 4`}
                   />
                 ))}
@@ -685,7 +681,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         <section className="bg-muted/20 px-6 py-16 lg:py-24">
           <div className="mx-auto max-w-7xl space-y-12">
             <div className="space-y-3 text-center">
-              <h2 className="text-3xl lg:text-4xl">Why people choose MaanaSarathi</h2>
+              <h2 className="text-3xl lg:text-4xl">Why people choose MaanSarathi</h2>
               <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
                 Built alongside psychologists, coaches, and neurodiverse advocates to support modern wellbeing needs.
               </p>
@@ -769,28 +765,28 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 Frequently asked questions
               </h2>
               <p className="mt-3 text-base font-medium text-foreground/70 sm:text-lg">
-                Still wondering if MaanaSarathi is right for you? We&apos;ve got answers.
+                Still wondering if MaanSarathi is right for you? We&apos;ve got answers.
               </p>
             </div>
 
-            <Accordion 
-              type="single" 
-              collapsible 
+            <Accordion
+              type="single"
+              collapsible
               className="rounded-xl border border-border/60 bg-background shadow-sm"
             >
               {faqs.map(({ question, answer }, index) => (
-                <AccordionItem 
-                  key={question} 
+                <AccordionItem
+                  key={question}
                   value={question}
                   className="border-b border-border/40 last:border-b-0"
                 >
-                  <AccordionTrigger 
+                  <AccordionTrigger
                     className="px-4 py-4 text-left text-base font-semibold text-foreground transition-colors hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:px-6 sm:text-lg [&[data-state=open]]:text-primary"
                     aria-controls={`faq-content-${index}`}
                   >
                     {question}
                   </AccordionTrigger>
-                  <AccordionContent 
+                  <AccordionContent
                     id={`faq-content-${index}`}
                     className="px-4 pb-4 text-base leading-relaxed text-foreground/70 sm:px-6"
                   >
@@ -814,17 +810,17 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 </p>
               </div>
               <div className="flex flex-col justify-center gap-3 md:items-end">
-                <Button 
-                  size="lg" 
-                  className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:bg-primary/90 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8" 
+                <Button
+                  size="lg"
+                  className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:bg-primary/90 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8"
                   onClick={() => openModal('signup')}
                 >
                   Create your free account
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="lg" 
-                  className="h-12 w-full rounded-xl border-2 border-primary text-base font-semibold text-primary transition-all duration-200 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8" 
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="h-12 w-full rounded-xl border-2 border-primary text-base font-semibold text-primary transition-all duration-200 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:w-auto md:px-8"
                   onClick={() => openModal('login')}
                 >
                   I already have an account
@@ -847,8 +843,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   <h3 className="text-sm font-semibold text-red-900 dark:text-red-100">Crisis Support Available 24/7</h3>
                   <p className="text-xs text-red-800 dark:text-red-200">If you&apos;re in immediate danger, call emergency services.</p>
                   <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-                    <a 
-                      href="tel:988" 
+                    <a
+                      href="tel:988"
                       className="inline-flex h-11 min-w-[44px] items-center justify-center rounded-md bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
                       aria-label="Call 988 Suicide and Crisis Lifeline"
                     >
@@ -857,8 +853,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                       </svg>
                       Call 988
                     </a>
-                    <a 
-                      href="/crisis" 
+                    <a
+                      href="/crisis"
                       className="inline-flex h-11 min-w-[44px] items-center justify-center rounded-md border border-red-600 bg-white px-4 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950/50"
                     >
                       More Resources
@@ -875,14 +871,14 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 <span className="text-sm font-medium text-foreground">Need Help?</span>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <a 
-                  href="mailto:support@wellbeingai.com" 
+                <a
+                  href="mailto:support@wellbeingai.com"
                   className="inline-flex h-11 min-w-[44px] items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                 >
                   Email Support
                 </a>
-                <a 
-                  href="#faq" 
+                <a
+                  href="#faq"
                   className="inline-flex h-11 min-w-[44px] items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
                   Help Center
@@ -897,12 +893,12 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary" />
-                <span className="text-lg font-semibold text-foreground">MaanaSarathi</span>
+                <span className="text-lg font-semibold text-foreground">MaanSarathi</span>
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground max-w-xs">
                 Evidence-based wellbeing support, anytime, anywhere.
               </p>
-              
+
               {/* Trust Badges */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-background/60 p-3">
                 <Shield className="h-4 w-4 text-primary" />
@@ -918,40 +914,40 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   SOC 2
                 </a>
               </div>
-              
+
               {/* Social Links */}
               <div className="flex items-center gap-2 pt-2" role="group" aria-label="Social media links">
-                <a 
-                  href="https://twitter.com" 
-                  target="_blank" 
+                <a
+                  href="https://twitter.com"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex h-11 w-11 min-w-[44px] items-center justify-center rounded-lg bg-background/80 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                   aria-label="Follow us on Twitter"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                   </svg>
                 </a>
-                <a 
-                  href="https://linkedin.com" 
-                  target="_blank" 
+                <a
+                  href="https://linkedin.com"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex h-11 w-11 min-w-[44px] items-center justify-center rounded-lg bg-background/80 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                   aria-label="Follow us on LinkedIn"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
                   </svg>
                 </a>
-                <a 
-                  href="https://instagram.com" 
-                  target="_blank" 
+                <a
+                  href="https://instagram.com"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex h-11 w-11 min-w-[44px] items-center justify-center rounded-lg bg-background/80 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                   aria-label="Follow us on Instagram"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
                   </svg>
                 </a>
               </div>
@@ -962,8 +958,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-500" />
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-red-900 dark:text-red-100">Crisis Support 24/7</p>
-                    <a 
-                      href="tel:988" 
+                    <a
+                      href="tel:988"
                       className="inline-flex items-center text-sm font-bold text-red-700 underline-offset-2 hover:underline dark:text-red-400"
                     >
                       Call 988
@@ -988,9 +984,9 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   </a>
                 </li>
                 <li>
-                  <button 
-                    type="button" 
-                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline" 
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
                     onClick={() => openModal('start')}
                   >
                     AI Chat
@@ -1093,9 +1089,9 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               <p className="text-sm leading-relaxed text-foreground/70">
                 Monthly wellbeing tips and mindfulness practices.
               </p>
-              <form 
-                className="space-y-3" 
-                onSubmit={(e) => { 
+              <form
+                className="space-y-3"
+                onSubmit={(e) => {
                   e.preventDefault();
                   // Form validation and submission logic would go here
                 }}
@@ -1104,20 +1100,20 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   <Label htmlFor="newsletter-email" className="text-xs text-foreground/70">
                     Email address
                   </Label>
-                  <Input 
+                  <Input
                     id="newsletter-email"
-                    type="email" 
-                    placeholder="your@email.com" 
-                    className="h-11 bg-background text-sm" 
-                    aria-label="Email address for newsletter" 
+                    type="email"
+                    placeholder="your@email.com"
+                    className="h-11 bg-background text-sm"
+                    aria-label="Email address for newsletter"
                     aria-describedby="newsletter-consent"
                     inputMode="email"
                     autoComplete="email"
                     required
                   />
                 </div>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="h-11 w-full text-sm font-medium"
                 >
                   Subscribe
@@ -1151,9 +1147,9 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Bottom Bar - Legal & Copyright */}
           <div className="flex flex-col gap-4 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
             <p className="flex items-center gap-1">
-              © {new Date().getFullYear()} MaanaSarathi. All rights reserved.
+              © {new Date().getFullYear()} MaanSarathi. All rights reserved.
             </p>
-            
+
             {/* Legal Links */}
             <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6" aria-label="Legal and compliance links">
               <a href="/privacy" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
@@ -1179,7 +1175,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 Accessibility
               </a>
             </nav>
-            
+
             <p className="flex items-center gap-1.5">
               <Heart className="h-3 w-3 text-red-500" aria-hidden="true" />
               <span>Made for people first</span>

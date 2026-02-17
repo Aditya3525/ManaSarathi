@@ -76,7 +76,9 @@ export interface SupportTicket {
 const TICKET_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const TICKET_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+import { getServerBaseUrl } from '../config/apiConfig';
+
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || getServerBaseUrl();
 
 // Admin API for Support Tickets
 const supportTicketAdminApi = {
@@ -84,7 +86,7 @@ const supportTicketAdminApi = {
     const queryParams = new URLSearchParams();
     if (params?.status) queryParams.append('status', params.status);
     if (params?.priority) queryParams.append('priority', params.priority);
-    
+
     const response = await fetch(`${API_BASE}/api/admin/help-safety/support/tickets?${queryParams}`, {
       credentials: 'include'
     });
@@ -120,17 +122,17 @@ interface SupportTicketManagementProps {
 
 export function SupportTicketManagement({ onRefresh }: SupportTicketManagementProps) {
   const { push } = useNotificationStore();
-  
+
   // State
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
-  
+
   // Dialog states
   const [viewingTicket, setViewingTicket] = useState<SupportTicket | null>(null);
   const [respondingTicket, setRespondingTicket] = useState<SupportTicket | null>(null);
@@ -145,7 +147,7 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
       const params: { status?: string; priority?: string } = {};
       if (filterStatus !== 'all') params.status = filterStatus;
       if (filterPriority !== 'all') params.priority = filterPriority;
-      
+
       const result = await supportTicketAdminApi.getAll(params);
       setTickets(result.data);
       setTotal(result.total);
@@ -166,7 +168,7 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
 
   // Filter tickets
   const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch = 
+    const matchesSearch =
       ticket.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ticket.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ticket.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -225,7 +227,7 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
 
   const handleClose = async () => {
     if (!closeConfirm) return;
-    
+
     setIsSubmitting(true);
     try {
       await supportTicketAdminApi.close(closeConfirm.id);
@@ -464,7 +466,7 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
             ))}
           </div>
         )}
-        
+
         {total > 0 && (
           <div className="text-center text-sm text-muted-foreground mt-4">
             Showing {filteredTickets.length} of {total} tickets
@@ -491,19 +493,19 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
                   {viewingTicket.category}
                 </Badge>
               </div>
-              
+
               <div>
                 <Label className="text-muted-foreground">Subject</Label>
                 <p className="mt-1 font-medium text-lg">{viewingTicket.subject}</p>
               </div>
-              
+
               <div>
                 <Label className="text-muted-foreground">Message</Label>
                 <p className="mt-1 whitespace-pre-wrap bg-muted p-3 rounded-lg">
                   {viewingTicket.message}
                 </p>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                 <div>
                   <Label className="text-muted-foreground">From</Label>
@@ -515,7 +517,7 @@ export function SupportTicketManagement({ onRefresh }: SupportTicketManagementPr
                   <p className="mt-1">{formatDate(viewingTicket.createdAt)}</p>
                 </div>
               </div>
-              
+
               {viewingTicket.response && (
                 <div className="pt-4 border-t">
                   <Label className="text-muted-foreground">Admin Response</Label>

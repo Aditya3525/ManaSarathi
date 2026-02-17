@@ -2,18 +2,21 @@ import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { sendMessageSchema, getChatHistorySchema } from '../api/validators/chat.validator';
-import { 
-  sendMessage, 
-  getChatHistory, 
-  getChatInsights, 
-  getAIHealthCheck, 
+import {
+  sendMessage,
+  getChatHistory,
+  getChatInsights,
+  getAIHealthCheck,
   testAIProviders,
   getConversationMemory,
   getConversationSummary,
   getConversationStarters,
   getProactiveCheckIn,
   getMoodBasedGreeting,
-  getExerciseRecommendations
+  getExerciseRecommendations,
+  submitFeedback,
+  submitMoodCheck,
+  clearMemory
 } from '../controllers/chatController';
 
 const router = express.Router();
@@ -30,5 +33,8 @@ router.get('/starters', getConversationStarters as any);
 router.get('/check-in', getProactiveCheckIn as any);
 router.get('/greeting', getMoodBasedGreeting as any);
 router.post('/exercises', getExerciseRecommendations as any);
+router.put('/message/:messageId/feedback', submitFeedback as any);
+router.post('/mood-check', submitMoodCheck as any);
+router.delete('/memory', clearMemory as any);
 
 export default router;

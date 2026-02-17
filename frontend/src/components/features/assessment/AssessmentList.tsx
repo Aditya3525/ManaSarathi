@@ -373,7 +373,9 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
       icon: getCategoryIcon(assessment.category),
       difficulty: getAssessmentDifficulty(assessment.type, assessment.questions),
       category: primaryCategory,
-      typeKey: assessment.type, // Use assessment type, not ID
+      // Use the assessment definition id as the `typeKey` so the frontend
+      // passes the correct template identifier to the backend.
+      typeKey: assessment.id,
       tags: tags.length > 0 ? tags : ['all']
     };
   });

@@ -10,14 +10,6 @@ import { Label } from '../ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter
-} from '../ui/dialog';
-import { 
   ArrowLeft,
   Phone,
   MessageSquare,
@@ -39,12 +31,13 @@ import {
   ThumbsUp,
   ThumbsDown,
   Calendar,
-  User
+  User,
+  CalendarCheck
 } from 'lucide-react';
-import { 
-  crisisResourcesApi, 
-  faqApi, 
-  therapistApi, 
+import {
+  crisisResourcesApi,
+  faqApi,
+  therapistApi,
   supportTicketsApi,
   type CrisisResource,
   type FAQ,
@@ -54,12 +47,16 @@ import {
   type TherapistBooking
 } from '../../services/helpSafetyApi';
 import { useToast } from '../../contexts/ToastContext';
+import { ConsultationBookingDialog } from '../features/booking/ConsultationBookingDialog';
+import { MyBookings } from '../features/booking/MyBookings';
+import { TherapistProfileDialog } from '../features/booking/TherapistProfileDialog';
 
 interface HelpSafetyProps {
   onNavigate: (page: string) => void;
+  userRegion?: string;
 }
 
-export function HelpSafety({ onNavigate }: HelpSafetyProps) {
+export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
@@ -71,16 +68,17 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
   const { push } = useToast();
   const queryClient = useQueryClient();
 
-  // Booking dialog state
+  // Therapist profile & booking state
+  const [profileTherapist, setProfileTherapist] = useState<Therapist | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [bookingTherapist, setBookingTherapist] = useState<Therapist | null>(null);
-  const [bookingDate, setBookingDate] = useState('');
-  const [bookingTime, setBookingTime] = useState('');
-  const [bookingMessage, setBookingMessage] = useState('');
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [therapistSubTab, setTherapistSubTab] = useState<'find' | 'bookings'>('find');
 
   // Fetch crisis resources
   const { data: crisisResources = [], isLoading: loadingCrisis } = useQuery({
-    queryKey: ['crisisResources'],
-    queryFn: () => crisisResourcesApi.getAll()
+    queryKey: ['crisisResources', userRegion],
+    queryFn: () => crisisResourcesApi.getAll(userRegion)
   });
 
   // Fetch FAQs
@@ -121,7 +119,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
 
   // FAQ vote mutation
   const voteOnFaqMutation = useMutation({
-    mutationFn: ({ id, helpful }: { id: string; helpful: boolean }) => 
+    mutationFn: ({ id, helpful }: { id: string; helpful: boolean }) =>
       faqApi.vote(id, helpful),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faqs'] });
@@ -133,74 +131,20 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
     }
   });
 
-  // Therapist booking mutation
-  const bookingMutation = useMutation({
-    mutationFn: (data: { 
-      therapistId: string; 
-      requestedDate: string; 
-      requestedTime: string; 
-      message?: string 
-    }) => therapistApi.requestBooking(
-      data.therapistId, 
-      data.requestedDate, 
-      data.requestedTime, 
-      data.message
-    ),
-    onSuccess: () => {
-      push({
-        type: 'success',
-        title: 'Booking Requested',
-        description: 'Your consultation request has been submitted. The therapist will confirm your appointment shortly.',
-      });
-      setBookingTherapist(null);
-      setBookingDate('');
-      setBookingTime('');
-      setBookingMessage('');
-      queryClient.invalidateQueries({ queryKey: ['therapists'] });
-    },
-    onError: (error: Error) => {
-      push({
-        type: 'error',
-        title: 'Booking Failed',
-        description: error.message || 'Failed to request booking. Please try again.',
-      });
-    }
-  });
-
-  // Handle booking submission
-  const handleBookingSubmit = () => {
-    if (!bookingTherapist || !bookingDate || !bookingTime) {
-      push({
-        type: 'error',
-        title: 'Validation Error',
-        description: 'Please select a date and time for your consultation.',
-      });
-      return;
-    }
-
-    bookingMutation.mutate({
-      therapistId: bookingTherapist.id,
-      requestedDate: bookingDate,
-      requestedTime: bookingTime,
-      message: bookingMessage || undefined
-    });
+  // Booking helper: open booking dialog directly for a therapist
+  const handleRequestConsultation = (therapist: Therapist) => {
+    setBookingTherapist(therapist);
+    setBookingOpen(true);
   };
 
-  // Get minimum date (today)
-  const getMinDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+  // Profile helper: open therapist profile
+  const handleViewProfile = (therapist: Therapist) => {
+    setProfileTherapist(therapist);
+    setProfileOpen(true);
   };
-
-  // Generate time slots
-  const timeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
-    '16:00', '16:30', '17:00', '17:30'
-  ];
 
   // Filter FAQs by search query
-  const filteredFAQs = allFaqs.filter(faq => 
+  const filteredFAQs = allFaqs.filter(faq =>
     faq.question.toLowerCase().includes(faqSearchQuery.toLowerCase()) ||
     faq.answer.toLowerCase().includes(faqSearchQuery.toLowerCase())
   );
@@ -212,8 +156,8 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
   const specialties = ['all', ...allSpecialties];
 
   // Filter therapists by specialty
-  const filteredTherapists = selectedSpecialty === 'all' 
-    ? therapists 
+  const filteredTherapists = selectedSpecialty === 'all'
+    ? therapists
     : therapists.filter(therapist => therapist.specialties.includes(selectedSpecialty));
 
   // FAQ categories
@@ -277,8 +221,8 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
               <p className="text-sm">Call 988 (US) • Text HOME to 741741 • Call 911 for emergencies</p>
             </div>
           </div>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             onClick={() => window.open('tel:988')}
             className="bg-white text-red-600 hover:bg-gray-100"
           >
@@ -292,8 +236,8 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
       <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4 mb-6">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => onNavigate('dashboard')}
             >
@@ -302,23 +246,25 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
             </Button>
           </div>
 
-          <div className="space-y-4">
-            <h1 className="text-3xl">Help & Safety</h1>
-            <p className="text-muted-foreground text-lg">
+          <div className="space-y-3 sm:space-y-4">
+            <h1 className="text-2xl sm:text-3xl">Help & Safety</h1>
+            <p className="text-muted-foreground text-base sm:text-lg">
               Resources, support, and answers to help you on your wellbeing journey
             </p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
         <Tabs defaultValue="crisis" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="crisis">Crisis Resources</TabsTrigger>
-            <TabsTrigger value="faq">FAQ</TabsTrigger>
-            <TabsTrigger value="therapists">Find Therapist</TabsTrigger>
-            <TabsTrigger value="support">Contact Support</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto min-w-full justify-start gap-1 sm:grid sm:w-full sm:grid-cols-4">
+              <TabsTrigger value="crisis" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Crisis Resources</TabsTrigger>
+              <TabsTrigger value="faq" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">FAQ</TabsTrigger>
+              <TabsTrigger value="therapists" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Find Therapist</TabsTrigger>
+              <TabsTrigger value="support" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Contact Support</TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Crisis Resources Tab */}
           <TabsContent value="crisis" className="space-y-6">
@@ -331,7 +277,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
-                  If you or someone you know is in immediate danger, please don't wait. 
+                  If you or someone you know is in immediate danger, please don't wait.
                   Reach out for professional help right away.
                 </p>
 
@@ -342,11 +288,10 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                 ) : (
                   <div className="grid md:grid-cols-2 gap-4">
                     {crisisResources.map((resource) => (
-                      <Card key={resource.id} className={`border-2 ${
-                        resource.type === 'HOTLINE' ? 'border-red-200 bg-red-50' :
+                      <Card key={resource.id} className={`border-2 ${resource.type === 'HOTLINE' ? 'border-red-200 bg-red-50' :
                         resource.type === 'TEXT' ? 'border-orange-200 bg-orange-50' :
-                        'border-blue-200 bg-blue-50'
-                      }`}>
+                          'border-blue-200 bg-blue-50'
+                        }`}>
                         <CardContent className="p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <h3 className="font-semibold">{resource.name}</h3>
@@ -358,13 +303,13 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                               )}
                               <Badge variant={
                                 resource.type === 'HOTLINE' ? 'destructive' :
-                                resource.type === 'TEXT' ? 'secondary' : 'default'
+                                  resource.type === 'TEXT' ? 'secondary' : 'default'
                               }>
                                 {resource.type}
                               </Badge>
                             </div>
                           </div>
-                          
+
                           <p className="text-sm text-muted-foreground">
                             {resource.description}
                           </p>
@@ -374,10 +319,10 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                               Languages: {resource.languages.join(', ')}
                             </p>
                           )}
-                          
+
                           <div className="flex flex-col gap-2">
                             {resource.phone && (
-                              <Button 
+                              <Button
                                 size="sm"
                                 onClick={() => window.open(`tel:${resource.phone}`)}
                                 className="w-full"
@@ -387,7 +332,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                               </Button>
                             )}
                             {resource.sms && (
-                              <Button 
+                              <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => window.open(`sms:${resource.sms}`)}
@@ -398,7 +343,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                               </Button>
                             )}
                             {resource.website && (
-                              <Button 
+                              <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => window.open(resource.website!, '_blank')}
@@ -491,8 +436,8 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
 
                   {/* Search Bar */}
                   <div className="relative">
-                    <Search 
-                      className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground cursor-pointer" 
+                    <Search
+                      className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground cursor-pointer"
                       onClick={(e) => {
                         const input = e.currentTarget.parentElement?.querySelector('input');
                         input?.focus();
@@ -515,9 +460,9 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                     <>
                       <Accordion type="single" collapsible className="space-y-2">
                         {filteredFAQs.map((faq) => (
-                          <AccordionItem 
-                            key={faq.id} 
-                            value={faq.id} 
+                          <AccordionItem
+                            key={faq.id}
+                            value={faq.id}
                             className="border rounded-lg px-4"
                             onClick={() => handleFaqClick(faq.id)}
                           >
@@ -594,185 +539,223 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
 
           {/* Therapist Directory Tab */}
           <TabsContent value="therapists" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  Find a Licensed Therapist
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <p className="text-muted-foreground">
-                    Connect with licensed professionals in your area. 
-                    This directory includes verified therapists who specialize in various areas.
-                  </p>
-
-                  {/* Specialty Filter */}
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium">Specialty:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {specialties.map((specialty) => (
-                        <Button
-                          key={specialty}
-                          variant={selectedSpecialty === specialty ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedSpecialty(specialty)}
-                          className="capitalize"
-                        >
-                          {specialty}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Therapist Cards */}
-            {loadingTherapists ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            {/* Sub-tab toggle: Find Therapist / My Bookings */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="therapist-sub-tabs">
+                <button
+                  className={`therapist-sub-tab ${therapistSubTab === 'find' ? 'active' : ''}`}
+                  onClick={() => setTherapistSubTab('find')}
+                >
+                  <Users className="h-3.5 w-3.5 inline mr-1.5" />
+                  Find Therapist
+                </button>
+                <button
+                  className={`therapist-sub-tab ${therapistSubTab === 'bookings' ? 'active' : ''}`}
+                  onClick={() => setTherapistSubTab('bookings')}
+                >
+                  <CalendarCheck className="h-3.5 w-3.5 inline mr-1.5" />
+                  My Bookings
+                </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredTherapists.map((therapist) => (
-                  <Card key={therapist.id}>
-                    <CardContent className="p-6">
-                      <div className="flex gap-4">
-                        {therapist.profileImageUrl ? (
-                          <img 
-                            src={therapist.profileImageUrl} 
-                            alt={therapist.name}
-                            className="w-16 h-16 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 bg-muted rounded-full flex-shrink-0 flex items-center justify-center">
-                            <Users className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                        )}
-                        
-                        <div className="flex-1 space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold">{therapist.name}</h3>
-                                {therapist.isVerified && (
-                                  <Badge variant="default" className="text-xs">
-                                    Verified
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {therapist.title} • {therapist.credential}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-4 w-4 fill-current text-yellow-500" />
-                                  <span className="text-sm">{therapist.rating.toFixed(1)}</span>
-                                  {therapist.reviewCount > 0 && (
-                                    <span className="text-xs text-muted-foreground">
-                                      ({therapist.reviewCount} reviews)
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <MapPin className="h-3 w-3" />
-                                  <span>{therapist.city}, {therapist.state}</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <Badge variant={therapist.acceptsInsurance ? 'default' : 'secondary'}>
-                              {therapist.acceptsInsurance ? 'Insurance Accepted' : 'Self-Pay'}
-                            </Badge>
-                          </div>
+            </div>
 
-                          <p className="text-sm text-muted-foreground">
-                            {therapist.bio}
-                          </p>
-
-                          <div className="flex flex-wrap gap-1">
-                            {therapist.specialties.map((specialty, i) => (
-                              <Badge key={i} variant="outline" className="text-xs">
-                                {specialty}
-                              </Badge>
-                            ))}
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div className="flex gap-2">
-                              {therapist.phone && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => window.open(`tel:${therapist.phone}`)}
-                                >
-                                  <Phone className="h-3 w-3 mr-1" />
-                                  Call
-                                </Button>
-                              )}
-                              {therapist.email && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => window.open(`mailto:${therapist.email}`)}
-                                >
-                                  <Mail className="h-3 w-3 mr-1" />
-                                  Email
-                                </Button>
-                              )}
-                              {therapist.website && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => window.open(therapist.website!, '_blank')}
-                                >
-                                  <ExternalLink className="h-3 w-3 mr-1" />
-                                  Website
-                                </Button>
-                              )}
-                            </div>
-
-                            <Button 
-                              size="sm"
-                              onClick={() => setBookingTherapist(therapist)}
-                            >
-                              <Calendar className="h-3 w-3 mr-1" />
-                              Request Consultation
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {filteredTherapists.length === 0 && (
-                  <Card>
-                    <CardContent className="p-6 text-center">
-                      <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">No therapists found</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Try adjusting your filters or contact support for help finding a therapist.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+            {/* My Bookings Sub-Tab */}
+            {therapistSubTab === 'bookings' && (
+              <Card>
+                <CardContent className="p-6">
+                  <MyBookings />
+                </CardContent>
+              </Card>
             )}
 
-            <Card>
-              <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Can't find what you're looking for? We can help you find additional therapists in your area.
-                </p>
-                <Button variant="outline">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Request Therapist Referral
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Find Therapist Sub-Tab */}
+            {therapistSubTab === 'find' && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-primary" />
+                      Find a Licensed Therapist
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-muted-foreground">
+                        Connect with licensed professionals in your area.
+                        This directory includes verified therapists who specialize in various areas.
+                      </p>
+
+                      {/* Specialty Filter */}
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium">Specialty:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {specialties.map((specialty) => (
+                            <Button
+                              key={specialty}
+                              variant={selectedSpecialty === specialty ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setSelectedSpecialty(specialty)}
+                              className="capitalize"
+                            >
+                              {specialty}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Therapist Cards */}
+                {loadingTherapists ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredTherapists.map((therapist) => (
+                      <Card key={therapist.id} className="cursor-pointer transition-all hover:shadow-md hover:border-primary/20" onClick={() => handleViewProfile(therapist)}>
+                        <CardContent className="p-6">
+                          <div className="flex gap-4">
+                            {therapist.profileImageUrl ? (
+                              <img
+                                src={therapist.profileImageUrl}
+                                alt={therapist.name}
+                                className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 bg-muted rounded-full flex-shrink-0 flex items-center justify-center">
+                                <Users className="h-8 w-8 text-muted-foreground" />
+                              </div>
+                            )}
+
+                            <div className="flex-1 space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold">{therapist.name}</h3>
+                                    {therapist.isVerified && (
+                                      <Badge variant="default" className="text-xs">
+                                        Verified
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {therapist.title} • {therapist.credential}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <div className="flex items-center gap-1">
+                                      <Star className="h-4 w-4 fill-current text-yellow-500" />
+                                      <span className="text-sm">{therapist.rating.toFixed(1)}</span>
+                                      {therapist.reviewCount > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                          ({therapist.reviewCount} reviews)
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                      <MapPin className="h-3 w-3" />
+                                      <span>{therapist.city}, {therapist.state}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <Badge variant={therapist.acceptsInsurance ? 'default' : 'secondary'}>
+                                  {therapist.acceptsInsurance ? 'Insurance Accepted' : 'Self-Pay'}
+                                </Badge>
+                              </div>
+
+                              <p className="text-sm text-muted-foreground">
+                                {therapist.bio}
+                              </p>
+
+                              <div className="flex flex-wrap gap-1">
+                                {therapist.specialties.map((specialty, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {specialty}
+                                  </Badge>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex gap-2">
+                                  {therapist.phone && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => window.open(`tel:${therapist.phone}`)}
+                                    >
+                                      <Phone className="h-3 w-3 mr-1" />
+                                      Call
+                                    </Button>
+                                  )}
+                                  {therapist.email && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => window.open(`mailto:${therapist.email}`)}
+                                    >
+                                      <Mail className="h-3 w-3 mr-1" />
+                                      Email
+                                    </Button>
+                                  )}
+                                  {therapist.website && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => window.open(therapist.website!, '_blank')}
+                                    >
+                                      <ExternalLink className="h-3 w-3 mr-1" />
+                                      Website
+                                    </Button>
+                                  )}
+                                </div>
+
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRequestConsultation(therapist);
+                                  }}
+                                  className="book-cta-btn"
+                                >
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  Request Consultation
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+
+                    {filteredTherapists.length === 0 && (
+                      <Card>
+                        <CardContent className="p-6 text-center">
+                          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No therapists found</h3>
+                          <p className="text-muted-foreground mb-4">
+                            Try adjusting your filters or contact support for help finding a therapist.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
+
+                <Card>
+                  <CardContent className="p-6 text-center">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Can't find what you're looking for? We can help you find additional therapists in your area.
+                    </p>
+                    <Button variant="outline">
+                      <Phone className="h-4 w-4 mr-2" />
+                      Request Therapist Referral
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           {/* Contact Support Tab */}
@@ -787,7 +770,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
-                    Need help with the app or have questions about your wellbeing journey? 
+                    Need help with the app or have questions about your wellbeing journey?
                     Our support team is here to help.
                   </p>
 
@@ -835,7 +818,7 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
                       </p>
                     </div>
 
-                    <Button 
+                    <Button
                       onClick={handleTicketSubmit}
                       disabled={createTicketMutation.isPending}
                       className="w-full"
@@ -906,106 +889,19 @@ export function HelpSafety({ onNavigate }: HelpSafetyProps) {
         </Tabs>
       </div>
 
-      {/* Therapist Booking Dialog */}
-      <Dialog open={!!bookingTherapist} onOpenChange={(open) => !open && setBookingTherapist(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Request Consultation</DialogTitle>
-            <DialogDescription>
-              Book a consultation with {bookingTherapist?.name}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Therapist Profile Dialog */}
+      <TherapistProfileDialog
+        therapist={profileTherapist}
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+      />
 
-          {bookingTherapist && (
-            <div className="space-y-4 py-4">
-              {/* Therapist Info */}
-              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">{bookingTherapist.name}</p>
-                  <p className="text-sm text-muted-foreground">{bookingTherapist.title}</p>
-                </div>
-              </div>
-
-              {/* Date Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="booking-date">Preferred Date *</Label>
-                <Input
-                  id="booking-date"
-                  type="date"
-                  min={getMinDate()}
-                  value={bookingDate}
-                  onChange={(e) => setBookingDate(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Time Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="booking-time">Preferred Time *</Label>
-                <div className="grid grid-cols-4 gap-2">
-                  {timeSlots.map((slot) => (
-                    <Button
-                      key={slot}
-                      type="button"
-                      variant={bookingTime === slot ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setBookingTime(slot)}
-                      className="text-xs"
-                    >
-                      {slot}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Message */}
-              <div className="space-y-2">
-                <Label htmlFor="booking-message">
-                  Reason for consultation (optional)
-                </Label>
-                <Textarea
-                  id="booking-message"
-                  placeholder="Briefly describe what you'd like to discuss..."
-                  value={bookingMessage}
-                  onChange={(e) => setBookingMessage(e.target.value)}
-                  rows={3}
-                />
-              </div>
-
-              {/* Note */}
-              <p className="text-xs text-muted-foreground">
-                * The therapist will confirm your appointment. You'll receive a notification 
-                once your booking is confirmed.
-              </p>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setBookingTherapist(null)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleBookingSubmit}
-              disabled={bookingMutation.isPending || !bookingDate || !bookingTime}
-            >
-              {bookingMutation.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Submitting...
-                </>
-              ) : (
-                'Request Booking'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Consultation Booking Dialog */}
+      <ConsultationBookingDialog
+        therapist={bookingTherapist}
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+      />
     </div>
   );
 }

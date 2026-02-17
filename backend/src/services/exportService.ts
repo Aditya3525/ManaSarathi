@@ -58,7 +58,7 @@ export class ExportService {
     // Footer
     text += '\n' + '='.repeat(60) + '\n';
     text += `Exported: ${new Date().toLocaleString()}\n`;
-    text += `MaanaSarathi - Conversation Export\n`;
+    text += `MaanSarathi - Conversation Export\n`;
     text += '='.repeat(60) + '\n';
 
     return text;
@@ -133,7 +133,7 @@ export class ExportService {
         doc
           .fontSize(24)
           .font('Helvetica-Bold')
-          .text('MaanaSarathi', { align: 'center' });
+          .text('MaanSarathi', { align: 'center' });
 
         doc.moveDown(0.5);
         doc

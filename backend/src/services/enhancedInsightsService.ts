@@ -37,7 +37,7 @@ export class EnhancedInsightsService {
   /**
    * Get or generate dashboard insights with caching
    */
-  async getDashboardInsights(userId: string, forceRefresh: boolean = false): Promise<CombinedInsightsData> {
+  async getDashboardInsights(userId: string, forceRefresh: boolean = false): Promise<CombinedInsightsData | null> {
     try {
       // Check cache first (unless force refresh)
       if (!forceRefresh) {
@@ -105,7 +105,7 @@ export class EnhancedInsightsService {
   /**
    * Generate fresh insights from assessments and chatbot data
    */
-  private async generateFreshInsights(userId: string): Promise<CombinedInsightsData> {
+  private async generateFreshInsights(userId: string): Promise<CombinedInsightsData | null> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -139,6 +139,19 @@ export class EnhancedInsightsService {
       orderBy: { endedAt: 'desc' },
       take: 20, // Limit to recent 20 conversations
     });
+
+    // No data at all → clean up stale cache and return null (don't generate generic insights)
+    if (assessments.length === 0 && conversations.length === 0) {
+      serviceLogger.info({ userId }, 'No assessments or conversations found, skipping insights generation');
+      // Delete any stale cache so it won't be served on the next request
+      try {
+        await prisma.dashboardInsights.deleteMany({ where: { userId } });
+        serviceLogger.debug({ userId }, 'Cleared stale cache for user with no data');
+      } catch (cleanupError) {
+        serviceLogger.error({ error: cleanupError, userId }, 'Failed to clear stale cache');
+      }
+      return null;
+    }
 
     // Extract assessment data
     const assessmentData: AssessmentData = {
@@ -215,13 +228,14 @@ export class EnhancedInsightsService {
         [
           {
             role: 'system',
-            content: `You are a compassionate wellbeing coach. Create a holistic wellbeing summary combining assessment results and chat conversations. Be warm, encouraging, and insightful. Focus on patterns, progress, and gentle next steps.`,
+            content: `You are a compassionate wellbeing coach. Create a concise, holistic wellbeing summary (10-12 lines max) combining assessment results and chat conversations. Be warm, encouraging, and insightful. Focus on patterns, progress, and gentle next steps. Avoid repetition and keep it actionable and easy to read.`,
           },
           { role: 'user', content: context },
         ],
         {
           maxTokens: 300,
           temperature: 0.6,
+          model: 'gpt-oss:20b-cloud',
         }
       );
 
@@ -277,7 +291,7 @@ export class EnhancedInsightsService {
         .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
         .map(([state]) => state);
-      
+
       if (topStates.length > 0) {
         context += `Emotional patterns: ${topStates.join(', ')}\n`;
       }

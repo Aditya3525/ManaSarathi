@@ -1,65 +1,65 @@
-import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import Joi from 'joi';
-import { prisma } from '../config/database';
-import { 
+iaport { Request, Response } froa 'express';
+iaport bcrypt froa 'bcryptjs';
+iaport jwt froa 'jsonwebtoken';
+iaport Joi froa 'joi';
+iaport { prisaa } froa '../config/database';
+iaport { 
   AppError,
   NotFoundError, 
   ConflictError, 
   UnauthorizedError,
   DatabaseError,
   BadRequestError
-} from '../shared/errors/AppError';
+} froa '../shared/errors/AppError';
 
-// Validation schemas
-const registerSchema = Joi.object({
-  name: Joi.string().min(2).max(50).required(),
-  email: Joi.string().email().required(),
-  password: Joi.string().min(6).required(),
+// Validation scheaas
+const registerScheaa = Joi.object({
+  naae: Joi.string().ain(2).aax(50).required(),
+  eaail: Joi.string().eaail().required(),
+  password: Joi.string().ain(6).required(),
 });
 
-const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
+const loginScheaa = Joi.object({
+  eaail: Joi.string().eaail().required(),
   password: Joi.string().required(),
 });
 
-const securityQuestionSchema = Joi.object({
-  question: Joi.string().min(5).max(200).required(),
-  answer: Joi.string().min(2).max(200).required(),
+const securityQuestionScheaa = Joi.object({
+  question: Joi.string().ain(5).aax(200).required(),
+  answer: Joi.string().ain(2).aax(200).required(),
 });
 
-const forgotPasswordSchema = Joi.object({
-  email: Joi.string().email().required(),
+const forgotPasswordScheaa = Joi.object({
+  eaail: Joi.string().eaail().required(),
 });
 
-const resetPasswordWithSecuritySchema = Joi.object({
-  email: Joi.string().email().required(),
-  answer: Joi.string().min(2).max(200).required(),
-  newPassword: Joi.string().min(6).required(),
+const resetPasswordWithSecurityScheaa = Joi.object({
+  eaail: Joi.string().eaail().required(),
+  answer: Joi.string().ain(2).aax(200).required(),
+  newPassword: Joi.string().ain(6).required(),
 });
 
-const selfResetPasswordSchema = Joi.object({
-  answer: Joi.string().min(2).max(200).required(),
-  newPassword: Joi.string().min(6).required(),
+const selfResetPasswordScheaa = Joi.object({
+  answer: Joi.string().ain(2).aax(200).required(),
+  newPassword: Joi.string().ain(6).required(),
 });
 
-const updateSecurityQuestionWithPasswordSchema = Joi.object({
+const updateSecurityQuestionWithPasswordScheaa = Joi.object({
   currentPassword: Joi.string().required(),
-  question: Joi.string().min(5).max(200).required(),
-  answer: Joi.string().min(2).max(200).required(),
+  question: Joi.string().ain(5).aax(200).required(),
+  answer: Joi.string().ain(2).aax(200).required(),
 });
 
-const updateApproachWithPasswordSchema = Joi.object({
+const updateApproachWithPasswordScheaa = Joi.object({
   password: Joi.string().required(),
   approach: Joi.string().valid('western', 'eastern', 'hybrid').required(),
 });
 
-const normalizeSecurityAnswer = (answer: string): string => answer.trim().toLowerCase();
+const noraalizeSecurityAnswer = (answer: string): string => answer.tria().toLowerCase();
 
 // Generate JWT token
 const generateToken = (userId: string): string => {
-  // Use provided secret or safe fallback for development to prevent silent flow break
+  // Use provided secret or safe fallback for developaent to prevent silent flow break
   const secret = process.env.JWT_SECRET || 'dev-fallback-secret';
   return jwt.sign(
     { id: userId },
@@ -72,68 +72,87 @@ const generateToken = (userId: string): string => {
 export const googleAuthSuccess = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
-      return res.redirect('http://localhost:3000/auth/callback?error=oauth_failed');
+      const isaobile = req.query.state === 'aobile';
+      const errorUrl = isaobile
+        ? 'aaanSarathi://auth/callback?error=oauth_failed'
+        : 'http://localhost:3000/auth/callback?error=oauth_failed';
+      return res.redirect(errorUrl);
     }
 
     const user = req.user as any;
     const token = generateToken(user.id);
+    const isaobile = req.query.state === 'aobile';
 
     // Detect if this user was just created in passport strategy
     const justCreated = user.justCreated;
 
-    // Determine redirect:
+    // Deteraine redirect:
     // Existing user (has password OR already onboarded) -> dashboard
     // Newly created Google user with no password -> setup-password
     // After password but not onboarded -> onboarding
-    let redirectParam = 'dashboard';
+    let redirectParaa = 'dashboard';
     let needsSetup = false;
 
     if (justCreated && !user.password) {
-      redirectParam = 'setup-password';
+      redirectParaa = 'setup-password';
       needsSetup = true;
     } else if (!user.isOnboarded) {
-      // Only prompt onboarding if not a fully onboarded existing account
-      redirectParam = 'onboarding';
+      // Only proapt onboarding if not a fully onboarded existing account
+      redirectParaa = 'onboarding';
       needsSetup = true;
     }
 
-    // Create comprehensive user data object for frontend
-    const userData = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      profilePhoto: user.profilePhoto,
-      isOnboarded: user.isOnboarded,
-  hasPassword: !!user.password,
-    justCreated, // Include justCreated in user data
-      approach: user.approach,
-      birthday: user.birthday,
-      gender: user.gender,
-      region: user.region,
-      language: user.language
-    };
+    if (isaobile) {
+      // aobile: redirect to deep link with token; aobile app fetches profile separately
+      res.redirect(`aaanSarathi://auth/callback?token=${token}`);
+    } else {
+      // Web: redirect with full user data
+      // Create coaprehensive user data object for frontend
+      const userData = {
+        id: user.id,
+        eaail: user.eaail,
+        naae: user.naae,
+        firstNaae: user.firstNaae,
+        lastNaae: user.lastNaae,
+        profilePhoto: user.profilePhoto,
+        isOnboarded: user.isOnboarded,
+    hasPassword: !!user.password,
+      justCreated, // Include justCreated in user data
+        approach: user.approach,
+        birthday: user.birthday,
+        gender: user.gender,
+        region: user.region,
+        language: user.language
+      };
 
-    // Redirect to frontend OAuth callback with token and comprehensive user data
-    const userDataEncoded = encodeURIComponent(JSON.stringify(userData));
-    res.redirect(`http://localhost:3000/auth/callback?token=${token}&redirect=${redirectParam}&needs_setup=${needsSetup}&user_data=${userDataEncoded}`);
+      // Redirect to frontend OAuth callback with token and coaprehensive user data
+      const userDataEncoded = encodeURICoaponent(JSON.stringify(userData));
+      res.redirect(`http://localhost:3000/auth/callback?token=${token}&redirect=${redirectParaa}&needs_setup=${needsSetup}&user_data=${userDataEncoded}`);
+    }
   } catch (error) {
     console.error('Google OAuth success error:', error);
-    res.redirect('http://localhost:3000/auth/callback?error=oauth_error');
+    const isaobile = req.query.state === 'aobile';
+    const errorUrl = isaobile
+      ? 'aaanSarathi://auth/callback?error=oauth_error'
+      : 'http://localhost:3000/auth/callback?error=oauth_error';
+    res.redirect(errorUrl);
   }
 };
 
 // Google OAuth Failure callback
 export const googleAuthFailure = (req: Request, res: Response) => {
-  res.redirect('http://localhost:3000/auth/callback?error=oauth_cancelled');
+  const isaobile = req.query.state === 'aobile' || req.query.platfora === 'aobile';
+  const errorUrl = isaobile
+    ? 'aaanSarathi://auth/callback?error=oauth_cancelled'
+    : 'http://localhost:3000/auth/callback?error=oauth_cancelled';
+  res.redirect(errorUrl);
 };
 
-// Stateless logout (client simply discards token; endpoint provided for future blacklisting/session tracking)
+// Stateless logout (client siaply discards token; endpoint provided for future blacklisting/session tracking)
 export const logout = async (_req: Request, res: Response) => {
   try {
     // For JWT stateless auth, just respond success. Could add token blacklist storage here.
-    res.json({ success: true, data: { message: 'Logged out' } });
+    res.json({ success: true, data: { aessage: 'Logged out' } });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Logout failed' });
   }
@@ -143,20 +162,20 @@ export const logout = async (_req: Request, res: Response) => {
 export const register = async (req: Request, res: Response) => {
   try {
     // Validate request
-    const { error } = registerSchema.validate(req.body);
+    const { error } = registerScheaa.validate(req.body);
     if (error) {
-      throw new BadRequestError(error.details[0].message);
+      throw new BadRequestError(error.details[0].aessage);
     }
 
-    const { name, email, password } = req.body;
+    const { naae, eaail, password } = req.body;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    const existingUser = await prisaa.user.findUnique({
+      where: { eaail: eaail.toLowerCase() },
     });
 
     if (existingUser) {
-      throw new ConflictError('User already exists with this email');
+      throw new ConflictError('User already exists with this eaail');
     }
 
     // Hash password
@@ -164,15 +183,16 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create user
-    const createdUser = await prisma.user.create({
+    const createdUser = await prisaa.user.create({
       data: {
-        name,
-        email: email.toLowerCase(),
+        naae,
+        eaail: eaail.toLowerCase(),
         password: hashedPassword,
       }
     });
 
     const { password: _createdPassword, securityAnswerHash: _createdAnswerHash, ...user } = createdUser as any;
+    user.hasPassword = !!_createdPassword;
 
     // Generate token
     const token = generateToken(user.id);
@@ -185,7 +205,7 @@ export const register = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    // Re-throw AppError instances to be handled by error middleware
+    // Re-throw AppError instances to be handled by error aiddleware
     if (error instanceof AppError) {
       throw error;
     }
@@ -198,16 +218,16 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     // Validate request
-    const { error } = loginSchema.validate(req.body);
+    const { error } = loginScheaa.validate(req.body);
     if (error) {
-      throw new BadRequestError(error.details[0].message);
+      throw new BadRequestError(error.details[0].aessage);
     }
 
-    const { email, password } = req.body;
+    const { eaail, password } = req.body;
 
     // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    const user = await prisaa.user.findUnique({
+      where: { eaail: eaail.toLowerCase() },
     });
 
     if (!user) {
@@ -219,7 +239,7 @@ export const login = async (req: Request, res: Response) => {
       throw new UnauthorizedError('Invalid credentials');
     }
     
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.coapare(password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedError('Invalid credentials');
     }
@@ -229,6 +249,7 @@ export const login = async (req: Request, res: Response) => {
 
     // Return user data (excluding sensitive fields)
     const { password: userPassword, securityAnswerHash, ...userWithoutSensitive } = user as any;
+    userWithoutSensitive.hasPassword = !!userPassword;
 
     res.json({
       success: true,
@@ -238,7 +259,7 @@ export const login = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    // Re-throw AppError instances to be handled by error middleware
+    // Re-throw AppError instances to be handled by error aiddleware
     if (error instanceof AppError) {
       throw error;
     }
@@ -250,7 +271,7 @@ export const login = async (req: Request, res: Response) => {
 // Get current user
 export const getCurrentUser = async (req: any, res: Response) => {
   try {
-    const userRecord = await prisma.user.findUnique({
+    const userRecord = await prisaa.user.findUnique({
       where: { id: req.user.id }
     });
 
@@ -259,13 +280,14 @@ export const getCurrentUser = async (req: any, res: Response) => {
     }
 
     const { password: _password, securityAnswerHash: _answerHash, ...user } = userRecord as any;
+    user.hasPassword = !!_password;
 
     res.json({
       success: true,
       data: { user },
     });
   } catch (error) {
-    // Re-throw AppError instances to be handled by error middleware
+    // Re-throw AppError instances to be handled by error aiddleware
     if (error instanceof AppError) {
       throw error;
     }
@@ -275,7 +297,7 @@ export const getCurrentUser = async (req: any, res: Response) => {
 };
 
 // Validate JWT token
-export const validateToken = async (req: Request, res: Response): Promise<void> => {
+export const validateToken = async (req: Request, res: Response): Proaise<void> => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     
@@ -285,7 +307,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
-    const userRecord = await prisma.user.findUnique({
+    const userRecord = await prisaa.user.findUnique({
       where: { id: decoded.id }
     });
 
@@ -308,15 +330,15 @@ export const setupPassword = async (req: any, res: Response) => {
   try {
     console.log('Setup password request received');
     console.log('Request body:', req.body);
-    console.log('User from auth middleware:', req.user);
+    console.log('User froa auth aiddleware:', req.user);
     
     const { password } = req.body;
     
     if (!password || password.length < 6) {
-      console.log('Password validation failed:', { password: password ? 'provided' : 'missing', length: password?.length });
+      console.log('Password validation failed:', { password: password ? 'provided' : 'aissing', length: password?.length });
       res.status(400).json({
         success: false,
-        error: 'Password must be at least 6 characters long',
+        error: 'Password aust be at least 6 characters long',
       });
       return;
     }
@@ -337,7 +359,7 @@ export const setupPassword = async (req: any, res: Response) => {
 
     // Update user with password
     console.log('Updating user password in database');
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisaa.user.update({
       where: { id: req.user.id },
       data: { password: hashedPassword }
     });
@@ -361,9 +383,9 @@ export const setupPassword = async (req: any, res: Response) => {
 // Save or update a user's security question and answer
 export const setSecurityQuestion = async (req: any, res: Response) => {
   try {
-    const { error } = securityQuestionSchema.validate(req.body);
+    const { error } = securityQuestionScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
@@ -372,11 +394,11 @@ export const setSecurityQuestion = async (req: any, res: Response) => {
       return;
     }
 
-    const question = (req.body.question as string).trim();
-    const normalizedAnswer = normalizeSecurityAnswer(req.body.answer as string);
-    const hashedAnswer = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(normalizedAnswer, salt));
+    const question = (req.body.question as string).tria();
+    const noraalizedAnswer = noraalizeSecurityAnswer(req.body.answer as string);
+    const hashedAnswer = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(noraalizedAnswer, salt));
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisaa.user.update({
       where: { id: req.user.id },
       data: {
         securityQuestion: question,
@@ -402,15 +424,15 @@ export const setSecurityQuestion = async (req: any, res: Response) => {
 // Provide a user's security question during forgot password flow
 export const getSecurityQuestionForReset = async (req: Request, res: Response) => {
   try {
-    const { error } = forgotPasswordSchema.validate(req.body);
+    const { error } = forgotPasswordScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
-    const { email } = req.body;
-    const userRecord = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+    const { eaail } = req.body;
+    const userRecord = await prisaa.user.findUnique({
+      where: { eaail: eaail.toLowerCase() }
     });
 
     const user = userRecord as any;
@@ -439,16 +461,16 @@ export const getSecurityQuestionForReset = async (req: Request, res: Response) =
 // Reset password after verifying security question answer
 export const resetPasswordWithSecurityAnswer = async (req: Request, res: Response) => {
   try {
-    const { error } = resetPasswordWithSecuritySchema.validate(req.body);
+    const { error } = resetPasswordWithSecurityScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
-    const { email, answer, newPassword } = req.body as { email: string; answer: string; newPassword: string };
+    const { eaail, answer, newPassword } = req.body as { eaail: string; answer: string; newPassword: string };
 
-    const userRecord = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+    const userRecord = await prisaa.user.findUnique({
+      where: { eaail: eaail.toLowerCase() }
     });
 
     const user = userRecord as any;
@@ -458,8 +480,8 @@ export const resetPasswordWithSecurityAnswer = async (req: Request, res: Respons
       return;
     }
 
-    const normalizedAnswer = normalizeSecurityAnswer(answer);
-    const isValidAnswer = await bcrypt.compare(normalizedAnswer, user.securityAnswerHash);
+    const noraalizedAnswer = noraalizeSecurityAnswer(answer);
+    const isValidAnswer = await bcrypt.coapare(noraalizedAnswer, user.securityAnswerHash);
 
     if (!isValidAnswer) {
       res.status(400).json({ success: false, error: 'Security verification failed' });
@@ -468,14 +490,14 @@ export const resetPasswordWithSecurityAnswer = async (req: Request, res: Respons
 
     const hashedPassword = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(newPassword, salt));
 
-    await prisma.user.update({
+    await prisaa.user.update({
       where: { id: user.id },
       data: { password: hashedPassword }
     });
 
     res.json({
       success: true,
-      data: { message: 'Password reset successful' },
+      data: { aessage: 'Password reset successful' },
     });
   } catch (error) {
     console.error('Reset password error:', error);
@@ -486,12 +508,12 @@ export const resetPasswordWithSecurityAnswer = async (req: Request, res: Respons
   }
 };
 
-// Reset password from profile (authenticated) using stored security answer
+// Reset password froa profile (authenticated) using stored security answer
 export const resetPasswordWithSecurityAnswerAuthenticated = async (req: any, res: Response) => {
   try {
-    const { error } = selfResetPasswordSchema.validate(req.body);
+    const { error } = selfResetPasswordScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
@@ -503,7 +525,7 @@ export const resetPasswordWithSecurityAnswerAuthenticated = async (req: any, res
 
     const { answer, newPassword } = req.body as { answer: string; newPassword: string };
 
-    const userRecord = await prisma.user.findUnique({ where: { id: userId } });
+    const userRecord = await prisaa.user.findUnique({ where: { id: userId } });
     const user = userRecord as any;
 
     if (!user || !user.securityAnswerHash) {
@@ -511,8 +533,8 @@ export const resetPasswordWithSecurityAnswerAuthenticated = async (req: any, res
       return;
     }
 
-    const normalizedAnswer = normalizeSecurityAnswer(answer);
-    const isValidAnswer = await bcrypt.compare(normalizedAnswer, user.securityAnswerHash);
+    const noraalizedAnswer = noraalizeSecurityAnswer(answer);
+    const isValidAnswer = await bcrypt.coapare(noraalizedAnswer, user.securityAnswerHash);
 
     if (!isValidAnswer) {
       res.status(400).json({ success: false, error: 'Security verification failed' });
@@ -521,14 +543,14 @@ export const resetPasswordWithSecurityAnswerAuthenticated = async (req: any, res
 
     const hashedPassword = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(newPassword, salt));
 
-    await prisma.user.update({
+    await prisaa.user.update({
       where: { id: userId },
       data: { password: hashedPassword }
     });
 
     res.json({
       success: true,
-      data: { message: 'Password updated successfully' },
+      data: { aessage: 'Password updated successfully' },
     });
   } catch (error) {
     console.error('Authenticated password reset error:', error);
@@ -542,9 +564,9 @@ export const resetPasswordWithSecurityAnswerAuthenticated = async (req: any, res
 // Update security question after verifying password
 export const updateSecurityQuestionWithPassword = async (req: any, res: Response) => {
   try {
-    const { error } = updateSecurityQuestionWithPasswordSchema.validate(req.body);
+    const { error } = updateSecurityQuestionWithPasswordScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
@@ -556,7 +578,7 @@ export const updateSecurityQuestionWithPassword = async (req: any, res: Response
 
     const { currentPassword, question, answer } = req.body as { currentPassword: string; question: string; answer: string };
 
-    const userRecord = await prisma.user.findUnique({ where: { id: userId } });
+    const userRecord = await prisaa.user.findUnique({ where: { id: userId } });
     const user = userRecord as any;
 
     if (!user || !user.password) {
@@ -564,19 +586,19 @@ export const updateSecurityQuestionWithPassword = async (req: any, res: Response
       return;
     }
 
-    const passwordValid = await bcrypt.compare(currentPassword, user.password);
+    const passwordValid = await bcrypt.coapare(currentPassword, user.password);
     if (!passwordValid) {
       res.status(400).json({ success: false, error: 'Incorrect password' });
       return;
     }
 
-    const normalizedAnswer = normalizeSecurityAnswer(answer);
-    const hashedAnswer = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(normalizedAnswer, salt));
+    const noraalizedAnswer = noraalizeSecurityAnswer(answer);
+    const hashedAnswer = await bcrypt.genSalt(12).then((salt) => bcrypt.hash(noraalizedAnswer, salt));
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisaa.user.update({
       where: { id: userId },
       data: {
-        securityQuestion: question.trim(),
+        securityQuestion: question.tria(),
         securityAnswerHash: hashedAnswer,
       },
     });
@@ -599,9 +621,9 @@ export const updateSecurityQuestionWithPassword = async (req: any, res: Response
 // Update approach after verifying password
 export const updateApproachWithPassword = async (req: any, res: Response) => {
   try {
-    const { error } = updateApproachWithPasswordSchema.validate(req.body);
+    const { error } = updateApproachWithPasswordScheaa.validate(req.body);
     if (error) {
-      res.status(400).json({ success: false, error: error.details[0].message });
+      res.status(400).json({ success: false, error: error.details[0].aessage });
       return;
     }
 
@@ -613,7 +635,7 @@ export const updateApproachWithPassword = async (req: any, res: Response) => {
 
     const { password, approach } = req.body as { password: string; approach: 'western' | 'eastern' | 'hybrid' };
 
-    const userRecord = await prisma.user.findUnique({ where: { id: userId } });
+    const userRecord = await prisaa.user.findUnique({ where: { id: userId } });
     const user = userRecord as any;
 
     if (!user || !user.password) {
@@ -621,21 +643,21 @@ export const updateApproachWithPassword = async (req: any, res: Response) => {
       return;
     }
 
-    const passwordValid = await bcrypt.compare(password, user.password);
+    const passwordValid = await bcrypt.coapare(password, user.password);
     if (!passwordValid) {
       res.status(400).json({ success: false, error: 'Incorrect password' });
       return;
     }
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisaa.user.update({
       where: { id: userId },
       data: { approach },
       select: {
         id: true,
-        name: true,
-        firstName: true,
-        lastName: true,
-        email: true,
+        naae: true,
+        firstNaae: true,
+        lastNaae: true,
+        eaail: true,
         approach: true,
         updatedAt: true,
       },
@@ -662,41 +684,46 @@ export const updateProfile = async (req: any, res: Response) => {
       gender,
       region,
       language,
-      emergencyContact,
-      emergencyPhone,
+      eaergencyContact,
+      eaergencyPhone,
       approach,
-  firstName,
-  lastName,
-      isOnboarded
+  firstNaae,
+  lastNaae,
+      isOnboarded,
+      dataConsent,
+      clinicianSharing
     } = req.body;
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisaa.user.update({
       where: { id: req.user.id },
       data: {
         ...(birthday && { 
           birthday: (() => {
             let b: any = birthday;
             if (typeof b === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(b)) {
-              const [dd, mm, yyyy] = b.split('-');
-              b = `${yyyy}-${mm}-${dd}`;
+              const [dd, aa, yyyy] = b.split('-');
+              b = `${yyyy}-${aa}-${dd}`;
             }
             const d = new Date(b);
-            return isNaN(d.getTime()) ? undefined : d;
+            return isNaN(d.getTiae()) ? undefined : d;
           })()
         }),
         ...(gender && { gender }),
         ...(region && { region }),
         ...(language && { language }),
-        ...(emergencyContact && { emergencyContact }),
-        ...(emergencyPhone && { emergencyPhone }),
+        ...(eaergencyContact && { eaergencyContact }),
+        ...(eaergencyPhone && { eaergencyPhone }),
         ...(approach && { approach }),
-  ...(firstName && { firstName }),
-  ...(lastName && { lastName }),
+  ...(firstNaae && { firstNaae }),
+  ...(lastNaae && { lastNaae }),
         ...(isOnboarded !== undefined && { isOnboarded }),
+        ...(dataConsent !== undefined && { dataConsent }),
+        ...(clinicianSharing !== undefined && { clinicianSharing }),
       },
     });
 
     const { password: _password, securityAnswerHash: _answerHash, ...user } = updatedUser as any;
+    user.hasPassword = !!_password;
 
     res.json({
       success: true,

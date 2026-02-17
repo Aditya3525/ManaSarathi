@@ -6,12 +6,14 @@ export class OllamaProvider extends BaseAIProvider {
   public name = 'Ollama';
   private baseURL: string;
   private model: string;
+  private apiKey?: string;
   private isModelAvailable: boolean = false;
 
   constructor(config: AIProviderConfig) {
     super('Ollama', config);
     this.baseURL = config.baseURL || 'http://localhost:11434';
     this.model = config.model || 'llama3';
+    this.apiKey = (config as any).apiKey || process.env.OLLAMA_API_KEY;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -42,7 +44,7 @@ export class OllamaProvider extends BaseAIProvider {
         
         // Try to pull the model automatically
         console.log(`[${this.name}] Attempting to pull model: ${this.model}`);
-        await this.pullModel();
+        await this.pullModel(this.model);
       }
       
       console.log(`[${this.name}] Connection successful, model ${this.model} available`);
@@ -53,77 +55,28 @@ export class OllamaProvider extends BaseAIProvider {
     }
   }
 
-  private async pullModel(): Promise<void> {
-    try {
-      console.log(`[${this.name}] Pulling model: ${this.model}...`);
-      
-      // Start model pull (this is async in Ollama)
-      const response = await fetch(`${this.baseURL}/api/pull`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: this.model })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to pull model: ${response.statusText}`);
-      }
-
-      // Read the streaming response to monitor progress
-      const reader = response.body?.getReader();
-      if (reader) {
-        let progress = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = new TextDecoder().decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim());
-          
-          for (const line of lines) {
-            try {
-              const data = JSON.parse(line);
-              if (data.status && data.status !== progress) {
-                progress = data.status;
-                console.log(`[${this.name}] Pull progress: ${progress}`);
-              }
-              if (data.status === 'success') {
-                this.isModelAvailable = true;
-                console.log(`[${this.name}] Model ${this.model} pulled successfully`);
-                return;
-              }
-            } catch (e) {
-              // Ignore JSON parse errors for partial chunks
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      console.error(`[${this.name}] Failed to pull model ${this.model}:`, error.message);
-      throw error;
-    }
-  }
-
   async generateResponse(
     messages: AIMessage[], 
     config?: AIConfig,
     context?: ConversationContext
   ): Promise<AIResponse> {
-    if (!this.isModelAvailable && !await this.testConnection()) {
-      throw new Error(`[${this.name}] Model ${this.model} not available`);
-    }
+    const usedModel = (config as any)?.model || this.model;
+
+    // Ensure the requested model is available (pull if needed)
+    await this.ensureModelAvailable(usedModel);
 
     const preparedMessages = this.prepareMessages(messages, context);
     const startTime = Date.now();
 
     try {
-      console.log(`[${this.name}] Generating response with ${preparedMessages.length} messages...`);
-      
+      console.log(`[${this.name}] Generating response with ${preparedMessages.length} messages using model ${usedModel}...`);
+
       // Convert messages to Ollama chat format
       const prompt = this.convertMessagesToPrompt(preparedMessages);
 
       const response = await Promise.race([
         axios.post(`${this.baseURL}/api/generate`, {
-          model: this.model,
+          model: usedModel,
           prompt: prompt,
           stream: false,
           options: {
@@ -132,7 +85,7 @@ export class OllamaProvider extends BaseAIProvider {
             top_p: 0.9,
             top_k: 40
           }
-        }),
+        }, { headers: this.getHeaders() }),
         new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Request timeout')), 
           config?.timeout || this.config.timeout || 60000) // Longer timeout for local processing
@@ -148,7 +101,7 @@ export class OllamaProvider extends BaseAIProvider {
           completion_tokens: response.data.eval_count || 0,
           total_tokens: (response.data.prompt_eval_count || 0) + (response.data.eval_count || 0),
         },
-        model: response.data.model || this.model,
+        model: response.data.model || usedModel,
         provider: this.name,
         finish_reason: response.data.done ? 'stop' : 'length',
         success: true,
@@ -173,6 +126,76 @@ export class OllamaProvider extends BaseAIProvider {
       (enhancedError as any).statusCode = error.response?.status || 500;
       throw enhancedError;
     }
+  }
+
+  private async ensureModelAvailable(modelName: string): Promise<void> {
+    try {
+      // Check server tags for the requested model
+      const resp = await axios.get(`${this.baseURL}/api/tags`, { headers: this.getHeaders() });
+      const models = resp.data?.models || [];
+      const found = models.some((m: any) => m.name === modelName || m.name.includes(modelName.split(':')[0]));
+      if (found) return;
+
+      // If not found, attempt to pull the model
+      console.log(`[${this.name}] Model ${modelName} not found locally. Attempting to pull.`);
+      await this.pullModel(modelName);
+    } catch (error: any) {
+      console.warn(`[${this.name}] ensureModelAvailable failed: ${error?.message || error}`);
+      // don't throw here; let the generate call surface errors
+    }
+  }
+
+  private async pullModel(modelName: string): Promise<void> {
+    try {
+      console.log(`[${this.name}] Pulling model: ${modelName}...`);
+
+      const response = await fetch(`${this.baseURL}/api/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.getHeaders() },
+        body: JSON.stringify({ name: modelName })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to pull model: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (reader) {
+        let progress = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n').filter(line => line.trim());
+
+          for (const line of lines) {
+            try {
+              const data = JSON.parse(line);
+              if (data.status && data.status !== progress) {
+                progress = data.status;
+                console.log(`[${this.name}] Pull progress: ${progress}`);
+              }
+              if (data.status === 'success') {
+                console.log(`[${this.name}] Model ${modelName} pulled successfully`);
+                return;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for partial chunks
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error(`[${this.name}] Failed to pull model ${modelName}:`, error.message);
+      throw error;
+    }
+  }
+
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    return headers;
   }
 
   /**

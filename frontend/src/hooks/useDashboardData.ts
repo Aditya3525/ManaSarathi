@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || getApiBaseUrl();
 
 // Types
 export interface DashboardData {
@@ -357,8 +359,8 @@ export function useDashboardWebSocket() {
     const storedToken = localStorage.getItem('token');
     if (!storedToken) return;
 
-    const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
-    
+    const WS_URL = import.meta.env.VITE_WS_URL || getWsBaseUrl();
+
     // Note: WebSocket implementation would need backend support
     // This is a placeholder for future WebSocket implementation
     const ws = new WebSocket(`${WS_URL}/dashboard?token=${storedToken}`);
@@ -371,7 +373,7 @@ export function useDashboardWebSocket() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Handle different update types
         switch (data.type) {
           case 'insight_generated':
@@ -386,7 +388,7 @@ export function useDashboardWebSocket() {
           default:
             console.log('[Dashboard] Unknown update type:', data.type);
         }
-        
+
         setLastUpdate(new Date());
       } catch (error) {
         console.error('[Dashboard] WebSocket message error:', error);
@@ -437,7 +439,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
 
       if (distance > 0 && window.scrollY === 0) {
         setPullDistance(Math.min(distance, PULL_THRESHOLD * 1.5));
-        
+
         // Prevent default scroll behavior when pulling
         if (distance > 10) {
           e.preventDefault();

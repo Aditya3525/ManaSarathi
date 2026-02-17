@@ -1,0 +1,419 @@
+/* ===== Consultation Booking System - Premium Styles ===== */
+
+/* --- Step Indicator --- */
+.booking-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.booking-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.booking-step-circle {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 2px solid hsl(var(--muted-foreground) / 0.3);
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.booking-step-circle.active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.15);
+  animation: stepPulse 2s ease-in-out infinite;
+}
+
+.booking-step-circle.completed {
+  border-color: hsl(142 76% 36%);
+  background: hsl(142 76% 36%);
+  color: white;
+}
+
+.booking-step-connector {
+  width: 2.5rem;
+  height: 2px;
+  background: hsl(var(--muted-foreground) / 0.2);
+  transition: background 0.35s ease;
+  flex-shrink: 0;
+}
+
+.booking-step-connector.completed {
+  background: hsl(142 76% 36%);
+}
+
+.booking-step-label {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .booking-step-label {
+    display: block;
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    transition: color 0.3s ease;
+  }
+
+  .booking-step-label.active {
+    color: hsl(var(--primary));
+    font-weight: 600;
+  }
+
+  .booking-step-label.completed {
+    color: hsl(142 76% 36%);
+  }
+}
+
+@keyframes stepPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0.08);
+  }
+}
+
+/* --- Consultation Type Cards --- */
+.consult-type-card {
+  position: relative;
+  padding: 1.25rem;
+  border: 2px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: hsl(var(--card));
+  overflow: hidden;
+}
+
+.consult-type-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.05), transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.consult-type-card:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px hsl(var(--primary) / 0.1);
+}
+
+.consult-type-card:hover::before {
+  opacity: 1;
+}
+
+.consult-type-card.selected {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.consult-type-card.selected::before {
+  opacity: 1;
+}
+
+.consult-type-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  transition: transform 0.3s ease;
+}
+
+.consult-type-card:hover .consult-type-icon,
+.consult-type-card.selected .consult-type-icon {
+  transform: scale(1.1);
+}
+
+/* --- Time Slot Grid --- */
+.time-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .time-slot-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.time-slot-btn {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1.5px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.time-slot-btn:hover {
+  border-color: hsl(var(--primary) / 0.5);
+  background: hsl(var(--primary) / 0.05);
+}
+
+.time-slot-btn.selected {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 600;
+}
+
+/* --- Booking Summary Card --- */
+.booking-summary {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.04), hsl(var(--accent) / 0.06));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.booking-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.booking-summary-row+.booking-summary-row {
+  border-top: 1px solid hsl(var(--border) / 0.5);
+}
+
+.booking-summary-label {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.booking-summary-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* --- Step Content Transition --- */
+.step-content {
+  animation: stepFadeIn 0.3s ease-out;
+}
+
+@keyframes stepFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --- Therapist Profile Header --- */
+.therapist-profile-header {
+  position: relative;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--accent) / 0.1));
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.therapist-profile-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.08), transparent 70%);
+  border-radius: 50%;
+}
+
+.therapist-profile-avatar {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid hsl(var(--primary) / 0.2);
+  box-shadow: 0 4px 15px hsl(var(--primary) / 0.1);
+}
+
+.therapist-profile-avatar-placeholder {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.25));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid hsl(var(--primary) / 0.2);
+}
+
+/* --- My Bookings Cards --- */
+.booking-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  transition: all 0.2s ease;
+  background: hsl(var(--card));
+}
+
+.booking-card:hover {
+  box-shadow: 0 4px 16px hsl(var(--foreground) / 0.06);
+  border-color: hsl(var(--border) / 0.8);
+}
+
+.booking-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.booking-status-badge.pending {
+  background: hsl(38 92% 50% / 0.12);
+  color: hsl(38 92% 40%);
+  border: 1px solid hsl(38 92% 50% / 0.25);
+}
+
+.booking-status-badge.confirmed {
+  background: hsl(142 76% 36% / 0.12);
+  color: hsl(142 76% 30%);
+  border: 1px solid hsl(142 76% 36% / 0.25);
+}
+
+.booking-status-badge.cancelled {
+  background: hsl(0 84% 60% / 0.12);
+  color: hsl(0 84% 45%);
+  border: 1px solid hsl(0 84% 60% / 0.25);
+}
+
+.booking-status-badge.completed {
+  background: hsl(217 91% 60% / 0.12);
+  color: hsl(217 91% 45%);
+  border: 1px solid hsl(217 91% 60% / 0.25);
+}
+
+.booking-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.booking-status-badge.pending .booking-status-dot {
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* --- Empty State --- */
+.bookings-empty {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.bookings-empty-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background: hsl(var(--primary) / 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+/* --- Sub-tab Toggle --- */
+.therapist-sub-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: hsl(var(--muted));
+  border-radius: 0.5rem;
+  width: fit-content;
+}
+
+.therapist-sub-tab {
+  padding: 0.4rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.therapist-sub-tab:hover {
+  color: hsl(var(--foreground));
+}
+
+.therapist-sub-tab.active {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.08);
+  font-weight: 600;
+}
+
+/* --- CTA Button Glow --- */
+.book-cta-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.book-cta-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.15), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.book-cta-btn:hover::after {
+  transform: translateX(100%);
+}

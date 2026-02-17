@@ -94,7 +94,9 @@ const RESOURCE_TYPES = [
   'WEBSITE'
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+import { getServerBaseUrl } from '../config/apiConfig';
+
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || getServerBaseUrl();
 
 // Admin API for Crisis Resources
 const crisisResourceAdminApi = {
@@ -146,15 +148,15 @@ interface CrisisResourceManagementProps {
 
 export function CrisisResourceManagement({ onRefresh }: CrisisResourceManagementProps) {
   const { push } = useNotificationStore();
-  
+
   // State
   const [resources, setResources] = useState<CrisisResource[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  
+
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<CrisisResource | null>(null);
@@ -201,7 +203,7 @@ export function CrisisResourceManagement({ onRefresh }: CrisisResourceManagement
 
   // Filter resources
   const filteredResources = resources.filter(resource => {
-    const matchesSearch = 
+    const matchesSearch =
       resource.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = filterType === 'all' || resource.type === filterType;
@@ -259,7 +261,7 @@ export function CrisisResourceManagement({ onRefresh }: CrisisResourceManagement
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
-    
+
     setIsSubmitting(true);
     try {
       await crisisResourceAdminApi.delete(deleteConfirm.id);

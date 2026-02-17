@@ -1,10 +1,5 @@
 // Help & Safety API Service
-const getApiBaseUrl = () => {
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:5000/api';
-  }
-  return `http://${window.location.hostname}:5000/api`;
-};
+import { getApiBaseUrl } from '../config/apiConfig';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || getApiBaseUrl();
 
@@ -56,7 +51,13 @@ export interface Therapist {
   country: string;
   acceptsInsurance: boolean;
   insuranceProviders: string | null;
+  insurancesList?: string[];
+  sessionFee: number | null;
+  offersSliding: boolean;
+  availability?: { day: string; startTime: string; endTime: string }[];
   profileImageUrl: string | null;
+  yearsExperience: number | null;
+  languages: string | null;
   rating: number;
   reviewCount: number;
   isActive: boolean;
@@ -89,14 +90,27 @@ export interface SafetyPlan {
   updatedAt: string;
 }
 
+export interface TherapistBookingTherapist {
+  name: string;
+  credential: string;
+  title: string;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+}
+
 export interface TherapistBooking {
   id: string;
   therapistId: string;
-  preferredDate: string;
-  preferredTime: string;
-  reason: string;
+  preferredDate: string | null;
+  preferredTime: string | null;
+  message: string | null;
   status: BookingStatus;
-  therapist?: Therapist;
+  therapistNotes?: string | null;
+  processedBy?: string | null;
+  processedAt?: string | null;
+  therapist?: TherapistBookingTherapist;
   createdAt: string;
   updatedAt: string;
 }
@@ -109,10 +123,10 @@ const getAuthToken = () => {
 // Crisis Resources API
 export const crisisResourcesApi = {
   getAll: async (country?: string): Promise<CrisisResource[]> => {
-    const url = country 
+    const url = country
       ? `${API_BASE_URL}/crisis/resources?country=${country}`
       : `${API_BASE_URL}/crisis/resources`;
-    
+
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch crisis resources');
     const data = await response.json();
@@ -123,10 +137,10 @@ export const crisisResourcesApi = {
 // FAQ API
 export const faqApi = {
   getAll: async (category?: FAQCategory): Promise<FAQ[]> => {
-    const url = category 
+    const url = category
       ? `${API_BASE_URL}/faq?category=${category}`
       : `${API_BASE_URL}/faq`;
-    
+
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch FAQs');
     const data = await response.json();
@@ -192,7 +206,8 @@ export const therapistApi = {
     therapistId: string;
     preferredDate: string;
     preferredTime: string;
-    reason: string;
+    message?: string;
+    userPhone?: string;
   }): Promise<TherapistBooking> => {
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/therapists/booking`, {
@@ -203,7 +218,10 @@ export const therapistApi = {
       },
       body: JSON.stringify(bookingData)
     });
-    if (!response.ok) throw new Error('Failed to request booking');
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      throw new Error(errData?.error || 'Failed to request booking');
+    }
     const data = await response.json();
     return data.data.booking;
   },
@@ -256,10 +274,10 @@ export const supportTicketsApi = {
 
   getMyTickets: async (status?: TicketStatus): Promise<SupportTicket[]> => {
     const token = getAuthToken();
-    const url = status 
+    const url = status
       ? `${API_BASE_URL}/support/tickets?status=${status}`
       : `${API_BASE_URL}/support/tickets`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`

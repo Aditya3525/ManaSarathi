@@ -5,12 +5,43 @@ import { z } from 'zod';
 import { ValidationError, NotFoundError } from '../shared/errors/AppError';
 import { formatZodErrors } from '../utils/zodHelpers';
 
+// Normalize availability from legacy { day, times } to { day, startTime, endTime }
+function normalizeAvailability(slots: any[]): { day: string; startTime: string; endTime: string }[] {
+  if (!Array.isArray(slots)) return [];
+  const result: { day: string; startTime: string; endTime: string }[] = [];
+  for (const slot of slots) {
+    if (slot.startTime && slot.endTime) {
+      result.push({ day: slot.day, startTime: slot.startTime, endTime: slot.endTime });
+    } else if (slot.times && Array.isArray(slot.times)) {
+      for (const timeRange of slot.times) {
+        const parts = timeRange.split(' - ');
+        if (parts.length === 2) {
+          result.push({ day: slot.day, startTime: convertTo24h(parts[0].trim()), endTime: convertTo24h(parts[1].trim()) });
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function convertTo24h(time12: string): string {
+  if (/^\d{1,2}:\d{2}$/.test(time12) && !time12.includes('AM') && !time12.includes('PM')) return time12;
+  const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return time12;
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
 // Validation schema
 const bookingSchema = z.object({
   therapistId: z.string(),
   preferredDate: z.string().optional(),
   preferredTime: z.string().optional(),
-  message: z.string().max(500).optional(),
+  message: z.string().max(1000).optional(),
   userPhone: z.string().optional()
 });
 
@@ -20,16 +51,16 @@ const bookingSchema = z.object({
  */
 export const getTherapists = async (req: Request, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'getTherapists'
   });
 
   try {
-    const { 
-      specialty, 
-      city, 
-      state, 
+    const {
+      specialty,
+      city,
+      state,
       acceptsInsurance,
       limit = '20',
       offset = '0'
@@ -61,8 +92,12 @@ export const getTherapists = async (req: Request, res: Response) => {
         title: true,
         bio: true,
         specialtiesJson: true,
+        email: true,
+        phone: true,
+        website: true,
         city: true,
         state: true,
+        country: true,
         acceptsInsurance: true,
         insurances: true,
         sessionFee: true,
@@ -72,23 +107,29 @@ export const getTherapists = async (req: Request, res: Response) => {
         yearsExperience: true,
         languages: true,
         rating: true,
-        reviewCount: true
+        reviewCount: true,
+        isActive: true,
+        isVerified: true
       }
     });
 
     // Parse JSON fields
-    const therapistsWithParsed = therapists.map(t => ({
-      ...t,
-      specialties: JSON.parse(t.specialtiesJson),
-      availability: JSON.parse(t.availabilityJson),
-      insurancesList: t.insurances ? JSON.parse(t.insurances) : []
-    }));
+    const therapistsWithParsed = therapists.map(t => {
+      const insurancesList = t.insurances ? JSON.parse(t.insurances) : [];
+      return {
+        ...t,
+        specialties: JSON.parse(t.specialtiesJson),
+        availability: normalizeAvailability(JSON.parse(t.availabilityJson)),
+        insurancesList,
+        insuranceProviders: insurancesList.length > 0 ? insurancesList.join(', ') : null
+      };
+    });
 
     log.info({ count: therapists.length }, 'Fetched therapists');
 
     res.json({
       success: true,
-      data: { 
+      data: {
         therapists: therapistsWithParsed,
         total: therapists.length
       }
@@ -105,8 +146,8 @@ export const getTherapists = async (req: Request, res: Response) => {
  */
 export const getTherapistById = async (req: Request, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'getTherapist'
   });
 
@@ -126,11 +167,13 @@ export const getTherapistById = async (req: Request, res: Response) => {
     }
 
     // Parse JSON fields
+    const insurancesList = therapist.insurances ? JSON.parse(therapist.insurances) : [];
     const therapistData = {
       ...therapist,
       specialties: JSON.parse(therapist.specialtiesJson),
-      availability: JSON.parse(therapist.availabilityJson),
-      insurancesList: therapist.insurances ? JSON.parse(therapist.insurances) : []
+      availability: normalizeAvailability(JSON.parse(therapist.availabilityJson)),
+      insurancesList,
+      insuranceProviders: insurancesList.length > 0 ? insurancesList.join(', ') : null
     };
 
     log.info({ therapistId: id }, 'Fetched therapist details');
@@ -142,7 +185,8 @@ export const getTherapistById = async (req: Request, res: Response) => {
   } catch (error) {
     log.error({ err: error }, 'Failed to fetch therapist');
     if (error instanceof NotFoundError) {
-      throw error;
+      res.status(404).json({ success: false, error: error.message });
+      return;
     }
     res.status(500).json({ success: false, error: 'Failed to fetch therapist' });
   }
@@ -154,8 +198,8 @@ export const getTherapistById = async (req: Request, res: Response) => {
  */
 export const searchTherapists = async (req: Request, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'searchTherapists'
   });
 
@@ -224,28 +268,71 @@ export const searchTherapists = async (req: Request, res: Response) => {
  */
 export const requestBooking = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'requestBooking',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {
     const validation = bookingSchema.safeParse(req.body);
     if (!validation.success) {
-      throw new ValidationError(formatZodErrors(validation.error), 'Invalid booking data');
+      const errors = formatZodErrors(validation.error);
+      const firstError = Object.values(errors).flat()[0] || 'Invalid booking data';
+      res.status(400).json({ success: false, error: firstError, errors });
+      return;
     }
 
     const userId = req.user.id;
     const { therapistId, preferredDate, preferredTime, message, userPhone } = validation.data;
 
+    // Validate date
+    if (!preferredDate) {
+      res.status(400).json({ success: false, error: 'Preferred date is required.' });
+      return;
+    }
+    // Ensure the date string matches YYYY-MM-DD format
+    const dateMatch = preferredDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dateMatch) {
+      res.status(400).json({ success: false, error: 'Preferred date must be in YYYY-MM-DD format.' });
+      return;
+    }
+    const dateObj = new Date(preferredDate + 'T00:00:00');
+    if (isNaN(dateObj.getTime())) {
+      res.status(400).json({ success: false, error: 'Preferred date is invalid.' });
+      return;
+    }
+    // Verify the parsed date matches the input (catches invalid dates like Feb 31)
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    if (
+      year !== parseInt(dateMatch[1]) ||
+      month !== parseInt(dateMatch[2]) ||
+      day !== parseInt(dateMatch[3])
+    ) {
+      res.status(400).json({ success: false, error: 'Preferred date is invalid (date does not exist).' });
+      return;
+    }
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (dateObj < now) {
+      res.status(400).json({ success: false, error: 'Preferred date must be in the future.' });
+      return;
+    }
+
+    if (!preferredTime) {
+      res.status(400).json({ success: false, error: 'Preferred time is required.' });
+      return;
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true }
     });
-
     if (!user) {
-      throw new NotFoundError('User not found');
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
     }
 
     // Verify therapist exists and is active
@@ -255,16 +342,34 @@ export const requestBooking = async (req: any, res: Response) => {
         isActive: true
       }
     });
-
     if (!therapist) {
-      throw new NotFoundError('Therapist not found or not available');
+      res.status(404).json({ success: false, error: 'Therapist not found or not available' });
+      return;
+    }
+
+    // Note: Availability check is skipped because bookings are requests
+    // that require therapist confirmation. The therapist will review
+    // and accept/reject based on their actual schedule.
+
+    // Prevent double-booking for user or therapist at the same date/time
+    const existing = await prisma.therapistBooking.findFirst({
+      where: {
+        OR: [
+          { userId, preferredDate: dateObj, preferredTime, status: { in: ['PENDING', 'CONFIRMED'] } },
+          { therapistId, preferredDate: dateObj, preferredTime, status: { in: ['PENDING', 'CONFIRMED'] } }
+        ]
+      }
+    });
+    if (existing) {
+      res.status(400).json({ success: false, error: 'This slot is already booked. Please choose another time.' });
+      return;
     }
 
     const booking = await prisma.therapistBooking.create({
       data: {
         userId,
         therapistId,
-        preferredDate: preferredDate ? new Date(preferredDate) : null,
+        preferredDate: dateObj,
         preferredTime,
         message: message || null,
         userEmail: user.email,
@@ -289,10 +394,15 @@ export const requestBooking = async (req: any, res: Response) => {
       data: { booking },
       message: 'Booking request submitted successfully. The therapist will contact you soon.'
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error({ err: error }, 'Failed to create booking request');
-    if (error instanceof ValidationError || error instanceof NotFoundError) {
-      throw error;
+    if (error instanceof ValidationError) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ success: false, error: error.message });
+      return;
     }
     res.status(500).json({ success: false, error: 'Failed to submit booking request' });
   }
@@ -304,10 +414,10 @@ export const requestBooking = async (req: any, res: Response) => {
  */
 export const getUserBookings = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'getUserBookings',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {
@@ -349,10 +459,10 @@ export const getUserBookings = async (req: any, res: Response) => {
  */
 export const cancelBooking = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'therapist', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'therapist',
     action: 'cancelBooking',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {
@@ -367,11 +477,13 @@ export const cancelBooking = async (req: any, res: Response) => {
     });
 
     if (!booking) {
-      throw new NotFoundError('Booking not found');
+      res.status(404).json({ success: false, error: 'Booking not found' });
+      return;
     }
 
     if (booking.status === 'COMPLETED') {
-      throw new ValidationError('Cannot cancel completed booking');
+      res.status(400).json({ success: false, error: 'Cannot cancel completed booking' });
+      return;
     }
 
     await prisma.therapistBooking.update({
@@ -388,10 +500,15 @@ export const cancelBooking = async (req: any, res: Response) => {
       success: true,
       message: 'Booking cancelled successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error({ err: error }, 'Failed to cancel booking');
-    if (error instanceof NotFoundError || error instanceof ValidationError) {
-      throw error;
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ success: false, error: error.message });
+      return;
+    }
+    if (error instanceof ValidationError) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
     }
     res.status(500).json({ success: false, error: 'Failed to cancel booking' });
   }

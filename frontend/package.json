@@ -1,8 +1,8 @@
 {
-  "name": "maanasarathi-frontend",
+  "name": "MaanSarathi-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "MaanaSarathi companion app (React + Vite)",
+  "description": "MaanSarathi companion app (React + Vite)",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -125,6 +125,6 @@
     "react",
     "vite",
     "ai",
-    "maanasarathi"
+    "MaanSarathi"
   ]
 }

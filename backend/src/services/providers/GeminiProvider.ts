@@ -38,8 +38,9 @@ export class GeminiProvider extends BaseAIProvider {
         const clientIndex = this.config.apiKeys?.indexOf(apiKey) || 0;
         const client = this.clients[clientIndex];
         
+        const selectedModel = options.model || this.config.model || 'gemini-2.0-flash-lite';
         const model = client.getGenerativeModel({
-          model: this.config.model || 'gemini-2.0-flash-exp',
+          model: selectedModel,
           generationConfig: {
             temperature: options.temperature || this.config.temperature || 0.7,
             topP: options.topP || 0.95,
@@ -68,11 +69,20 @@ export class GeminiProvider extends BaseAIProvider {
 
         console.log(`[Gemini] Generating response with ${messages.length} messages...`);
 
-        // Build the conversation context with system prompt
-        const systemPrompt = this.createSystemPrompt(context);
-        
+        // Extract system prompt from incoming messages if present (injected by chatService),
+        // otherwise fall back to the base provider's lightweight prompt.
+        let systemPrompt: string;
+        let conversationMessages = messages;
+
+        if (messages.length > 0 && messages[0].role === 'system') {
+          systemPrompt = messages[0].content;
+          conversationMessages = messages.slice(1);
+        } else {
+          systemPrompt = this.createSystemPrompt(context);
+        }
+
         // Convert messages to Gemini format
-        const conversationHistory = this.formatMessagesForGemini(messages, systemPrompt);
+        const conversationHistory = this.formatMessagesForGemini(conversationMessages, systemPrompt);
 
         // Generate response
         const result = await model.generateContent(conversationHistory);
@@ -118,7 +128,7 @@ export class GeminiProvider extends BaseAIProvider {
         return {
           content: text.trim(),
           provider: 'Gemini',
-          model: this.config.model || 'gemini-2.0-flash-exp',
+          model: selectedModel,
           usage: {
             prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
             completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
@@ -159,7 +169,7 @@ export class GeminiProvider extends BaseAIProvider {
     try {
       const client = this.clients[0];
       const model = client.getGenerativeModel({ 
-        model: this.config.model || 'gemini-2.0-flash-exp' 
+        model: this.config.model || 'gemini-2.0-flash-lite' 
       });
       
       console.log('[Gemini] Testing connection...');

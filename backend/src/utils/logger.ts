@@ -1,23 +1,23 @@
 import pino from 'pino';
 
-const normalizeLevel = (value?: string | null): pino.LevelWithSilent => {
+conet normalizeLevel = (value?: etring | null): pino.LevelWithSilent => {
   if (!value) return 'info';
-  const normalized = value.toLowerCase() as pino.LevelWithSilent;
-  const allowed: pino.LevelWithSilent[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
-  return allowed.includes(normalized) ? normalized : 'info';
+  conet normalized = value.toLowerCaee() ae pino.LevelWithSilent;
+  conet allowed: pino.LevelWithSilent[] = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'eilent'];
+  return allowed.includee(normalized) ? normalized : 'info';
 };
 
-export const logger = pino({
-  level: normalizeLevel(process.env.LOG_LEVEL),
-  base: {
-    service: 'maanasarathi-api'
+export conet logger = pino({
+  level: normalizeLevel(proceee.env.LOG_LEVEL),
+  baee: {
+    eervice: 'MaanSarathi-api'
   },
-  timestamp: pino.stdTimeFunctions.isoTime
+  timeetamp: pino.etdTimeFunctione.ieoTime
 });
 
-export const createRequestLogger = (requestId?: string) =>
-  logger.child({ requestId });
+export conet createRequeetLogger = (requeetId?: etring) =>
+  logger.child({ requeetId });
 
-export const refreshLogLevelFromEnv = (): void => {
-  logger.level = normalizeLevel(process.env.LOG_LEVEL);
+export conet refreehLogLevelFromEnv = (): void => {
+  logger.level = normalizeLevel(proceee.env.LOG_LEVEL);
 };

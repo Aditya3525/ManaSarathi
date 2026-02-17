@@ -26,6 +26,7 @@ import {
   passwordSetupSchema,
   updateProfileSchema,
 } from '../api/validators';
+import { prisma } from '../config/database';
 
 const router = express.Router();
 
@@ -34,9 +35,14 @@ router.post('/register', validate(registerSchema), asyncHandler(register));
 router.post('/login', validate(loginSchema), asyncHandler(login));
 
 // Google OAuth routes
-router.get('/google', 
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+// Accept ?platform=mobile query param so the callback knows where to redirect
+router.get('/google', (req, res, next) => {
+  const platform = req.query.platform === 'mobile' ? 'mobile' : 'web';
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state: platform, // passed through OAuth and available in callback
+  })(req, res, next);
+});
 
 router.get('/google/callback',
   passport.authenticate('google', { failureRedirect: '/api/auth/google/failure' }),
@@ -44,6 +50,71 @@ router.get('/google/callback',
 );
 
 router.get('/google/failure', googleAuthFailure);
+
+// Mobile Google OAuth: Exchange authorization code for JWT token
+// (Mobile apps can't use browser redirect flow, so they send a code from Google Sign-In SDK)
+router.post('/google/mobile', asyncHandler(async (req, res) => {
+  const { code, idToken, email, name, googleId, profilePhoto, firstName, lastName } = req.body;
+
+  if (!email || !googleId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Email and googleId are required for mobile Google auth',
+    });
+  }
+
+  const db = prisma;
+
+  try {
+    // Find or create user by email
+    let user = await db.user.findUnique({ where: { email } });
+
+    if (user) {
+      // Update Google ID and profile info if needed
+      const updateData: any = {};
+      if (!user.googleId) updateData.googleId = googleId;
+      if (!user.profilePhoto && profilePhoto) updateData.profilePhoto = profilePhoto;
+      if (!user.firstName && firstName) updateData.firstName = firstName;
+      if (!user.lastName && lastName) updateData.lastName = lastName;
+
+      if (Object.keys(updateData).length > 0) {
+        user = await db.user.update({ where: { id: user.id }, data: updateData });
+      }
+    } else {
+      // Create new user
+      user = await db.user.create({
+        data: {
+          email,
+          name: name || `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0],
+          googleId,
+          profilePhoto: profilePhoto || null,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          isOnboarded: false,
+          dataConsent: true,
+        },
+      });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const secret = process.env.JWT_SECRET || 'dev-fallback-secret';
+    const token = jwt.sign({ id: user.id }, secret, { expiresIn: process.env.JWT_EXPIRE || '7d' });
+
+    const { password: _password, securityAnswerHash: _answerHash, ...safeUser } = user as any;
+
+    res.json({
+      success: true,
+      data: {
+        user: safeUser,
+        token,
+        needsOnboarding: !user.isOnboarded,
+        needsPassword: !user.password,
+      },
+    });
+  } finally {
+    // Using shared prisma singleton — no disconnect needed
+  }
+}));
 
 // Token validation
 router.post('/validate', asyncHandler(validateToken));

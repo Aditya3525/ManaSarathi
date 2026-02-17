@@ -88,7 +88,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       try {
         // Load personalized greeting
         const greetingResponse = await chatApi.getMoodBasedGreeting();
-        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm MaanaSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
+        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm MaanSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
         
         if (greetingResponse.success && greetingResponse.data?.greeting) {
           greetingText = greetingResponse.data.greeting;

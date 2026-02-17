@@ -20,19 +20,37 @@ const safetyPlanSchema = z.object({
   reasonsToLiveJson: z.string().optional()
 });
 
+// Map onboarding country names to DB country codes
+const countryNameToCode: Record<string, string> = {
+  'India': 'IN',
+  'United States': 'US',
+  'United Kingdom': 'UK',
+  'Canada': 'CA',
+  'Australia': 'AU',
+  'Germany': 'DE',
+  'France': 'FR',
+  'Spain': 'ES',
+  'Brazil': 'BR',
+  'Japan': 'JP',
+  'Singapore': 'SG',
+  'United Arab Emirates': 'AE',
+};
+
 /**
  * Get all active crisis resources
  * GET /api/crisis/resources
  */
 export const getCrisisResources = async (req: Request, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'crisis', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'crisis',
     action: 'getResources'
   });
 
   try {
-    const country = (req.query.country as string) || 'US';
+    const rawCountry = (req.query.country as string) || 'US';
+    // Resolve country name to code (e.g., 'India' → 'IN'), or use as-is if already a code
+    const country = countryNameToCode[rawCountry] || rawCountry;
 
     const resources = await prisma.crisisResource.findMany({
       where: {
@@ -72,10 +90,10 @@ export const getCrisisResources = async (req: Request, res: Response) => {
  */
 export const createOrUpdateSafetyPlan = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'crisis', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'crisis',
     action: 'saveSafetyPlan',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {
@@ -118,10 +136,10 @@ export const createOrUpdateSafetyPlan = async (req: any, res: Response) => {
  */
 export const getSafetyPlan = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'crisis', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'crisis',
     action: 'getSafetyPlan',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {
@@ -168,10 +186,10 @@ export const getSafetyPlan = async (req: any, res: Response) => {
  */
 export const deleteSafetyPlan = async (req: any, res: Response) => {
   const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({ 
-    controller: 'crisis', 
+  const log = createRequestLogger(requestId).child({
+    controller: 'crisis',
     action: 'deleteSafetyPlan',
-    userId: req.user.id 
+    userId: req.user.id
   });
 
   try {

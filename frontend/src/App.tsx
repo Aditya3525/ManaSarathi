@@ -1,7 +1,11 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getServerBaseUrl } from './config/apiConfig';
+
 import { AdminDashboard } from './admin/AdminDashboard';
+import { TherapistLoginPage } from './therapist/TherapistLoginPage';
+import { TherapistDashboard } from './therapist/TherapistDashboard';
 import { AssessmentList, AssessmentFlow, CombinedAssessmentFlow, InsightsResults, OverallAssessmentInvite, OverallAssessmentSelection, OVERALL_ASSESSMENT_OPTION_IDS } from './components/features/assessment';
 import { AssessmentCompletionPayload } from './components/features/assessment/AssessmentFlow';
 import { AdminLoginPage, LandingPage, OAuthCallback, PasswordSetup, UserLoginPage } from './components/features/auth';
@@ -24,7 +28,7 @@ import { assessmentsApi, AssessmentInsights, AssessmentSessionSummary } from './
 import { getCurrentUser, loginUser, registerUser, signOut, StoredUser, completeOnboarding, setupUserPassword } from './services/auth';
 import { useAuthStore } from './stores/authStore';
 
-type Page = 
+type Page =
   | 'landing'
   | 'user-login'
   | 'admin-login'
@@ -46,7 +50,9 @@ type Page =
   | 'profile'
   | 'help'
   | 'oauth-callback'
-  | 'admin';
+  | 'admin'
+  | 'therapist-login'
+  | 'therapist-portal';
 
 type User = StoredUser;
 
@@ -78,7 +84,9 @@ const PAGE_ROUTES: Record<Page, string> = {
   profile: '/profile',
   help: '/help',
   'oauth-callback': '/auth/callback',
-  admin: '/admin'
+  admin: '/admin',
+  'therapist-login': '/therapist_login',
+  'therapist-portal': '/therapist_portal'
 };
 
 const PATH_TO_PAGE: Record<string, Page> = Object.entries(PAGE_ROUTES).reduce((acc, [page, route]) => {
@@ -86,7 +94,7 @@ const PATH_TO_PAGE: Record<string, Page> = Object.entries(PAGE_ROUTES).reduce((a
   return acc;
 }, {} as Record<string, Page>);
 
-const PUBLIC_PAGES = new Set<Page>(['landing', 'user-login', 'admin-login', 'oauth-callback']);
+const PUBLIC_PAGES = new Set<Page>(['landing', 'user-login', 'admin-login', 'therapist-login', 'oauth-callback']);
 
 const PRE_ONBOARDING_ALLOWED_PAGES = new Set<Page>([
   'landing', // Allow non-onboarded users to return to landing page
@@ -107,6 +115,11 @@ const pathToPage = (rawPath: string): Page => {
 const resolveInitialPage = (user: User | null, requestedPage: Page, adminAuthenticated: boolean): Page => {
   if (requestedPage === 'admin') {
     return adminAuthenticated ? 'admin' : 'admin-login';
+  }
+
+  // Therapist portal pages are public (login) or session-gated (portal)
+  if (requestedPage === 'therapist-login' || requestedPage === 'therapist-portal') {
+    return requestedPage;
   }
 
   if (!user) {
@@ -177,44 +190,48 @@ const DASHBOARD_TOUR_STORAGE_KEY = 'mw-dashboard-tour-pending';
 
 function AppInner() {
   const [currentPage, setCurrentPage] = useState<Page>(() => pathToPage(window.location.pathname));
-  
+
   // Auth state from Zustand store
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
   const updateUser = useAuthStore((state) => state.updateUser);
   const logoutFromStore = useAuthStore((state) => state.logout);
-  
+
   // Admin auth from context
   const { admin: adminUser, adminAutoLogin } = useAdminAuth();
-  
+
   const [loadingUser, setLoadingUser] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<{ error: string; suggestion?: string; message?: string } | null>(null);
   const [currentAssessment, setCurrentAssessment] = useState<string | null>(null);
   const [selectedAssessmentTypes, setSelectedAssessmentTypes] = useState<string[]>([]);
-  
+
   // React Query for assessment data ✅
   // Only fetch when user is logged in (not on admin pages)
-  const { 
-    data: assessmentData, 
+  const {
+    data: assessmentData,
     isLoading: assessmentsLoading,
     error: assessmentQueryError,
-    refetch: refetchAssessments 
-  } = useAssessmentHistory({ 
-    enabled: !!user && currentPage !== 'admin' && currentPage !== 'admin-login' 
+    refetch: refetchAssessments
+  } = useAssessmentHistory({
+    enabled: !!user && currentPage !== 'admin' && currentPage !== 'admin-login' && currentPage !== 'therapist-login' && currentPage !== 'therapist-portal'
   });
-  
+
+  // Therapist portal state
+  const [therapistSession, setTherapistSession] = useState<{ therapistId: string; therapistName: string } | null>(null);
+  const [therapistLoginError, setTherapistLoginError] = useState<string | null>(null);
+
   // Derive values from React Query
   const assessmentHistory = assessmentData?.history ?? [];
   const assessmentInsights = assessmentData?.insights ?? null;
   const assessmentError = assessmentQueryError?.message ?? null;
-  
+
   // OLD STATE - Commented out, now using React Query above
   // const [assessmentHistory, setAssessmentHistory] = useState<AssessmentHistoryEntry[]>([]);
   // const [assessmentInsights, setAssessmentInsights] = useState<AssessmentInsights | null>(null);
   // const [assessmentsLoading, setAssessmentsLoading] = useState(false);
   // const [assessmentError, setAssessmentError] = useState<string | null>(null);
-  
+
   const [activeSession, setActiveSession] = useState<AssessmentSessionSummary | null>(null);
   const [isStartingOverallSession, setIsStartingOverallSession] = useState(false);
   const [assessmentSelectionDefaults, setAssessmentSelectionDefaults] = useState<string[] | undefined>(undefined);
@@ -258,7 +275,7 @@ function AppInner() {
       try {
         // Refetch assessment data (React Query handles loading/error states)
         const result = await refetchAssessments();
-        
+
         // Also fetch active session (not cached by React Query)
         const sessionResponse = await assessmentsApi.getActiveAssessmentSession();
 
@@ -357,11 +374,7 @@ function AppInner() {
   }, [user, adminUser, adminAutoLogin]);
 
   const startGoogleOAuth = useCallback(() => {
-    const hostname = window.location.hostname;
-    const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
-      ? 'http://localhost:5000' 
-      : `http://${hostname}:5000`;
-    window.location.assign(`${apiUrl}/api/auth/google`);
+    window.location.assign(`${getServerBaseUrl()}/api/auth/google`);
   }, []);
 
   const startAssessment = (assessmentId: string, session?: AssessmentSessionSummary | null) => {
@@ -382,7 +395,7 @@ function AppInner() {
     const defaults = recentSelection.length > 0 ? recentSelection : DEFAULT_COMBINED_SELECTION;
 
     // React Query handles error state
-  setAssessmentSelectionDefaults([...defaults]);
+    setAssessmentSelectionDefaults([...defaults]);
     setAssessmentSelectionReturnPage('assessments');
     navigateTo('assessment-selection');
   }, [lastCombinedSelection, navigateTo]);
@@ -416,7 +429,7 @@ function AppInner() {
       }
 
       const session = response.data.session;
-      
+
       // Store selected types and session for combined flow
       setSelectedAssessmentTypes(sanitizedSelectedTypes);
       setActiveSession(session);
@@ -471,18 +484,18 @@ function AppInner() {
           responseDetails: assessment.responseDetails
         }))
       });
-      
+
       if (!response.success || !response.data) {
         throw new Error(response.error || 'Unable to save combined assessments');
       }
 
       // Refetch assessment data (React Query will update automatically)
       await refetchAssessments();
-      
-    // Update session and selection state
-    setActiveSession(response.data.session);
-    const sanitizedSessionSelection = sanitizeCombinedAssessmentSelection(response.data.session.selectedTypes);
-    setLastCombinedSelection(sanitizedSessionSelection.length > 0 ? sanitizedSessionSelection : null);
+
+      // Update session and selection state
+      setActiveSession(response.data.session);
+      const sanitizedSessionSelection = sanitizeCombinedAssessmentSelection(response.data.session.selectedTypes);
+      setLastCombinedSelection(sanitizedSessionSelection.length > 0 ? sanitizedSessionSelection : null);
       setAssessmentSelectionReturnPage('dashboard');
       setAssessmentSelectionDefaults(undefined);
 
@@ -493,10 +506,10 @@ function AppInner() {
         updateUser({ assessmentScores: mergedScores });
       }
 
-    // Clear temporary state
-    setSelectedAssessmentTypes([]);
-    pendingInsightsFocusRef.current = null;
-    navigateTo('insights');
+      // Clear temporary state
+      setSelectedAssessmentTypes([]);
+      pendingInsightsFocusRef.current = null;
+      navigateTo('insights');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save combined assessments';
       console.error('Combined assessment submission error:', message, error);
@@ -566,10 +579,10 @@ function AppInner() {
     try {
       setAuthError(null);
       console.log('Starting registration process for:', userData);
-      
+
       const result = await registerUser(userData);
       console.log('Registration successful:', result);
-      
+
       // Set user data with token and route to onboarding
       setUser({
         ...result.user,
@@ -578,10 +591,10 @@ function AppInner() {
         dataConsent: false,
         clinicianSharing: false
       }, result.token);
-      
+
       console.log('Routing new user to onboarding');
-  navigateTo('onboarding');
-      
+      navigateTo('onboarding');
+
     } catch (error) {
       console.error('Registration error:', error);
       // Handle structured ApiResponse thrown from registerUser
@@ -661,12 +674,52 @@ function AppInner() {
       console.log('App.tsx: Starting admin login process');
       await adminLogin(credentials);
       console.log('App.tsx: Admin login successful, redirecting to admin dashboard');
-    navigateTo('admin');
+      navigateTo('admin');
     } catch (error) {
       console.error('App.tsx: Admin login failed:', error);
       // The error will be handled by the AdminAuthContext
     }
   };
+
+  // ─── Therapist Portal auth ───────────────────────────────────────────────
+  const handleTherapistLogin = async (credentials: { email: string; password: string }) => {
+    try {
+      setTherapistLoginError(null);
+      const res = await fetch('/api/therapist-portal/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTherapistLoginError(data.error || 'Login failed');
+        return;
+      }
+      setTherapistSession({ therapistId: data.therapistId, therapistName: data.therapistName });
+      navigateTo('therapist-portal');
+    } catch (e: any) {
+      setTherapistLoginError(e.message || 'Login failed');
+    }
+  };
+
+  const handleTherapistLogout = async () => {
+    try {
+      await fetch('/api/therapist-portal/logout', { method: 'POST', credentials: 'include' });
+    } catch (_) { }
+    setTherapistSession(null);
+    navigateTo('therapist-login');
+  };
+
+  // Check therapist session on mount if on therapist-portal page
+  useEffect(() => {
+    if (currentPage === 'therapist-portal' && !therapistSession) {
+      fetch('/api/therapist-portal/session', { credentials: 'include' })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => setTherapistSession({ therapistId: data.therapistId, therapistName: data.therapistName }))
+        .catch(() => navigateTo('therapist-login'));
+    }
+  }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOAuthSuccess = (userData: {
     id: string;
@@ -695,14 +748,14 @@ function AppInner() {
     updatedAt?: string;
   }) => {
     console.log('OAuth Success Data:', userData);
-    
+
     // CRITICAL: Store token in localStorage FIRST (before setUser)
     // This ensures the token is available for immediate API calls
     if (userData.token) {
       console.log('Storing OAuth token in localStorage');
       localStorage.setItem('token', userData.token);
     }
-    
+
     // Set complete user data from backend (includes all profile fields)
     setUser({
       id: userData.id,
@@ -725,13 +778,13 @@ function AppInner() {
       createdAt: userData.createdAt || new Date().toISOString(),
       updatedAt: userData.updatedAt || new Date().toISOString()
     }, userData.token);
-    
+
     // Store complete user data (for backward compatibility)
     localStorage.setItem('user', JSON.stringify(userData));
-    
+
     // Clear URL parameters
     window.history.replaceState({}, document.title, '/');
-    
+
     // Determine flow based on user status
     console.log('User status check:', {
       needsPassword: userData.needsPassword,
@@ -741,7 +794,7 @@ function AppInner() {
       justCreated: userData.justCreated,
       tokenStored: !!localStorage.getItem('token')
     });
-    
+
     // Simplified routing logic:
     // - New Google users (justCreated) -> password setup
     // - Existing users without onboarding -> onboarding
@@ -778,11 +831,11 @@ function AppInner() {
   }) => {
     console.log('completeOnboardingFlow called with:', profileData);
     console.log('Current token in localStorage:', localStorage.getItem('token'));
-    
+
     try {
       console.log('Completing onboarding with data:', profileData);
       console.log('Current user before onboarding:', user);
-      
+
       if (profileData.approach) {
         console.log('Making API call to complete onboarding...');
         // Send all profile data to backend
@@ -802,10 +855,10 @@ function AppInner() {
         }
         updateDashboardTourPending(true);
       }
-      
+
       console.log('Onboarding complete - routing to overall assessment invite');
       navigateTo('assessment-invite');
-      
+
     } catch (error) {
       console.error('Onboarding completion error:', error);
       // Don't proceed to dashboard if backend update fails - show error instead
@@ -820,23 +873,23 @@ function AppInner() {
     try {
       setAuthError(null);
       console.log('Setting up user password...');
-      
+
       // Verify we have a user and token before attempting password setup
       if (!user) {
         throw new Error('No user session found. Please sign in again.');
       }
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication token missing. Please sign in again.');
       }
-      
+
       const updatedUser = await setupUserPassword(password);
       if (updatedUser) {
         console.log('Password setup successful:', updatedUser);
         // Update user with new password status
         setUser({ ...updatedUser, hasPassword: true });
-        
+
         // Check if user still needs onboarding after password setup
         if (!updatedUser.isOnboarded) {
           console.log('User needs onboarding - routing to onboarding');
@@ -852,7 +905,7 @@ function AppInner() {
       console.error('Password setup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Password setup failed. Please try again.';
       setAuthError(errorMessage);
-      
+
       // If token is missing, redirect back to login
       if (errorMessage.includes('token') || errorMessage.includes('Authentication')) {
         console.log('Token issue detected, redirecting to login');
@@ -978,12 +1031,12 @@ function AppInner() {
           />
         );
       case 'landing':
-  return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
       case 'oauth-callback':
         return <OAuthCallback onAuthSuccess={handleOAuthSuccess} onAuthError={handleOAuthError} />;
       case 'password-setup':
-        return <PasswordSetup 
-          user={user} 
+        return <PasswordSetup
+          user={user}
           onComplete={completePasswordSetup}
           error={authError}
           isLoading={false}
@@ -1111,12 +1164,30 @@ function AppInner() {
       case 'profile':
         return <Profile user={user} onNavigate={navigateTo} setUser={setUser} onLogout={logout} />;
       case 'help':
-        return <HelpSafety onNavigate={navigateTo} />;
+        return <HelpSafety onNavigate={navigateTo} userRegion={user?.region} />;
       case 'admin':
         // Show admin dashboard if admin session exists (either old 'admin' or new 'adminUser')
         return (admin || adminUser) ? <AdminDashboard /> : <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+      case 'therapist-login':
+        return (
+          <TherapistLoginPage
+            onTherapistLogin={handleTherapistLogin}
+            loginError={therapistLoginError}
+            onNavigateHome={() => navigateTo('landing')}
+            onNavigateUserLogin={() => navigateTo('user-login')}
+          />
+        );
+      case 'therapist-portal':
+        return therapistSession ? (
+          <TherapistDashboard
+            onLogout={handleTherapistLogout}
+            therapistName={therapistSession.therapistName}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-screen text-muted-foreground">Loading therapist portal...</div>
+        );
       default:
-  return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
     }
   };
   return (

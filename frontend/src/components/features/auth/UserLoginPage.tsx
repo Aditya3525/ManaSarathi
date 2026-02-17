@@ -1,6 +1,8 @@
 import { ArrowLeft, CheckCircle, Shield, Sparkles, UserRound } from 'lucide-react';
 import React, { useState } from 'react';
 
+import { getServerBaseUrl } from '../../../config/apiConfig';
+
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
@@ -69,11 +71,7 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
       startOAuth();
       return;
     }
-    const hostname = window.location.hostname;
-    const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
-      ? 'http://localhost:5000' 
-      : `http://${hostname}:5000`;
-    window.location.assign(`${apiUrl}/api/auth/google`);
+    window.location.assign(`${getServerBaseUrl()}/api/auth/google`);
   };
 
   const combinedError = authError || loginError?.message || loginError?.error;

@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -23,6 +24,43 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Public practices fetch error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch practices' });
+  }
+});
+
+// Log a practice session (authenticated)
+router.post('/sessions', authenticate as any, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'User not authenticated' });
+    }
+
+    const { practiceId, startTime, endTime, completed, notes } = req.body;
+
+    if (!practiceId) {
+      return res.status(400).json({ success: false, error: 'practiceId is required' });
+    }
+
+    // Track practice as a progress metric
+    const progressEntry = await prisma.progressTracking.create({
+      data: {
+        userId,
+        metric: 'practice_session',
+        value: completed ? 1 : 0,
+        notes: JSON.stringify({
+          practiceId,
+          startTime,
+          endTime,
+          completed: completed ?? true,
+          notes: notes || '',
+        }),
+      },
+    });
+
+    res.json({ success: true, data: progressEntry });
+  } catch (error) {
+    console.error('Log practice session error:', error);
+    res.status(500).json({ success: false, error: 'Failed to log practice session' });
   }
 });
 

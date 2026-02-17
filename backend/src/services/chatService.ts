@@ -126,7 +126,7 @@ const APPROACH_DESCRIPTIONS: Record<ApproachMode, string> = {
 };
 
 export class ChatService {
-  
+
   async generateAIResponse(
     userId: string,
     userMessage: string,
@@ -167,15 +167,27 @@ export class ChatService {
         chatLogger.info({ userId, conversationId: activeConversationId }, 'Created new conversation');
       }
 
-      // Check for crisis language first
-      if (this.detectCrisisLanguage(userMessage)) {
-        chatLogger.warn({ userId }, 'Crisis language detected in chat message');
+      // Check for crisis language first — use both keyword matching AND the
+      // computed crisisRisk score from enhanced sentiment analysis for higher recall.
+      const keywordCrisis = this.detectCrisisLanguage(userMessage);
+      const enhancedCrisisSentiment = this.analyzeEnhancedSentiment(userMessage);
+      const computedCrisisRisk = enhancedCrisisSentiment?.indicators?.crisisRisk ?? 0;
+      const isCrisis = keywordCrisis || computedCrisisRisk >= 0.5;
+
+      if (isCrisis) {
+        chatLogger.warn({ userId, keywordCrisis, computedCrisisRisk }, 'Crisis language detected in chat message');
 
         // Save user message with crisis flag
         await this.saveChatMessage(userId, userMessage, 'user', { crisis: true }, activeConversationId);
 
+        // Fetch user region for localised crisis resources
+        const crisisUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { region: true }
+        });
+
         // Save crisis response
-        const crisisResponse = this.getCrisisResponse();
+        const crisisResponse = this.getCrisisResponse(crisisUser?.region);
         const botMessage = await this.saveChatMessage(userId, crisisResponse, 'system', { crisis: true }, activeConversationId);
 
         // Update conversation timestamp
@@ -207,7 +219,7 @@ export class ChatService {
 
       // Get conversation memory context
       const memoryContext = await conversationMemoryService.getMemory(userId);
-      
+
       // Get contextual awareness (time of day, recent events)
       const contextInsight = contextAwarenessService.getContextualInsight({
         userId,
@@ -229,8 +241,8 @@ export class ChatService {
           'sadness': 'depression',
           'fatigue': 'overwhelm'
         };
-        
-        const emotion = sentimentSnapshot.dominantEmotion 
+
+        const emotion = sentimentSnapshot.dominantEmotion
           ? (emotionMap[sentimentSnapshot.dominantEmotion] || 'stress')
           : 'stress';
 
@@ -242,7 +254,7 @@ export class ChatService {
 
         if (recommendedExercise) {
           const exerciseResponse = structuredExercisesService.formatExerciseForChat(recommendedExercise);
-          
+
           // Save user message
           await this.saveChatMessage(userId, userMessage, 'user', {
             sentiment: sentimentSnapshot,
@@ -302,6 +314,9 @@ export class ChatService {
         maxItems: 4
       });
 
+      // Query recent feedback for adaptive context
+      const feedbackSummary = await this.buildFeedbackSummary(userId);
+
       const systemPrompt = this.buildSystemPrompt({
         approach: approachMode,
         userContext,
@@ -309,7 +324,8 @@ export class ChatService {
         directives,
         recommendations: recommendationResult.items,
         memoryContext,
-        contextInsight
+        contextInsight,
+        feedbackSummary: feedbackSummary ?? undefined
       });
 
       const promptMessages: AIMessage[] = [
@@ -349,6 +365,9 @@ export class ChatService {
         chatLogger.warn({ userId }, 'Falling back to default recommendations');
       }
 
+      // ---- Post-processing safety layer ----
+      const processedContent = this.postProcessResponse(aiResponse.content);
+
       // Save user message (with sentiment metadata)
       await this.saveChatMessage(userId, userMessage, 'user', {
         sentiment: sentimentSnapshot,
@@ -358,7 +377,7 @@ export class ChatService {
       // Update conversation memory with user message
       await conversationMemoryService.updateMemory(userId, userMessage, 'user');
 
-      const botMessage = await this.saveChatMessage(userId, aiResponse.content, 'bot', {
+      const botMessage = await this.saveChatMessage(userId, processedContent, 'bot', {
         provider: aiResponse.provider,
         model: aiResponse.model,
         processingTime: aiResponse.processingTime,
@@ -423,7 +442,7 @@ export class ChatService {
       }, activeConversationId);
 
       const fallbackPayload = recommendationResult ?? this.buildEmergencyRecommendationSet(sentimentSnapshot);
-      const fallbackResponse = this.getFallbackResponse(userMessage);
+      const fallbackResponse = this.getFallbackResponse(userMessage, approachMode);
       const botMessage = await this.saveChatMessage(userId, fallbackResponse, 'bot', {
         provider: 'fallback',
         approach: approachMode,
@@ -435,7 +454,7 @@ export class ChatService {
       // Update conversation timestamp even on error
       if (activeConversationId) {
         await conversationService.updateLastMessageTime(activeConversationId);
-        
+
         // Generate title if this is a new conversation
         if (newConversationCreated) {
           generatedTitle = await conversationService.generateConversationTitle(activeConversationId);
@@ -466,7 +485,7 @@ export class ChatService {
   }
 
   private async getUserContext(userId: string): Promise<UserContext> {
-    const [user, insight] = await Promise.all([
+    const [user, insight, activeGoals] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -482,7 +501,12 @@ export class ChatService {
       }),
       (prisma as any).assessmentInsight?.findUnique({
         where: { userId }
-      }) ?? null
+      }) ?? null,
+      prisma.conversationGoal.findMany({
+        where: { userId, status: 'active' },
+        orderBy: { updatedAt: 'desc' },
+        take: 5
+      })
     ]);
 
     if (!user) {
@@ -507,7 +531,7 @@ export class ChatService {
     const aiSummary = insight?.aiSummary ?? parsedSummary?.insights?.aiSummary ?? undefined;
 
     // Parse assessment responses for detailed context
-  const detailedAssessments = user.assessments.map((assessment: typeof user.assessments[number]) => {
+    const detailedAssessments = user.assessments.map((assessment: typeof user.assessments[number]) => {
       let responses: Record<string, unknown> | null = null;
       try {
         responses = JSON.parse(assessment.responses);
@@ -528,6 +552,11 @@ export class ChatService {
     const moodTrend = this.analyzeMoodTrend(user.moodEntries);
     const { age, ageGroup } = this.calculateAgeInfo(user.birthday || undefined);
 
+    // Privacy enforcement: if the user has NOT given data consent,
+    // exclude detailed assessment scores, mood entries, and personal metrics
+    // from the AI prompt context. We still allow the approach and basic profile.
+    const privacyRestricted = !user.dataConsent;
+
     return {
       id: user.id,
       name: user.name,
@@ -537,26 +566,34 @@ export class ChatService {
       ageGroup,
       approach: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
       approachEngine: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
-      recentAssessments: detailedAssessments,
-      currentMood: user.moodEntries[0]?.mood,
-      moodTrend,
-      hasCompletedAssessments: user.assessments.length > 0,
+      recentAssessments: privacyRestricted ? [] : detailedAssessments,
+      currentMood: privacyRestricted ? undefined : user.moodEntries[0]?.mood,
+      moodTrend: privacyRestricted ? undefined : moodTrend,
+      hasCompletedAssessments: privacyRestricted ? false : user.assessments.length > 0,
       preferences: {
         emergencyContact: user.emergencyContact,
         dataConsent: user.dataConsent,
         clinicianSharing: user.clinicianSharing
       },
-      wellnessScore,
-      wellbeingTrend,
-      aiSummary,
-      assessmentInsights: insightsByType
-        ? {
+      wellnessScore: privacyRestricted ? undefined : wellnessScore,
+      wellbeingTrend: privacyRestricted ? undefined : wellbeingTrend,
+      aiSummary: privacyRestricted ? undefined : aiSummary,
+      assessmentInsights: privacyRestricted
+        ? undefined
+        : insightsByType
+          ? {
             byType: insightsByType as Record<string, AssessmentTypeSummary>,
             recommendations: this.collectRecommendations(
               insightsByType as Record<string, AssessmentTypeSummary>
             )
           }
-        : undefined
+          : undefined,
+      activeGoals: activeGoals.map(g => ({
+        goalType: g.goalType,
+        title: g.title,
+        progress: g.progress,
+        status: g.status
+      }))
     };
   }
 
@@ -644,7 +681,7 @@ export class ChatService {
    */
   private analyzeEnhancedSentiment(message: string): EnhancedSentiment {
     const lower = message.toLowerCase();
-    
+
     // Emotion scoring
     const emotionScores: Record<string, number> = {
       joy: 0,
@@ -687,7 +724,7 @@ export class ChatService {
     // Determine primary emotion
     const maxScore = Math.max(...Object.values(emotionScores));
     let primaryEmotion: 'joy' | 'sadness' | 'anxiety' | 'anger' | 'fear' | 'neutral' = 'neutral';
-    
+
     if (maxScore > 0) {
       const primaryEntry = Object.entries(emotionScores).find(([_, score]) => score === maxScore);
       if (primaryEntry) {
@@ -867,8 +904,9 @@ export class ChatService {
     recommendations?: RecommendationResult['items'];
     memoryContext?: any;
     contextInsight?: any;
+    feedbackSummary?: string;
   }): string {
-    const { approach, userContext, sentiment, directives, recommendations = [], memoryContext, contextInsight } = args;
+    const { approach, userContext, sentiment, directives, recommendations = [], memoryContext, contextInsight, feedbackSummary } = args;
 
     const wellnessText = userContext.wellnessScore
       ? `${userContext.wellnessScore.toFixed(1)} / 100`
@@ -883,18 +921,18 @@ export class ChatService {
 
     const domainText = userContext.assessmentInsights?.byType
       ? `Latest assessment signals:\n${Object.entries(
-          userContext.assessmentInsights.byType as Record<string, AssessmentTypeSummary>
-        )
-          .slice(0, 4)
-          .map(([type, summary]) => {
-            const label = type
-              .replace(/([A-Z])/g, ' $1')
-              .replace(/^./, (c) => c.toUpperCase());
-            return `- ${label.trim()}: score ${Math.round(summary.latestScore || 0)} (normalized ${Math.round(
-              summary.normalizedScore || 0
-            )}, trend ${summary.trend})`;
-          })
-          .join('\n')}`
+        userContext.assessmentInsights.byType as Record<string, AssessmentTypeSummary>
+      )
+        .slice(0, 4)
+        .map(([type, summary]) => {
+          const label = type
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, (c) => c.toUpperCase());
+          return `- ${label.trim()}: score ${Math.round(summary.latestScore || 0)} (normalized ${Math.round(
+            summary.normalizedScore || 0
+          )}, trend ${summary.trend})`;
+        })
+        .join('\n')}`
       : null;
 
     const recommendationLines = recommendations.slice(0, 3).map((item) => {
@@ -932,7 +970,7 @@ export class ChatService {
     if (memoryContext) {
       if (memoryContext.recentTopics && memoryContext.recentTopics.length > 0) {
         memorySection += `\nRECENT CONVERSATION TOPICS:\n`;
-        memorySection += memoryContext.recentTopics.slice(0, 5).map((topic: any) => 
+        memorySection += memoryContext.recentTopics.slice(0, 5).map((topic: any) =>
           `- ${topic.topic} (mentioned ${topic.count} times, last on ${new Date(topic.lastMentioned).toLocaleDateString()})`
         ).join('\n');
       }
@@ -965,20 +1003,54 @@ export class ChatService {
       contextSection = contextAwarenessService.buildContextPrompt(contextInsight);
     }
 
+    // Build active goals section
+    let goalsSection = '';
+    if (userContext.activeGoals && userContext.activeGoals.length > 0) {
+      goalsSection = `\nACTIVE WELLBEING GOALS:\n`;
+      goalsSection += userContext.activeGoals.map(g =>
+        `- ${g.title} (${g.goalType.replace(/_/g, ' ')}) — ${g.progress}% complete`
+      ).join('\n');
+      goalsSection += `\nGently reference these goals when relevant to motivate progress, but do not force them into every response.`;
+    }
+
     return [
       `You are a compassionate wellbeing coach. ${APPROACH_DESCRIPTIONS[approach]}`,
       `Overall mental wellness score: ${wellnessText}. Trend: ${trendText}.`,
       userContext.aiSummary ? `Previous AI summary cue: ${userContext.aiSummary}` : null,
       domainText,
-      `Latest message sentiment: ${sentiment.summary}. Keywords: ${
-        sentiment.keywords.length ? sentiment.keywords.join(', ') : 'none detected'
+      `Latest message sentiment: ${sentiment.summary}. Keywords: ${sentiment.keywords.length ? sentiment.keywords.join(', ') : 'none detected'
       }`,
       recommendationText,
       recommendationSection,
       directivesText,
       memorySection || null,
       contextSection || null,
-      'When you respond: 1) validate emotion, 2) reflect a thought/behavior pattern, 3) offer one practical action aligned with the approach, 4) close with a gentle question. Keep it under 150 words, trauma-informed, and avoid clinical diagnoses. Remind about professional help if they disclose severe risk.'
+      goalsSection || null,
+      this.buildAssessmentDetailSection(userContext),
+      this.buildMoodSection(userContext),
+      feedbackSummary || null,
+      `RESPONSE STRUCTURE (follow this order):
+1) Validate the emotion — "It sounds like you're feeling..." or "I can see this is..."
+2) Reflect a thought or behavior pattern you notice in what they shared
+3) Offer ONE practical coping action aligned with the ${approach} approach
+4) Suggest a concrete micro-action they can do right now (e.g., "Take 3 slow breaths", "Write one sentence about this feeling")
+5) Close with a gentle, open-ended question to continue the conversation
+
+PERSONALITY RULES — NEVER:
+- Say "everything will be fine", "just stay positive", "look on the bright side", or similar toxic positivity
+- Provide clinical diagnoses, medication names, or dosage suggestions
+- Claim "I understand exactly how you feel" — you are an AI, not a human
+- Give overly verbose monologues or preachy motivational speeches
+- Minimize suffering with phrases like "at least...", "others have it worse", or "it's not that bad"
+
+PERSONALITY RULES — ALWAYS:
+- Acknowledge difficulty without minimizing it
+- Use "I notice..." or "It sounds like..." rather than "You should..."
+- Offer options and invitations, never commands
+- Keep responses under 120 words — be warm but concise
+- Be trauma-informed: never push someone to share more than they want
+- Remind about professional help if the user discloses severe distress or risk
+- You are a wellness companion, NOT a licensed therapist — never claim otherwise`
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -998,11 +1070,146 @@ export class ChatService {
   private getMaxTokensForApproach(approach: ApproachMode): number {
     switch (approach) {
       case 'western':
-        return 200;
+        return 350;
       case 'eastern':
-        return 220;
+        return 380;
       default:
-        return 220;
+        return 380;
+    }
+  }
+
+  /**
+   * Post-processing safety layer — filters AI responses for quality and safety.
+   * Runs after LLM output and before saving to DB.
+   */
+  private postProcessResponse(content: string): string {
+    let processed = content;
+
+    // 1. Toxic positivity filter — replace banned phrases with safer alternatives
+    const toxicReplacements: [RegExp, string][] = [
+      [/everything will be (fine|okay|ok|alright)/gi, 'things can feel difficult right now, and that\'s valid'],
+      [/just (stay|be|think) positive/gi, 'it\'s okay to feel what you\'re feeling'],
+      [/look on the bright side/gi, 'let\'s gently explore what might help'],
+      [/others have it worse/gi, 'your experience matters'],
+      [/it('s| is) not that bad/gi, 'what you\'re going through is real'],
+      [/I understand exactly how you feel/gi, 'I hear you, and what you\'re sharing matters'],
+    ];
+
+    for (const [pattern, replacement] of toxicReplacements) {
+      if (pattern.test(processed)) {
+        chatLogger.warn({ pattern: pattern.source }, 'Post-processing: replaced toxic positivity phrase');
+        processed = processed.replace(pattern, replacement);
+      }
+    }
+
+    // 2. Clinical claims filter — log warnings for medication/diagnostic language
+    const clinicalPatterns = [
+      /\b(prescri(?:be|ption)|dosage|milligrams?|mg\b)/i,
+      /\b(diagnos(?:e|is|ed)|you (?:have|suffer from) (?:depression|anxiety|PTSD|bipolar|OCD))/i,
+    ];
+
+    for (const pattern of clinicalPatterns) {
+      if (pattern.test(processed)) {
+        chatLogger.warn({ pattern: pattern.source }, 'Post-processing: clinical language detected in AI response');
+      }
+    }
+
+    // 3. Length enforcement — truncate at sentence boundary if over 200 words
+    const words = processed.split(/\s+/);
+    if (words.length > 200) {
+      const truncated = words.slice(0, 200).join(' ');
+      const lastSentenceEnd = Math.max(
+        truncated.lastIndexOf('.'),
+        truncated.lastIndexOf('?'),
+        truncated.lastIndexOf('!')
+      );
+      processed = lastSentenceEnd > 0 ? truncated.slice(0, lastSentenceEnd + 1) : truncated + '...';
+      chatLogger.warn({ originalWords: words.length }, 'Post-processing: response truncated for length');
+    }
+
+    return processed;
+  }
+
+  /**
+   * Build a detailed per-assessment section for the system prompt.
+   * Surfaces individual assessment scores, interpretations, and specific concerns.
+   */
+  private buildAssessmentDetailSection(userContext: UserContext): string | null {
+    if (!userContext.recentAssessments || userContext.recentAssessments.length === 0) {
+      return null;
+    }
+
+    const lines = userContext.recentAssessments.slice(0, 4).map((a: any) => {
+      const concerns = a.specificConcerns?.length
+        ? ` (concerns: ${a.specificConcerns.join(', ')})`
+        : '';
+      const dateStr = a.completedAt
+        ? new Date(a.completedAt).toLocaleDateString()
+        : 'unknown date';
+      return `- ${a.assessmentType}: score ${a.score} — ${a.interpretation}${concerns} [${dateStr}]`;
+    });
+
+    return `DETAILED ASSESSMENT HISTORY:\n${lines.join('\n')}\nUse this context to personalize your responses. Reference relevant concerns when appropriate, but do not recite scores.`;
+  }
+
+  /**
+   * Build a mood section for the system prompt.
+   */
+  private buildMoodSection(userContext: UserContext): string | null {
+    if (!userContext.currentMood && !userContext.moodTrend) {
+      return null;
+    }
+
+    const parts: string[] = [];
+    if (userContext.currentMood) {
+      parts.push(`Current mood: ${userContext.currentMood}`);
+    }
+    if (userContext.moodTrend) {
+      parts.push(`Mood trend: ${userContext.moodTrend}`);
+    }
+    return `USER MOOD:\n${parts.join('. ')}.`;
+  }
+
+  /**
+   * Query recent message feedback to build an adaptive hint for the AI.
+   */
+  private async buildFeedbackSummary(userId: string): Promise<string | null> {
+    try {
+      const recentBotMessages = await prisma.chatMessage.findMany({
+        where: { userId, type: 'bot' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { metadata: true }
+      });
+
+      let liked = 0;
+      let disliked = 0;
+
+      for (const msg of recentBotMessages) {
+        if (!msg.metadata) continue;
+        try {
+          const meta = JSON.parse(msg.metadata);
+          if (meta.feedback === 'liked') liked++;
+          if (meta.feedback === 'disliked') disliked++;
+        } catch { /* skip unparseable */ }
+      }
+
+      const total = liked + disliked;
+      if (total < 2) return null; // Not enough data
+
+      const likeRate = Math.round((liked / total) * 100);
+
+      let hint = `USER FEEDBACK PATTERN: ${liked} liked / ${disliked} disliked out of ${total} rated responses (${likeRate}% approval).`;
+      if (likeRate < 50) {
+        hint += '\nThe user has been dissatisfied with recent responses. Try shorter, more empathetic replies with fewer suggestions.';
+      } else if (likeRate >= 80) {
+        hint += '\nThe user responds well to your current style. Maintain this approach.';
+      }
+
+      return hint;
+    } catch (error) {
+      chatLogger.warn({ error }, 'Failed to build feedback summary');
+      return null;
     }
   }
 
@@ -1018,25 +1225,25 @@ export class ChatService {
         if (score <= 14) return 'moderate depression';
         if (score <= 19) return 'moderately severe depression';
         return 'severe depression';
-      
+
       case 'gad-7':
       case 'anxiety':
         if (score <= 4) return 'minimal anxiety';
         if (score <= 9) return 'mild anxiety';
         if (score <= 14) return 'moderate anxiety';
         return 'severe anxiety';
-      
+
       case 'stress':
         if (score <= 3) return 'low stress';
         if (score <= 6) return 'moderate stress';
         if (score <= 8) return 'high stress';
         return 'very high stress';
-      
+
       case 'emotionalintelligence':
         if (score >= 8) return 'high emotional intelligence';
         if (score >= 6) return 'moderate emotional intelligence';
         return 'developing emotional intelligence';
-      
+
       default:
         return score > 5 ? 'elevated concerns' : 'manageable levels';
     }
@@ -1047,9 +1254,9 @@ export class ChatService {
    */
   private extractSpecificConcerns(assessmentType: string, responses: any): string[] {
     if (!responses || typeof responses !== 'object') return [];
-    
+
     const concerns: string[] = [];
-    
+
     try {
       // PHQ-9 specific concerns
       if (assessmentType.toLowerCase().includes('phq') || assessmentType.toLowerCase().includes('depression')) {
@@ -1059,7 +1266,7 @@ export class ChatService {
         if (responses['energy'] && parseInt(responses['energy']) > 2) concerns.push('low energy');
         if (responses['selfEsteem'] && parseInt(responses['selfEsteem']) > 2) concerns.push('self-esteem issues');
       }
-      
+
       // GAD-7 specific concerns
       if (assessmentType.toLowerCase().includes('gad') || assessmentType.toLowerCase().includes('anxiety')) {
         if (responses['restless'] && parseInt(responses['restless']) > 2) concerns.push('restlessness');
@@ -1067,17 +1274,17 @@ export class ChatService {
         if (responses['irritable'] && parseInt(responses['irritable']) > 2) concerns.push('irritability');
         if (responses['relaxing'] && parseInt(responses['relaxing']) > 2) concerns.push('difficulty relaxing');
       }
-      
+
       // General stress concerns
       if (assessmentType.toLowerCase().includes('stress')) {
         if (responses['overwhelmed'] && parseInt(responses['overwhelmed']) > 2) concerns.push('feeling overwhelmed');
         if (responses['physical'] && parseInt(responses['physical']) > 2) concerns.push('physical stress symptoms');
       }
-      
+
     } catch (e) {
       // If parsing fails, return empty array
     }
-    
+
     return concerns;
   }
 
@@ -1087,7 +1294,7 @@ export class ChatService {
   private analyzeMoodTrend(moodEntries: any[]): string {
     if (moodEntries.length === 0) return 'no mood data available';
     if (moodEntries.length === 1) return 'limited mood data';
-    
+
     const moodValues: { [key: string]: number } = {
       'Great': 5,
       'Good': 4,
@@ -1095,18 +1302,18 @@ export class ChatService {
       'Struggling': 2,
       'Anxious': 1
     };
-    
+
     const recent = moodEntries.slice(0, 3).map(entry => moodValues[entry.mood] || 3);
     const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
-    
+
     if (recent.length >= 2) {
       const isImproving = recent[0] > recent[1];
       const isDeclining = recent[0] < recent[1];
-      
+
       if (isImproving) return 'mood improving';
       if (isDeclining) return 'mood declining';
     }
-    
+
     if (avg >= 4) return 'generally positive mood';
     if (avg <= 2) return 'consistently low mood';
     return 'variable mood';
@@ -1122,10 +1329,10 @@ export class ChatService {
 
     const today = new Date();
     const birthDate = new Date(birthday);
-    
+
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDifference = today.getMonth() - birthDate.getMonth();
-    
+
     // Adjust age if birthday hasn't occurred this year
     if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
       age--;
@@ -1133,7 +1340,7 @@ export class ChatService {
 
     // Determine age group
     let ageGroup: 'teen' | 'young-adult' | 'adult' | 'middle-aged' | 'senior';
-    
+
     if (age >= 13 && age <= 19) {
       ageGroup = 'teen';
     } else if (age >= 20 && age <= 29) {
@@ -1188,14 +1395,14 @@ export class ChatService {
       'hopeless', 'no point', 'better off dead', 'want to die',
       'can\'t go on', 'end my life', 'not worth living'
     ];
-    
+
     const lowerMessage = message.toLowerCase();
     return crisisKeywords.some(keyword => lowerMessage.includes(keyword));
   }
 
   detectExerciseRequest(message: string): { requested: boolean; timeAvailable?: number } | null {
     const lowerMessage = message.toLowerCase();
-    
+
     // Exercise keywords
     const exerciseKeywords = [
       'exercise', 'breathing', 'meditation', 'mindfulness', 'relaxation',
@@ -1204,7 +1411,7 @@ export class ChatService {
     ];
 
     const hasExerciseKeyword = exerciseKeywords.some(keyword => lowerMessage.includes(keyword));
-    
+
     // Check for request patterns
     const requestPatterns = [
       'can you help me',
@@ -1224,7 +1431,7 @@ export class ChatService {
     if (hasExerciseKeyword || hasRequestPattern) {
       // Try to extract time available
       let timeAvailable: number | undefined;
-      
+
       const timeMatch = lowerMessage.match(/(\d+)\s*(minute|min|hour)/);
       if (timeMatch) {
         const value = parseInt(timeMatch[1]);
@@ -1245,35 +1452,91 @@ export class ChatService {
     return null;
   }
 
-  getCrisisResponse(): string {
+  getCrisisResponse(region?: string | null): string {
+    // Region-aware crisis resources
+    const crisisResources: Record<string, string> = {
+      US: `• **National Suicide Prevention Lifeline**: 988 or 1-800-273-8255
+• **Crisis Text Line**: Text HOME to 741741
+• **Emergency Services**: 911`,
+
+      IN: `• **iCall**: +91 9152987821 (Mon–Sat, 8am–10pm IST)
+• **Vandrevala Foundation**: 1860-2662-345 (24/7)
+• **AASRA**: +91 9820466726 (24/7)
+• **Emergency Services**: 112`,
+
+      GB: `• **Samaritans**: 116 123 (24/7, free)
+• **SHOUT Crisis Text Line**: Text SHOUT to 85258
+• **Emergency Services**: 999`,
+
+      AU: `• **Lifeline Australia**: 13 11 14 (24/7)
+• **Beyond Blue**: 1300 22 4636
+• **Emergency Services**: 000`,
+
+      CA: `• **Crisis Services Canada**: 1-833-456-4566 (24/7)
+• **Crisis Text Line**: Text HOME to 686868
+• **Emergency Services**: 911`,
+
+      // Default / unknown region — show international + US
+      DEFAULT: `• **International Association for Suicide Prevention**: https://www.iasp.info/resources/Crisis_Centres/
+• **Befrienders Worldwide**: https://befrienders.org
+• **National Suicide Prevention Lifeline (US)**: 988 or 1-800-273-8255
+• **Crisis Text Line (US)**: Text HOME to 741741`
+    };
+
+    const key = (region || '').toUpperCase();
+    const resources = crisisResources[key] || crisisResources['DEFAULT'];
+
     return `I'm very concerned about your safety and wellbeing. If you're having thoughts of hurting yourself, please reach out for immediate help:
 
 🆘 **Crisis Resources:**
-• **National Suicide Prevention Lifeline**: 988 or 1-800-273-8255
-• **Crisis Text Line**: Text HOME to 741741
-• **Emergency Services**: 911
+${resources}
 
 You are not alone, and there are people who want to help you. Please consider reaching out to a trusted friend, family member, or professional.
 
 Would you like me to help you find local resources?`;
   }
 
-  getFallbackResponse(userMessage: string): string {
+  getFallbackResponse(userMessage: string, approach?: 'western' | 'eastern' | 'hybrid'): string {
     const lowerMessage = userMessage.toLowerCase();
-    
+    const mode = approach || 'hybrid';
+
     if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety')) {
-      return "I can hear that you're feeling anxious. Anxiety can be really overwhelming, but you're taking a positive step by reaching out. One thing that might help right now is taking some slow, deep breaths. What's been on your mind lately that's contributing to these feelings?";
+      if (mode === 'eastern') {
+        return "I sense that anxiety is weighing on you. Let's bring your awareness gently to this moment. Try placing one hand on your belly and breathing slowly — in through your nose for four counts, out through your mouth for six. Anxiety often lives in our anticipation of the future; right now, you are safe. What does your body feel in this present breath?";
+      }
+      if (mode === 'western') {
+        return "I can hear that you're feeling anxious. Anxiety can be really overwhelming, but you're taking a positive step by reaching out. Let's try to identify the thought pattern — sometimes writing down the specific worry helps us evaluate it more clearly. What's the main thought driving these feelings right now?";
+      }
+      return "I can hear that you're feeling anxious. That takes courage to share. Let's try something: take a slow breath and notice one thing around you. Sometimes grounding ourselves in the present helps loosen anxiety's grip. What's been on your mind lately that's contributing to these feelings?";
     }
-    
+
     if (lowerMessage.includes('sad') || lowerMessage.includes('depressed')) {
+      if (mode === 'eastern') {
+        return "Sadness, like all feelings, is a visitor — it arrives, stays awhile, and passes. There is no need to push it away. Can you sit quietly with it for a moment, perhaps with a hand on your heart, and offer yourself the same compassion you would give a dear friend? What feels most heavy right now?";
+      }
+      if (mode === 'western') {
+        return "I'm sorry you're feeling this way. Those feelings are valid, and it's important that you're talking about them. One strategy that can help is behavioural activation — doing one small, manageable activity even when motivation is low. Is there something small that usually brings you a bit of comfort?";
+      }
       return "I'm sorry you're feeling this way. Those feelings are valid, and it's important that you're talking about them. Sometimes when we're feeling down, it can help to focus on small, manageable things. Is there something small that usually brings you a bit of comfort?";
     }
-    
+
     if (lowerMessage.includes('stress') || lowerMessage.includes('overwhelmed')) {
+      if (mode === 'eastern') {
+        return "When stress overwhelms us, it often means we are carrying more than this moment requires. Let's try a brief body scan: close your eyes, notice where tension gathers — jaw, shoulders, belly — and breathe gently into that space. What is the most pressing weight you are holding right now?";
+      }
+      if (mode === 'western') {
+        return "Feeling overwhelmed can be really difficult to manage. Let's break this down using a problem-solving approach: list everything on your plate, then categorise each item as 'urgent', 'important', or 'can wait'. What's the most pressing thing you're dealing with right now?";
+      }
       return "Feeling overwhelmed can be really difficult to manage. It sounds like you have a lot on your plate right now. Sometimes it helps to break things down into smaller, more manageable pieces. What's the most pressing thing you're dealing with right now?";
     }
-    
-    // Default empathetic response
+
+    // Default empathetic response — approach-aware
+    if (mode === 'eastern') {
+      return "Thank you for sharing with me. In this moment, simply being present with what arises is enough. While I'm having some technical difficulties, I want you to know that your feelings are worthy of your own gentle attention. How are you feeling right now, in this breath?";
+    }
+    if (mode === 'western') {
+      return "Thank you for sharing with me. I can hear that you're going through something difficult right now. While I'm having some technical difficulties, I want you to know that your feelings are important and valid. Can you tell me more about the specific situation so we can work through it together?";
+    }
     return "Thank you for sharing with me. I can hear that you're going through something difficult right now. While I'm having some technical difficulties, I want you to know that your feelings are important and valid. How are you feeling in this moment?";
   }
 
@@ -1314,7 +1577,7 @@ Would you like me to help you find local resources?`;
 
   async getConversationInsights(userId: string): Promise<any> {
     const recentMessages = await prisma.chatMessage.findMany({
-      where: { 
+      where: {
         userId,
         createdAt: {
           gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
@@ -1337,7 +1600,7 @@ Would you like me to help you find local resources?`;
 
     for (const message of userMessages) {
       const content = message.content.toLowerCase();
-      
+
       if (anxietyKeywords.some(keyword => content.includes(keyword))) {
         anxietyMentions++;
       }
@@ -1358,11 +1621,11 @@ Would you like me to help you find local resources?`;
       },
       period: '7 days',
       insights: {
-        mostDiscussedTopic: anxietyMentions >= depressionMentions && anxietyMentions >= stressMentions 
-          ? 'anxiety' 
-          : depressionMentions >= stressMentions 
-          ? 'depression' 
-          : 'stress',
+        mostDiscussedTopic: anxietyMentions >= depressionMentions && anxietyMentions >= stressMentions
+          ? 'anxiety'
+          : depressionMentions >= stressMentions
+            ? 'depression'
+            : 'stress',
         engagementLevel: totalMessages > 10 ? 'high' : totalMessages > 5 ? 'medium' : 'low'
       }
     };
@@ -1423,7 +1686,7 @@ Would you like me to help you find local resources?`;
 
       if (lastMessage) {
         const daysSince = Math.floor((Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (daysSince > 3) {
           starters.push(`👋 It's been ${daysSince} days - what's new with you?`);
         } else if (daysSince === 0) {
@@ -1595,7 +1858,7 @@ Would you like me to help you find local resources?`;
       }
 
       // Format conversation for AI
-      const conversationText = messages.reverse().map(msg => 
+      const conversationText = messages.reverse().map(msg =>
         `${msg.type === 'user' ? 'User' : 'AI'}: ${msg.content}`
       ).join('\n');
 
@@ -1697,7 +1960,7 @@ Format as valid JSON only.`;
       // High priority check-ins
       // 1. User mentioned crisis keywords recently
       const recentMessages = await prisma.chatMessage.findMany({
-        where: { 
+        where: {
           userId,
           createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
         },
@@ -1705,7 +1968,7 @@ Format as valid JSON only.`;
         take: 10
       });
 
-      const hasCrisisIndicators = recentMessages.some(msg => 
+      const hasCrisisIndicators = recentMessages.some(msg =>
         msg.type === 'user' && (
           msg.content.toLowerCase().includes('hopeless') ||
           msg.content.toLowerCase().includes('can\'t go on') ||
@@ -1793,10 +2056,10 @@ Format as valid JSON only.`;
     try {
       const context = await this.getUserContext(userId);
       const memory = await conversationMemoryService.getMemory(userId);
-      
+
       const userName = context.firstName || 'there';
       const hour = new Date().getHours();
-      
+
       // Time-based greeting base
       let timeGreeting = '';
       if (hour < 12) timeGreeting = 'Good morning';

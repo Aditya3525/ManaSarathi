@@ -1,6 +1,6 @@
-# MaanaSarathi - Frontend
+# MaanSarathi - Frontend
 
-React + Vite frontend application for the MaanaSarathi wellbeing platform.
+React + Vite frontend application for the MaanSarathi wellbeing platform.
 
 ## Tech Stack
 

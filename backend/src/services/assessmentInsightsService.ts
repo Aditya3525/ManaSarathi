@@ -639,7 +639,8 @@ async function generateAISummary(
       }
     ], {
       maxTokens: 220,
-      temperature: 0.6
+      temperature: 0.6,
+      model: 'gpt-oss:20b-cloud'
     });
 
     console.log('[AI Summary] LLM response:', {

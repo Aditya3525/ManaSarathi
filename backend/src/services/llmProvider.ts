@@ -41,7 +41,7 @@ export class LLMService {
   private initializeProviders(): void {
     // Load configuration from environment
     const configs = this.loadProviderConfigs();
-    
+
     // Initialize providers based on available API keys
     for (const [type, config] of Object.entries(configs)) {
       try {
@@ -154,7 +154,7 @@ export class LLMService {
     ]);
 
     if (geminiKeys.length > 0) {
-      const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash-thinking-exp';
+      const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash-lite';
       configs.gemini = {
         apiKeys: geminiKeys,
         model: geminiModel,
@@ -257,7 +257,7 @@ export class LLMService {
     // Default excludes 'ollama' so it is only used if explicitly configured and enabled
     const priorityString = process.env.AI_PROVIDER_PRIORITY || 'gemini,huggingface,openai,anthropic';
     const priority = priorityString.split(',').map(p => p.trim() as AIProviderType);
-    
+
     // Filter to only include providers that are actually initialized
     const filtered = priority.filter(type => this.providers.has(type));
 
@@ -291,7 +291,15 @@ export class LLMService {
     }
 
     // Try providers in priority order, starting with last working provider if available
-    const providersToTry = this.getProvidersToTry();
+    let providersToTry = this.getProvidersToTry();
+
+    // If a specific model hint targets Ollama (e.g., gpt-oss family or cloud models), prefer Ollama first for this call
+    const requestedModel = (config as any)?.model;
+    if (typeof requestedModel === 'string' && /gpt-oss|ollama|:cloud/i.test(requestedModel)) {
+      if (this.providers.has(AIProviderType.OLLAMA)) {
+        providersToTry = [AIProviderType.OLLAMA, ...providersToTry.filter(p => p !== AIProviderType.OLLAMA)];
+      }
+    }
     if (providersToTry.length === 0) {
       const coolingProviders = Array.from(this.providerState.entries())
         .filter(([type]) => this.isProviderCoolingDown(type))
@@ -314,9 +322,32 @@ export class LLMService {
         continue;
       }
 
+      // SMART FALLBACK LOGIC:
+      // If we are falling back to a non-Ollama provider (like Gemini/OpenAI),
+      // but the request still asks for an Ollama-specific model (e.g. 'gpt-oss', 'llama3'),
+      // we must STRIP that model from the config to let the provider use its default.
+      // Otherwise, the provider will reject the unknown model name.
+      let currentConfig = config;
+      if (providerType !== AIProviderType.OLLAMA) {
+        const requestedModel = (config as any)?.model;
+        if (requestedModel && (
+          requestedModel.includes('gpt-oss') ||
+          requestedModel.includes('llama') ||
+          requestedModel.includes(':cloud')
+        )) {
+          // Clone config and remove the incompatible model
+          const { model, ...rest } = (config as any || {});
+          currentConfig = rest;
+          serviceLogger.info(
+            { providerType, originalModel: requestedModel },
+            'Sanitized config: Removed incompatible model name for fallback provider'
+          );
+        }
+      }
+
       try {
         serviceLogger.info({ provider: provider.name, providerType }, 'Attempting AI provider response');
-        
+
         // Check if provider is available
         if (!(await provider.isAvailable())) {
           const availabilityError = new Error(`${provider.name} is not available`);
@@ -326,7 +357,7 @@ export class LLMService {
         }
 
         const startTime = Date.now();
-        const response = await provider.generateResponse(messages, config, context);
+        const response = await provider.generateResponse(messages, currentConfig, context);
         const totalTime = Date.now() - startTime;
 
         // Mark this provider as working
@@ -358,7 +389,7 @@ export class LLMService {
         } catch (analyticsError) {
           serviceLogger.warn({ err: analyticsError }, 'Failed to track AI usage analytics');
         }
-        
+
         return {
           ...response,
           provider: provider.name,
@@ -387,13 +418,13 @@ export class LLMService {
         } catch (analyticsError) {
           serviceLogger.warn({ err: analyticsError }, 'Failed to track failed AI usage analytics');
         }
-        
+
         // If it's an authentication error, don't retry this provider
         if (error.statusCode === 401) {
           serviceLogger.error({ provider: provider.name, providerType }, 'Authentication failed for provider, skipping');
           continue;
         }
-        
+
         // For rate limits, try next provider immediately
         if (error.statusCode === 429 || error.statusCode === 402) {
           serviceLogger.warn({ provider: provider.name, providerType }, 'Rate limit or quota exceeded, moving to next provider');
@@ -421,8 +452,8 @@ export class LLMService {
       `Available providers: ${availableProviders}. ` +
       (coolingProviders.length > 0
         ? `Cooling down providers: ${coolingProviders
-            .map((provider) => `${provider.providerType}${provider.retryAt ? ` (retry at ${provider.retryAt})` : ''}`)
-            .join(', ')}. `
+          .map((provider) => `${provider.providerType}${provider.retryAt ? ` (retry at ${provider.retryAt})` : ''}`)
+          .join(', ')}. `
         : '') +
       `Please check your API keys or ensure Ollama is running locally.`
     );
@@ -529,7 +560,7 @@ export class LLMService {
         };
       }
     }
-    
+
     return status;
   }
 
@@ -538,19 +569,19 @@ export class LLMService {
    */
   async testAllProviders(): Promise<Record<string, { success: boolean; error?: string; responseTime?: number }>> {
     const results: Record<string, { success: boolean; error?: string; responseTime?: number }> = {};
-    
+
     for (const [type, provider] of this.providers) {
       try {
         const startTime = Date.now();
         await provider.testConnection();
         const responseTime = Date.now() - startTime;
-        
+
         results[type] = { success: true, responseTime };
       } catch (error: any) {
         results[type] = { success: false, error: error.message };
       }
     }
-    
+
     return results;
   }
 

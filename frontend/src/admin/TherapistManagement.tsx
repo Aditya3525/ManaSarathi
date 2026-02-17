@@ -82,6 +82,8 @@ export interface Therapist {
   reviewCount: number;
   isActive: boolean;
   isVerified: boolean;
+  portalLinked?: boolean;
+  portalEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }

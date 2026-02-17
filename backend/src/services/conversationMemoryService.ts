@@ -274,15 +274,37 @@ export class ConversationMemoryService {
         };
       }
 
-      // Parse topics
+      // Parse topics and apply time-based decay / TTL
       const topicsData = JSON.parse(memory.topics as string) || {};
+      const now = Date.now();
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+
       const recentTopics = (Object.values(topicsData) as any[])
+        // Exclude topics not mentioned in 90+ days (stale memory)
+        .filter((t: any) => {
+          const lastMentionedMs = new Date(t.lastMentioned).getTime();
+          return now - lastMentionedMs < NINETY_DAYS_MS;
+        })
+        .map((t: any) => {
+          // Reduce effective mention count for topics 30-90 days old
+          const lastMentionedMs = new Date(t.lastMentioned).getTime();
+          const ageMs = now - lastMentionedMs;
+          const decayFactor = ageMs > THIRTY_DAYS_MS ? 0.5 : 1;
+          return { ...t, effectiveMentions: Math.round(t.mentions * decayFactor) };
+        })
         .sort((a: any, b: any) => new Date(b.lastMentioned).getTime() - new Date(a.lastMentioned).getTime())
         .slice(0, 10) as ConversationTopic[];
 
-      // Identify recurring themes (topics mentioned 3+ times)
+      // Identify recurring themes (topics with 3+ effective mentions)
       const recurringThemes = (Object.values(topicsData) as any[])
-        .filter((t: any) => t.mentions >= 3)
+        .filter((t: any) => {
+          const lastMentionedMs = new Date(t.lastMentioned).getTime();
+          if (now - lastMentionedMs >= NINETY_DAYS_MS) return false;
+          const ageMs = now - lastMentionedMs;
+          const decayFactor = ageMs > THIRTY_DAYS_MS ? 0.5 : 1;
+          return Math.round(t.mentions * decayFactor) >= 3;
+        })
         .map((t: any) => t.topic) as string[];
 
       // Analyze conversation style

@@ -74,10 +74,6 @@ export const loginSchema = z.object({
  */
 export const passwordSetupSchema = z.object({
   body: z.object({
-    token: z.string({
-      required_error: 'Token is required',
-    }),
-    
     password: z
       .string({
         required_error: 'Password is required',
@@ -148,13 +144,20 @@ export const updateProfileSchema = z.object({
     
     emergencyPhone: z
       .string()
-      .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
+      .min(7, 'Phone number is too short')
+      .max(20, 'Phone number is too long')
       .optional(),
     
+    approach: z
+      .enum(['western', 'eastern', 'hybrid'])
+      .optional(),
+    
+    isOnboarded: z.boolean().optional(),
+
     dataConsent: z.boolean().optional(),
     
     clinicianSharing: z.boolean().optional(),
-  }),
+  }).passthrough(), // Allow additional fields to pass through to the controller
 });
 
 /**

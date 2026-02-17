@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Heart, Clock, TrendingUp, Filter, Loader2, Star } from 'lucide-react';
 
+import { getApiBaseUrl } from '../../../config/apiConfig';
 import { useToast } from '../../../contexts/ToastContext';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -42,10 +43,7 @@ export function ContentRecommendations() {
   const fetchRecommendations = useCallback(async () => {
     setIsLoading(true);
     try {
-      const hostname = window.location.hostname;
-      const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
-        ? 'http://localhost:5000/api' 
-        : `http://${hostname}:5000/api`;
+      const apiUrl = getApiBaseUrl();
       const response = await fetch(`${apiUrl}/recommendations/personalized`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -282,9 +280,8 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
 
   return (
     <Card
-      className={`hover:shadow-lg transition-shadow cursor-pointer ${
-        isCrisis ? 'border-red-500 border-2' : ''
-      }`}
+      className={`hover:shadow-lg transition-shadow cursor-pointer ${isCrisis ? 'border-red-500 border-2' : ''
+        }`}
       onClick={() => window.location.href = `/content/${recommendation.id}`}
     >
       {/* Thumbnail */}

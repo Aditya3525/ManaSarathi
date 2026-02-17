@@ -1,91 +1,29 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
-import { PrismaClient } from '@prisma/client';
+import { validate } from '../middleware/validate';
+import { logMoodSchema, getMoodHistorySchema } from '../api/validators/mood.validator';
+import {
+  getMoodEntries,
+  createMoodEntry,
+  deleteMoodEntry,
+  getMoodStats,
+} from '../controllers/moodController';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-// Get mood entries for authenticated user
-router.get('/', authenticate as any, async (req: any, res) => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized'
-      });
-    }
-    
-    const { limit = '30', startDate, endDate } = req.query;
-    
-    const where: any = { userId };
-    
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate as string);
-      if (endDate) where.createdAt.lte = new Date(endDate as string);
-    }
-    
-    const moodEntries = await prisma.moodEntry.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit as string)
-    });
-    
-    res.json({
-      success: true,
-      data: moodEntries
-    });
-  } catch (error) {
-    console.error('Error fetching mood entries:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch mood entries'
-    });
-  }
-});
+// All mood routes require authentication
+router.use(authenticate as any);
 
-// Log a new mood entry
-router.post('/', authenticate as any, async (req: any, res) => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized'
-      });
-    }
-    
-    const { mood, notes } = req.body;
-    
-    if (!mood) {
-      return res.status(400).json({
-        success: false,
-        error: 'Mood is required'
-      });
-    }
-    
-    const moodEntry = await prisma.moodEntry.create({
-      data: {
-        userId,
-        mood,
-        notes
-      }
-    });
-    
-    res.status(201).json({
-      success: true,
-      data: moodEntry
-    });
-  } catch (error) {
-    console.error('Error creating mood entry:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to create mood entry'
-    });
-  }
-});
+// GET /api/mood/stats — Mood statistics (must be before /:id to avoid conflict)
+router.get('/stats', getMoodStats);
+
+// GET /api/mood — List mood entries with optional filtering
+router.get('/', validate(getMoodHistorySchema), getMoodEntries);
+
+// POST /api/mood — Log a new mood entry
+router.post('/', validate(logMoodSchema), createMoodEntry);
+
+// DELETE /api/mood/:id — Delete a mood entry
+router.delete('/:id', deleteMoodEntry);
 
 export default router;

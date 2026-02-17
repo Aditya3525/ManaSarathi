@@ -1,4 +1,4 @@
-# MaanaSarathi - AI-Powered Mental Wellbeing Platform
+# MaanSarathi - AI-Powered Mental Wellbeing Platform
 
 An intelligent mental wellbeing companion combining guided onboarding, personalized care plans, AI-powered chat support with crisis awareness, and a comprehensive content library. Built as a TypeScript monorepo with React/Vite frontend and Express/Prisma backend, featuring multi-LLM integration (Gemini, OpenAI, Anthropic, Hugging Face, Ollama).
 
@@ -28,7 +28,7 @@ An intelligent mental wellbeing companion combining guided onboarding, personali
 ### Project Structure
 
 ```
-MaanaSarathi/
+MaanSarathi/
 ├── frontend/                          # React + Vite frontend
 │   ├── src/
 │   │   ├── components/features/      # Feature modules (auth, chat, assessment, etc.)
@@ -150,6 +150,14 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 
 ### AI Chat Companion
 - **Multi-provider**: Seamless failover between Gemini, OpenAI, Anthropic, Hugging Face, Ollama
+  - Ollama Cloud: You can use Ollama Cloud models (e.g., `gpt-oss:20b-cloud`). To enable, set the following in `backend/.env`:
+
+    - `OLLAMA_BASE_URL` — e.g. `https://api.ollama.ai`
+    - `OLLAMA_MODEL` — `gpt-oss:20b-cloud`
+    - `OLLAMA_API_KEY` — your Ollama Cloud API key
+    - `OLLAMA_ENABLED=true`
+
+  When `OLLAMA_ENABLED` is true, the app will initialize the Ollama provider. Per-call model overrides are supported: services (like assessment insights) can request `model: 'gpt-oss:20b-cloud'` and the LLM routing will prefer Ollama for that call.
 - **Crisis Detection**: Keyword-based safety detection with immediate resource handoff
 - **Context Awareness**: Incorporates user demographics, assessment scores, mood history
 - **Voice**: Speech-to-text input and text-to-speech output
@@ -377,5 +385,5 @@ npm run format
 
 ## 📝 License
 
-Proprietary - All rights reserved. MaanaSarathi © 2025
+Proprietary - All rights reserved. MaanSarathi © 2025
    

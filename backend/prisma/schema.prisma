@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -64,6 +64,11 @@ model User {
   emergencyPhone   String?
   dataConsent      Boolean @default(false)
   clinicianSharing Boolean @default(false)
+  anonymousAnalytics   Boolean @default(true)
+  marketingEmails      Boolean @default(false)
+  researchParticipation Boolean @default(false)
+  consentUpdatedAt     DateTime?
+  deletionRequestedAt  DateTime?
   securityQuestion   String?
   securityAnswerHash String?
   createdAt   DateTime @default(now())
@@ -86,6 +91,7 @@ model User {
   supportTickets SupportTicket[]
   safetyPlan     SafetyPlan?
   therapistBookings TherapistBooking[]
+  therapistProfile   Therapist?
   
   // Analytics relations
   crisisEvents   CrisisEvent[]
@@ -785,6 +791,10 @@ model Therapist {
   title           String                // "Licensed Clinical Psychologist"
   bio             String
   
+  // Link to User account (for therapist portal login)
+  userId          String?               @unique
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
   // Specialties (stored as JSON array of TherapistSpecialty values)
   specialtiesJson String                @default("[]")
   
@@ -824,6 +834,7 @@ model Therapist {
   // Relations
   bookings TherapistBooking[]
   
+  @@index([userId])
   @@index([isActive])
   @@index([isVerified])
   @@index([city, state])
@@ -856,8 +867,9 @@ model TherapistBooking {
   // Status
   status       BookingStatus @default(PENDING)
   
-  // Admin notes
-  adminNotes   String?
+  // Notes
+  adminNotes      String?
+  therapistNotes  String?
   processedBy  String?       // Admin email
   processedAt  DateTime?
   

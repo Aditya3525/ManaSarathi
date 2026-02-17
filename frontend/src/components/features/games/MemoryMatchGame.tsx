@@ -211,17 +211,16 @@ export const MemoryMatchGame: React.FC = () => {
 
       {gameStarted && !isComplete && (
         <Card className="p-6 lg:p-8">
-          <div className="grid grid-cols-4 gap-3 lg:gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 lg:gap-6 max-w-4xl mx-auto">
             {cards.map((card) => (
               <button
                 key={card.id}
                 onClick={() => handleCardClick(card.id)}
                 disabled={flippedCards.length === 2}
-                className={`aspect-square rounded-xl lg:rounded-2xl transition-all duration-500 transform hover:scale-110 hover:-translate-y-1 ${
-                  flippedCards.includes(card.id) || card.matched
+                className={`aspect-square rounded-xl lg:rounded-2xl transition-all duration-500 transform hover:scale-110 hover:-translate-y-1 ${flippedCards.includes(card.id) || card.matched
                     ? 'bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 text-white shadow-2xl rotate-y-180'
                     : 'bg-gradient-to-br from-gray-200 to-gray-300 hover:from-purple-100 hover:to-pink-100 shadow-lg'
-                } disabled:cursor-not-allowed`}
+                  } disabled:cursor-not-allowed`}
                 style={{
                   transformStyle: 'preserve-3d',
                   transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',

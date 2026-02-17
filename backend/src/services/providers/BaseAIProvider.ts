@@ -284,11 +284,20 @@ Response Guidelines:
   }
 
   /**
-   * Prepare messages for AI with system prompt
+   * Prepare messages for AI with system prompt.
+   * If the incoming messages already contain a system prompt (injected by
+   * chatService.buildSystemPrompt), we honour it and skip prepending our own
+   * to avoid duplicate / conflicting instructions.
    */
   protected prepareMessages(messages: AIMessage[], context?: ConversationContext): AIMessage[] {
+    const alreadyHasSystemPrompt = messages.length > 0 && messages[0].role === 'system';
+
+    if (alreadyHasSystemPrompt) {
+      return messages;
+    }
+
+    // Fallback: build a lightweight system prompt when none was provided
     const systemPrompt = this.createSystemPrompt(context);
-    
     return [
       { role: 'system', content: systemPrompt },
       ...messages

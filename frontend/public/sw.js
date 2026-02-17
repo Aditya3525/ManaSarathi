@@ -1,10 +1,10 @@
 /**
- * Service Worker for MaanaSarathi PWA
+ * Service Worker for MaanSarathi PWA
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'maanasarathi-v1.0.1';
-const API_CACHE_NAME = 'maanasarathi-api-v1.0.1';
+const CACHE_NAME = 'MaanSarathi-v1.0.1';
+const API_CACHE_NAME = 'MaanSarathi-api-v1.0.1';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -196,7 +196,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification('MaanaSarathi', options)
+    self.registration.showNotification('MaanSarathi', options)
   );
 });
 

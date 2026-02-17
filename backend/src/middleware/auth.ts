@@ -27,11 +27,10 @@ export const authenticate = async (
     }
 
     const token = authHeader.substring(7);
-    if (!process.env.JWT_SECRET) {
-      throw new Error('JWT_SECRET not configured');
-    }
+    // Use the same fallback as generateToken() in authController so tokens can always be verified
+    const secret = process.env.JWT_SECRET || 'dev-fallback-secret';
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, secret) as JwtPayload;
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user) {
       res.status(401).json({ success: false, error: 'Invalid token - user not found.' });

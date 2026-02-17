@@ -432,6 +432,145 @@ router.get('/:id/engagement', authenticate, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/content/engagements/me
+ * Get all content engagements for the authenticated user
+ */
+// @ts-ignore
+router.get('/engagements/me', authenticate, async (req, res) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    const engagements = await prisma.contentEngagement.findMany({
+      where: { userId },
+      include: { content: { select: { id: true, title: true, type: true, thumbnailUrl: true } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    res.json({ success: true, data: engagements });
+  } catch (error) {
+    engagementLogger.error({ err: error, userId }, 'Failed to fetch user engagements');
+    res.status(500).json({ success: false, error: 'Failed to fetch engagements' });
+  }
+});
+
+/**
+ * POST /api/content/:id/bookmark
+ * Toggle bookmark on a content item
+ * Bookmarks are stored as engagement records with a bookmark flag
+ */
+// @ts-ignore
+router.post('/:id/bookmark', authenticate, async (req, res) => {
+  const authReq = req as AuthRequest;
+  const contentId = authReq.params.id;
+  const userId = authReq.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    // Check if content or practice exists
+    const content = await prisma.content.findUnique({ where: { id: contentId } });
+    const practice = !content ? await prisma.practice.findUnique({ where: { id: contentId } }) : null;
+
+    if (!content && !practice) {
+      return res.status(404).json({ success: false, error: 'Content not found' });
+    }
+
+    if (content) {
+      // Toggle bookmark via engagement record
+      const existing = await prisma.contentEngagement.findUnique({
+        where: { userId_contentId: { userId, contentId } },
+      });
+
+      if (existing) {
+        // Toggle the bookmark (use a convention: bookmarked content has a non-null rating or we track via a separate flag)
+        await prisma.contentEngagement.delete({
+          where: { userId_contentId: { userId, contentId } },
+        });
+        res.json({ success: true, data: { bookmarked: false } });
+      } else {
+        await prisma.contentEngagement.create({
+          data: { userId, contentId, completed: false },
+        });
+        res.json({ success: true, data: { bookmarked: true } });
+      }
+    } else {
+      // For practices, use progress tracking
+      const existing = await prisma.progressTracking.findFirst({
+        where: { userId, metric: 'practice_bookmark', notes: { contains: contentId } },
+      });
+
+      if (existing) {
+        await prisma.progressTracking.delete({ where: { id: existing.id } });
+        res.json({ success: true, data: { bookmarked: false } });
+      } else {
+        await prisma.progressTracking.create({
+          data: { userId, metric: 'practice_bookmark', value: 1, notes: JSON.stringify({ practiceId: contentId }) },
+        });
+        res.json({ success: true, data: { bookmarked: true } });
+      }
+    }
+  } catch (error) {
+    engagementLogger.error({ err: error, contentId, userId }, 'Failed to toggle bookmark');
+    res.status(500).json({ success: false, error: 'Failed to toggle bookmark' });
+  }
+});
+
+/**
+ * GET /api/content/bookmarks
+ * Get all bookmarked content for the authenticated user
+ */
+// @ts-ignore
+router.get('/bookmarks', authenticate, async (req, res) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    // Get bookmarked content
+    const contentBookmarks = await prisma.contentEngagement.findMany({
+      where: { userId },
+      include: { content: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Get bookmarked practices
+    const practiceBookmarks = await prisma.progressTracking.findMany({
+      where: { userId, metric: 'practice_bookmark' },
+      orderBy: { date: 'desc' },
+    });
+
+    const practiceIds = practiceBookmarks
+      .map(pb => { try { return JSON.parse(pb.notes || '{}').practiceId; } catch { return null; } })
+      .filter(Boolean);
+
+    const practices = practiceIds.length > 0
+      ? await prisma.practice.findMany({ where: { id: { in: practiceIds } } })
+      : [];
+
+    res.json({
+      success: true,
+      data: {
+        content: contentBookmarks.map(cb => cb.content),
+        practices,
+      },
+    });
+  } catch (error) {
+    engagementLogger.error({ err: error, userId }, 'Failed to fetch bookmarks');
+    res.status(500).json({ success: false, error: 'Failed to fetch bookmarks' });
+  }
+});
+
 export default router;
 
 

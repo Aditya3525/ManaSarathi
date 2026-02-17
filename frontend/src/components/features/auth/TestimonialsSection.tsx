@@ -69,15 +69,17 @@ export function TestimonialsSection() {
   // Auto-slide testimonials carousel with pause control
   useEffect(() => {
     if (!device.isMobile || isPaused) return;
-    
+
     const interval = setInterval(() => {
       const container = testimonialsContainerRef.current;
       if (!container) return;
-      
+
       setActiveTestimonialIndex((prev) => {
         const next = (prev + 1) % TESTIMONIALS.length;
         const child = container.children[next] as HTMLElement;
-        child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        if (child) {
+          container.scrollTo({ left: child.offsetLeft - container.offsetLeft, behavior: 'smooth' });
+        }
         return next;
       });
     }, 5000); // Increased from 2s to 5s for better readability
@@ -89,7 +91,9 @@ export function TestimonialsSection() {
     const newIndex = Math.max(0, activeTestimonialIndex - 1);
     const container = testimonialsContainerRef.current;
     const child = container?.children[newIndex] as HTMLElement;
-    child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (child && container) {
+      container.scrollTo({ left: child.offsetLeft - container.offsetLeft, behavior: 'smooth' });
+    }
     setActiveTestimonialIndex(newIndex);
   };
 
@@ -97,13 +101,15 @@ export function TestimonialsSection() {
     const newIndex = Math.min(TESTIMONIALS.length - 1, activeTestimonialIndex + 1);
     const container = testimonialsContainerRef.current;
     const child = container?.children[newIndex] as HTMLElement;
-    child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (child && container) {
+      container.scrollTo({ left: child.offsetLeft - container.offsetLeft, behavior: 'smooth' });
+    }
     setActiveTestimonialIndex(newIndex);
   };
 
   return (
-    <section 
-      className="relative overflow-hidden bg-gradient-to-br from-background via-accent/5 to-background px-4 py-16 sm:px-6 md:py-20 lg:py-28" 
+    <section
+      className="relative overflow-hidden bg-gradient-to-br from-background via-accent/5 to-background px-4 py-16 sm:px-6 md:py-20 lg:py-28"
       id="testimonials"
       aria-labelledby="testimonials-heading"
     >
@@ -130,7 +136,7 @@ export function TestimonialsSection() {
 
         {/* Mobile: Enhanced Swipeable Cards */}
         <div className="md:hidden">
-          <div 
+          <div
             ref={testimonialsContainerRef}
             className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-6 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             role="region"
@@ -138,8 +144,8 @@ export function TestimonialsSection() {
             aria-roledescription="carousel"
           >
             {TESTIMONIALS.map(({ quote, name, role, rating, verified }, index) => (
-              <div 
-                key={name} 
+              <div
+                key={name}
                 className="min-w-[90vw] flex-shrink-0 snap-center"
                 role="group"
                 aria-roledescription="slide"
@@ -159,12 +165,12 @@ export function TestimonialsSection() {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Quote - constrained width */}
                     <blockquote className="max-w-[60ch] text-base leading-relaxed text-foreground">
                       &ldquo;{quote}&rdquo;
                     </blockquote>
-                    
+
                     {/* Author with Avatar and Verified Badge */}
                     <div className="flex items-center gap-3 pt-2 border-t border-border/50">
                       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-bold text-primary ring-2 ring-primary/20">
@@ -194,7 +200,7 @@ export function TestimonialsSection() {
             {/* Progress Bar */}
             <div className="w-full max-w-xs">
               <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300 ease-out"
                   style={{ width: `${((activeTestimonialIndex + 1) / TESTIMONIALS.length) * 100}%` }}
                 />
@@ -253,8 +259,8 @@ export function TestimonialsSection() {
         {/* Tablet+: Enhanced 3-column Grid */}
         <div className="hidden gap-8 md:grid md:grid-cols-3" role="list">
           {TESTIMONIALS.map(({ quote, name, role, rating, verified }) => (
-            <Card 
-              key={name} 
+            <Card
+              key={name}
               className="group h-full border-2 border-primary/10 bg-background/90 shadow-md transition-all duration-300 hover:border-primary/20 hover:shadow-lg hover:-translate-y-1"
               role="listitem"
             >
@@ -265,12 +271,12 @@ export function TestimonialsSection() {
                     <Star key={index} className="h-4 w-4 fill-current" aria-hidden="true" />
                   ))}
                 </div>
-                
+
                 {/* Quote - constrained width */}
                 <blockquote className="flex-1 max-w-[60ch] text-base leading-relaxed text-foreground/80 italic">
                   &ldquo;{quote}&rdquo;
                 </blockquote>
-                
+
                 {/* Author with Avatar and Verified Badge */}
                 <div className="flex items-center gap-3 pt-3 border-t border-border/40">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-bold text-primary ring-2 ring-primary/20">
@@ -303,7 +309,7 @@ export function TestimonialsSection() {
               <span>Data protected with bank-level encryption</span>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-12">
             <div className="text-center">
               <p className="text-3xl font-bold text-primary lg:text-4xl">5,000+</p>

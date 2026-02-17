@@ -1,6 +1,7 @@
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
+import { getServerBaseUrl } from '../../../config/apiConfig';
 import { Card, CardContent } from '../../ui/card';
 
 interface OAuthCallbackProps {
@@ -49,10 +50,7 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         }
 
         // Validate the token with the backend - use smart URL detection
-        const hostname = window.location.hostname;
-        const apiUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
-          ? 'http://localhost:5000' 
-          : `http://${hostname}:5000`;
+        const apiUrl = getServerBaseUrl();
         const response = await fetch(`${apiUrl}/api/auth/validate`, {
           method: 'POST',
           headers: {
@@ -67,7 +65,7 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
 
         const userData = await response.json();
         console.log('Backend user data:', userData);
-        
+
         // Merge with Google user data if available
         const enhancedUserData = {
           ...userData,
@@ -79,20 +77,20 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
           hasPassword: userData.hasPassword !== undefined ? userData.hasPassword : !!userData.password,
           justCreated: googleUserData?.justCreated
         };
-        
+
         console.log('Enhanced user data for frontend:', enhancedUserData);
-        
+
         // Store token in localStorage
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(enhancedUserData));
 
         setStatus('success');
-        
+
         // Determine the flow based on redirect parameter
         console.log('OAuth routing decision:', { redirectTo, needsSetup, hasPassword: enhancedUserData.hasPassword, isOnboarded: enhancedUserData.isOnboarded });
-        
-  // If backend says dashboard but client thinks needs setup due to stale params, trust backend flags
-  switch (redirectTo) {
+
+        // If backend says dashboard but client thinks needs setup due to stale params, trust backend flags
+        switch (redirectTo) {
           case 'setup-password':
             setMessage('Please set up a secure password...');
             setTimeout(() => {

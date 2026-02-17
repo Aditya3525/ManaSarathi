@@ -41,7 +41,7 @@ export function HeroSection({ onStartJourney, onSignUp, onDemo }: HeroSectionPro
               className="text-4xl font-bold leading-[1.15] tracking-tight text-foreground sm:text-5xl lg:text-6xl xl:text-7xl"
             >
               <span className="block bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                MaanaSarathi
+                MaanSarathi
               </span>
               <span className="mt-2 block text-[0.85em] font-semibold text-foreground/90">
                 Your personal wellbeing companion
@@ -123,7 +123,7 @@ export function HeroSection({ onStartJourney, onSignUp, onDemo }: HeroSectionPro
             />
             <img
               src="https://images.unsplash.com/photo-1687180948607-9ba1dd045e10?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWVkaXRhdGlvbiUyMHdlbGxuZXNzfGVufDF8fHx8MTc1NjcxMDg4Nnww&ixlib=rb-4.1.0&q=80&w=1080"
-              alt="Person practicing mindful meditation in a serene natural setting – MaanaSarathi wellness companion helps you find calm"
+              alt="Person practicing mindful meditation in a serene natural setting – MaanSarathi wellness companion helps you find calm"
               className="h-[400px] w-full rounded-3xl object-cover shadow-2xl lg:h-[500px]"
               loading="eager"
               width={1080}

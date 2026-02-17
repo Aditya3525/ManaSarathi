@@ -33,7 +33,9 @@ import supportRoutes from './routes/support';
 import faqRoutes from './routes/faq';
 import crisisRoutes from './routes/crisis';
 import therapistRoutes from './routes/therapists';
+import therapistPortalRoutes from './routes/therapistPortal';
 import helpSafetyAdminRoutes from './routes/admin/helpSafetyAdmin';
+import privacyRoutes from './routes/privacy';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { systemHealthMiddleware, startHealthMonitoring } from './middleware/systemHealthMiddleware';
@@ -83,17 +85,29 @@ app.use((req, res, next) => {
   try {
     const sid = (req as any).sessionID;
     if (sid) logger.debug({ sid, reqId: (req as any).id }, 'session trace');
-  } catch {}
+  } catch { }
   next();
 });
 if (process.env.NODE_ENV === 'production') {
   app.use(limiter);
 }
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? (process.env.FRONTEND_URL || 'http://localhost:3000')
+  origin: process.env.NODE_ENV === 'production'
+    ? [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      process.env.MOBILE_URL || 'http://localhost:8081',
+      // Allow Expo Go and mobile device access
+      /^https?:\/\/192\.168\.\d+\.\d+/,
+      /^https?:\/\/10\.\d+\.\d+\.\d+/,
+      /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/,
+      // Allow the production mobile app (native apps send no Origin)
+      'https://maansarathi.app',
+      'https://api.maansarathi.app',
+    ].filter(Boolean) as (string | RegExp)[]
     : true, // Allow all origins in development
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Platform'],
 }));
 
 // Session middleware (required for passport)
@@ -138,11 +152,12 @@ app.get('/api/health/ready', async (req, res) => {
   const requestId = (req as any).id;
   const checks: {
     database: { status: 'pass' | 'fail'; error?: string };
-    providers: Record<string, { available: boolean; name: string; cooldownActive: boolean; cooldownExpiresAt: string | null; lastError?: string }>; }
+    providers: Record<string, { available: boolean; name: string; cooldownActive: boolean; cooldownExpiresAt: string | null; lastError?: string }>;
+  }
     = {
-      database: { status: 'pass' },
-      providers: {}
-    };
+    database: { status: 'pass' },
+    providers: {}
+  };
 
   let databaseHealthy = true;
   try {
@@ -182,6 +197,7 @@ app.use('/api/mood', moodRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/help-safety', helpSafetyAdminRoutes); // Help & Safety admin management
+app.use('/api/privacy', privacyRoutes);  // Privacy settings, data export, account deletion
 app.use('/api/admin-data', adminDataRoutes); // For database CRUD operations
 app.use('/api/practices', publicPracticesRoutes);
 app.use('/api/public-content', publicContentRoutes);
@@ -196,12 +212,13 @@ app.use('/api/support', supportRoutes);       // Support tickets
 app.use('/api/faq', faqRoutes);               // FAQ system
 app.use('/api/crisis', crisisRoutes);         // Crisis resources & safety plans
 app.use('/api/therapists', therapistRoutes);  // Therapist directory & bookings
+app.use('/api/therapist-portal', therapistPortalRoutes); // Therapist self-service portal
 
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
   // Serve static files from frontend build
   app.use(express.static(path.join(__dirname, '../../frontend/dist')));
-  
+
   // Handle React Router - send all non-API requests to React app
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));

@@ -13,14 +13,18 @@ import {
   KeyRound,
   BookOpen,
   MessageSquareLock,
-  Languages
+  Languages,
+  FileText,
+  FileJson,
+  FileDown,
+  CheckCircle2
 } from 'lucide-react';
-import React, { type Dispatch, type SetStateAction, useMemo, useState } from 'react';
+import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useDevice } from '../../../hooks/use-device';
 import { LanguageSelector } from '../LanguageSelector';
-import { authApi, usersApi } from '../../../services/api';
+import { authApi, usersApi, privacyApi } from '../../../services/api';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -97,6 +101,33 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     marketingEmails: false,
     researchParticipation: false
   });
+  const [privacyLoading, setPrivacyLoading] = useState(true);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [privacySuccess, setPrivacySuccess] = useState(false);
+  const [consentUpdatedAt, setConsentUpdatedAt] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<'json' | 'text' | 'pdf'>('json');
+  const [exportSections, setExportSections] = useState<Record<string, boolean>>({
+    profile: true,
+    assessments: true,
+    moodEntries: true,
+    conversations: true,
+    goals: true,
+    progress: true,
+    insights: true,
+    memory: true,
+    contentActivity: true,
+    safetyPlan: true,
+    supportTickets: true,
+    sessions: true,
+    chatbotConversations: true,
+    bookingsCrisis: true,
+  });
+  const [exportSuccess, setExportSuccess] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [notificationSettings, setNotificationSettings] = useState({
     practiceReminders: true,
@@ -313,17 +344,100 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     }
   };
 
-  const handleDeleteAccount = () => {
-    // In a real app, this would make an API call
-    console.log('Account deletion requested');
-    setShowDeleteConfirm(false);
-    onNavigate('landing');
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const resp = await privacyApi.deleteAccount();
+      if (!resp.success) throw new Error(resp.error || 'Deletion failed');
+      setShowDeleteConfirm(false);
+      // Log out and redirect
+      if (onLogout) onLogout();
+      onNavigate('landing');
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Failed to delete account');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const handleExportData = () => {
-    // In a real app, this would generate and download user data
-    console.log('Data export requested');
+  const handleExportData = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    setExportSuccess(false);
+    try {
+      const selectedSections = Object.entries(exportSections)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      if (selectedSections.length === 0) {
+        setExportError('Please select at least one data section to export.');
+        setIsExporting(false);
+        return;
+      }
+      await privacyApi.exportData(exportFormat, selectedSections);
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 4000);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
   };
+
+  const toggleExportSection = (key: string) => {
+    setExportSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Load privacy settings from backend
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setPrivacyLoading(true);
+        const resp = await privacyApi.getSettings();
+        if (!cancelled && resp.success && resp.data) {
+          setPrivacySettings({
+            dataSharing: resp.data.dataSharing,
+            clinicianAccess: resp.data.clinicianAccess,
+            anonymousAnalytics: resp.data.anonymousAnalytics,
+            marketingEmails: resp.data.marketingEmails,
+            researchParticipation: resp.data.researchParticipation,
+          });
+          setConsentUpdatedAt(resp.data.consentUpdatedAt);
+        }
+      } catch {
+        // Fallback to defaults silently
+      } finally {
+        if (!cancelled) setPrivacyLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Save privacy setting to backend when toggled
+  const handlePrivacyToggle = useCallback(async (key: keyof typeof privacySettings, value: boolean) => {
+    // Optimistic update
+    setPrivacySettings(prev => ({ ...prev, [key]: value }));
+    setPrivacySaving(true);
+    setPrivacyError(null);
+    setPrivacySuccess(false);
+    try {
+      const resp = await privacyApi.updateSettings({ [key]: value });
+      if (!resp.success) throw new Error(resp.error || 'Save failed');
+      if (resp.data) {
+        setConsentUpdatedAt(resp.data.consentUpdatedAt);
+      }
+      setPrivacySuccess(true);
+      setTimeout(() => setPrivacySuccess(false), 2000);
+    } catch (e) {
+      // Rollback
+      setPrivacySettings(prev => ({ ...prev, [key]: !value }));
+      setPrivacyError(e instanceof Error ? e.message : 'Failed to save');
+      setTimeout(() => setPrivacyError(null), 4000);
+    } finally {
+      setPrivacySaving(false);
+    }
+  }, []);
 
   const getDeviceIcon = (type: string) => {
     switch (type) {
@@ -769,6 +883,16 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 md:space-y-6">
+                {privacyError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{privacyError}</AlertDescription>
+                  </Alert>
+                )}
+                {privacySuccess && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <AlertDescription>Privacy settings saved successfully</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-3 md:space-y-4">
                   {/* Mobile: Increased row height for touch / Desktop: Standard */}
                   <div className={`flex items-start justify-between gap-4 ${device.isMobile ? 'py-2 min-h-[60px]' : ''}`}>
@@ -780,9 +904,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     </div>
                     <Switch
                       checked={privacySettings.dataSharing}
-                      onCheckedChange={(checked) => 
-                        setPrivacySettings(prev => ({ ...prev, dataSharing: checked }))
-                      }
+                      onCheckedChange={(checked) => handlePrivacyToggle('dataSharing', checked)}
+                      disabled={privacyLoading || privacySaving}
                       className="flex-shrink-0 mt-1"
                       aria-label="Data Sharing for Personalization"
                     />
@@ -799,9 +922,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     </div>
                     <Switch
                       checked={privacySettings.clinicianAccess}
-                      onCheckedChange={(checked) => 
-                        setPrivacySettings(prev => ({ ...prev, clinicianAccess: checked }))
-                      }
+                      onCheckedChange={(checked) => handlePrivacyToggle('clinicianAccess', checked)}
+                      disabled={privacyLoading || privacySaving}
                       className="flex-shrink-0 mt-1"
                       aria-label="Clinician Access"
                     />
@@ -818,11 +940,28 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     </div>
                     <Switch
                       checked={privacySettings.anonymousAnalytics}
-                      onCheckedChange={(checked) => 
-                        setPrivacySettings(prev => ({ ...prev, anonymousAnalytics: checked }))
-                      }
+                      onCheckedChange={(checked) => handlePrivacyToggle('anonymousAnalytics', checked)}
+                      disabled={privacyLoading || privacySaving}
                       className="flex-shrink-0 mt-1"
                       aria-label="Anonymous Analytics"
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className={`flex items-start justify-between gap-4 ${device.isMobile ? 'py-2 min-h-[60px]' : ''}`}>
+                    <div className="space-y-1 flex-1">
+                      <Label className="cursor-pointer">Marketing Emails</Label>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        Receive updates about new features, tips, and wellbeing resources
+                      </p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.marketingEmails}
+                      onCheckedChange={(checked) => handlePrivacyToggle('marketingEmails', checked)}
+                      disabled={privacyLoading || privacySaving}
+                      className="flex-shrink-0 mt-1"
+                      aria-label="Marketing Emails"
                     />
                   </div>
 
@@ -837,14 +976,21 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     </div>
                     <Switch
                       checked={privacySettings.researchParticipation}
-                      onCheckedChange={(checked) => 
-                        setPrivacySettings(prev => ({ ...prev, researchParticipation: checked }))
-                      }
+                      onCheckedChange={(checked) => handlePrivacyToggle('researchParticipation', checked)}
+                      disabled={privacyLoading || privacySaving}
                       className="flex-shrink-0 mt-1"
                       aria-label="Research Participation"
                     />
                   </div>
                 </div>
+
+                {consentUpdatedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Last updated: {new Date(consentUpdatedAt).toLocaleDateString(undefined, {
+                      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
+                )}
 
                 <Alert>
                   <Shield className="h-4 w-4" />
@@ -1310,22 +1456,108 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Download className="h-5 w-5 text-primary" />
-                  Data Management
+                  Export Your Data
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg border">
-                  <div>
-                    <h4 className="font-medium">Export Your Data</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Download a copy of all your data including assessments, progress, and settings
-                    </p>
+              <CardContent className="space-y-5">
+                <p className="text-sm text-muted-foreground">
+                  Download a structured copy of your data. Choose a format and select which sections to include.
+                </p>
+
+                {exportError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{exportError}</AlertDescription>
+                  </Alert>
+                )}
+                {exportSuccess && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      Export downloaded successfully!
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Format Selector */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Export Format</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {([
+                      { value: 'json' as const, label: 'JSON', icon: FileJson, desc: 'Structured data' },
+                      { value: 'text' as const, label: 'Text', icon: FileText, desc: 'Human-readable' },
+                      { value: 'pdf' as const, label: 'PDF', icon: FileDown, desc: 'Printable document' },
+                    ]).map(fmt => (
+                      <button
+                        key={fmt.value}
+                        type="button"
+                        onClick={() => setExportFormat(fmt.value)}
+                        className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                          exportFormat === fmt.value
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-muted hover:border-primary/40'
+                        }`}
+                      >
+                        <fmt.icon className={`h-6 w-6 ${exportFormat === fmt.value ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className={`text-sm font-medium ${exportFormat === fmt.value ? 'text-primary' : ''}`}>{fmt.label}</span>
+                        <span className="text-xs text-muted-foreground">{fmt.desc}</span>
+                      </button>
+                    ))}
                   </div>
-                  <Button variant="outline" onClick={handleExportData}>
+                </div>
+
+                {/* Section Checkboxes */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Data Sections</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { key: 'profile', label: 'Profile & Settings', icon: '👤' },
+                      { key: 'assessments', label: 'Assessments', icon: '📋' },
+                      { key: 'moodEntries', label: 'Mood Entries', icon: '🎭' },
+                      { key: 'conversations', label: 'Chat History', icon: '💬' },
+                      { key: 'goals', label: 'Wellbeing Goals', icon: '🎯' },
+                      { key: 'progress', label: 'Progress Tracking', icon: '📈' },
+                      { key: 'insights', label: 'Insights & Wellness', icon: '🔍' },
+                      { key: 'memory', label: 'AI Memory', icon: '🧠' },
+                      { key: 'contentActivity', label: 'Content & Plans', icon: '📚' },
+                      { key: 'safetyPlan', label: 'Safety Plan', icon: '🛡️' },
+                      { key: 'supportTickets', label: 'Support Tickets', icon: '🎫' },
+                      { key: 'sessions', label: 'Usage Sessions', icon: '⏱️' },
+                      { key: 'chatbotConversations', label: 'Chatbot Threads', icon: '🤖' },
+                      { key: 'bookingsCrisis', label: 'Bookings & Crisis', icon: '🏥' },
+                    ]).map(sec => (
+                      <label
+                        key={sec.key}
+                        className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                          exportSections[sec.key]
+                            ? 'border-primary/30 bg-primary/5'
+                            : 'border-muted hover:bg-muted/50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={exportSections[sec.key]}
+                          onChange={() => toggleExportSection(sec.key)}
+                          className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <span className="text-base">{sec.icon}</span>
+                        <span className="text-sm">{sec.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Export Button */}
+                <div className="flex items-center justify-between pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    {Object.values(exportSections).filter(Boolean).length} of {Object.keys(exportSections).length} sections selected
+                  </p>
+                  <Button onClick={handleExportData} disabled={isExporting}>
                     <Download className="h-4 w-4 mr-2" />
-                    Export
+                    {isExporting ? 'Preparing export…' : `Export as ${exportFormat.toUpperCase()}`}
                   </Button>
                 </div>
+
+                <Separator />
 
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div>
@@ -1617,6 +1849,12 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   </AlertDescription>
                 </Alert>
 
+                {deleteError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{deleteError}</AlertDescription>
+                  </Alert>
+                )}
+
                 <Button 
                   variant="destructive" 
                   onClick={() => setShowDeleteConfirm(true)}
@@ -1728,13 +1966,15 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   <Button 
                     variant="destructive" 
                     onClick={handleDeleteAccount}
+                    disabled={isDeleting}
                     className="flex-1"
                   >
-                    Yes, Delete Forever
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete Forever'}
                   </Button>
                   <Button 
                     variant="outline"
                     onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
                     className="flex-1"
                   >
                     Cancel
@@ -1786,6 +2026,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 <Button 
                   variant="outline"
                   onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
                   className="w-full min-h-[48px]"
                 >
                   Cancel
@@ -1793,9 +2034,10 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 <Button 
                   variant="destructive" 
                   onClick={handleDeleteAccount}
+                  disabled={isDeleting}
                   className="w-full min-h-[48px]"
                 >
-                  Yes, Delete Forever
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete Forever'}
                 </Button>
               </SheetFooter>
             </SheetContent>

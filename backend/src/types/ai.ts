@@ -57,6 +57,12 @@ export interface UserContext {
     score?: number;
     details?: string;
   };
+  activeGoals?: Array<{
+    goalType: string;
+    title: string;
+    progress: number;
+    status: string;
+  }>;
 }
 
 export interface ConversationContext {
@@ -70,7 +76,7 @@ export interface AIProvider {
   name: string;
   isAvailable(): Promise<boolean>;
   generateResponse(
-    messages: AIMessage[], 
+    messages: AIMessage[],
     config?: AIConfig,
     context?: ConversationContext
   ): Promise<AIResponse>;

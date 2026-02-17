@@ -1,13 +1,6 @@
-// API Configuration - Smart detection for localhost vs mobile access
-const getApiBaseUrl = () => {
-  // If accessed via localhost, use localhost for API
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:5000/api';
-  }
-  // If accessed via IP address, use the same IP for API
-  return `http://${window.location.hostname}:5000/api`;
-};
+import { getApiBaseUrl } from '../config/apiConfig';
 
+// API Configuration - uses shared dynamic URL detection
 const API_BASE_URL = import.meta.env.VITE_API_URL || getApiBaseUrl();
 
 // Types
@@ -555,21 +548,21 @@ const apiClient = new ApiClient(API_BASE_URL);
 export const authApi = {
   async register(userData: { name: string; email: string; password: string }): Promise<AuthResponse> {
     const response = await apiClient.post<{ user: User; token: string }>('/auth/register', userData);
-    
+
     if (response.success && response.data) {
       TokenManager.setToken(response.data.token);
     }
-    
+
     return response;
   },
 
   async login(credentials: { email: string; password: string }): Promise<AuthResponse> {
     const response = await apiClient.post<{ user: User; token: string }>('/auth/login', credentials);
-    
+
     if (response.success && response.data) {
       TokenManager.setToken(response.data.token);
     }
-    
+
     return response;
   },
 
@@ -662,6 +655,58 @@ export const usersApi = {
   }): Promise<ApiResponse<{ user: User }>> {
     return apiClient.post<{ user: User }>('/users/complete-onboarding', onboardingData);
   }
+};
+
+// Privacy API
+export interface PrivacySettings {
+  dataSharing: boolean;
+  clinicianAccess: boolean;
+  anonymousAnalytics: boolean;
+  marketingEmails: boolean;
+  researchParticipation: boolean;
+  consentUpdatedAt: string | null;
+}
+
+export const privacyApi = {
+  async getSettings(): Promise<ApiResponse<PrivacySettings>> {
+    return apiClient.get<PrivacySettings>('/privacy/settings');
+  },
+
+  async updateSettings(settings: Partial<Omit<PrivacySettings, 'consentUpdatedAt'>>): Promise<ApiResponse<PrivacySettings>> {
+    return apiClient.put<PrivacySettings>('/privacy/settings', settings);
+  },
+
+  async exportData(
+    format: 'json' | 'text' | 'pdf' = 'json',
+    sections?: string[]
+  ): Promise<void> {
+    const token = TokenManager.getToken();
+    const baseURL = apiClient['baseURL'] || '/api';
+    const response = await fetch(`${baseURL}/privacy/export-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ format, sections }),
+    });
+    if (!response.ok) throw new Error('Failed to export data');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().split('T')[0];
+    const ext = format === 'pdf' ? 'pdf' : format === 'text' ? 'txt' : 'json';
+    a.download = `MaanSarathi-export-${dateStr}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  },
+
+  async deleteAccount(): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/privacy/delete-account', { confirmation: 'DELETE' });
+  },
 };
 
 // Assessments API
@@ -800,6 +845,22 @@ export const chatApi = {
 
   async getExerciseRecommendations(currentMessage?: string): Promise<ApiResponse<ExerciseRecommendationsResponse>> {
     return apiClient.post('/chat/exercises', { message: currentMessage });
+  },
+
+  async submitFeedback(messageId: string, feedback: 'liked' | 'disliked'): Promise<ApiResponse<{ messageId: string; feedback: string }>> {
+    return apiClient.put(`/chat/message/${messageId}/feedback`, { feedback });
+  },
+
+  async submitMoodCheck(conversationId: string, moodBefore?: number, moodAfter?: number): Promise<ApiResponse<any>> {
+    return apiClient.post('/chat/mood-check', { conversationId, moodBefore, moodAfter });
+  },
+
+  async getMemory(userId: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/chat/memory/${userId}`);
+  },
+
+  async clearMemory(): Promise<ApiResponse<any>> {
+    return apiClient.delete('/chat/memory');
   }
 };
 
@@ -923,10 +984,10 @@ export const contentApi = {
     if (filters?.category) params.append('category', filters.category);
     if (filters?.type) params.append('type', filters.type);
     if (filters?.approach) params.append('approach', filters.approach);
-    
+
     const queryString = params.toString();
     const endpoint = queryString ? `/content?${queryString}` : '/content';
-    
+
     return apiClient.get(endpoint);
   },
 
@@ -976,10 +1037,10 @@ export const recommendationsApi = {
     if (context?.availableTime) params.append('availableTime', context.availableTime.toString());
     if (context?.environment) params.append('environment', context.environment);
     if (context?.immediateNeed !== undefined) params.append('immediateNeed', context.immediateNeed.toString());
-    
+
     const queryString = params.toString();
     const endpoint = queryString ? `/recommendations/personalized?${queryString}` : '/recommendations/personalized';
-    
+
     return apiClient.get(endpoint);
   }
 };
@@ -999,35 +1060,35 @@ export const adminApi = {
     if (params?.category) query.append('category', params.category);
     if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
     if (params?.search) query.append('search', params.search);
-    
+
     const queryString = query.toString();
     return apiClient.get(`/admin/assessments${queryString ? `?${queryString}` : ''}`);
   },
-  
+
   async getAssessment(id: string) {
     return apiClient.get(`/admin/assessments/${id}`);
   },
-  
+
   async createAssessment(data: any) {
     return apiClient.post('/admin/assessments', data);
   },
-  
+
   async updateAssessment(id: string, data: any) {
     return apiClient.put(`/admin/assessments/${id}`, data);
   },
-  
+
   async deleteAssessment(id: string) {
     return apiClient.delete(`/admin/assessments/${id}`);
   },
-  
+
   async duplicateAssessment(id: string) {
     return apiClient.post(`/admin/assessments/${id}/duplicate`);
   },
-  
+
   async previewAssessment(id: string, responses: Record<string, string>) {
     return apiClient.post(`/admin/assessments/${id}/preview`, { responses });
   },
-  
+
   async getAssessmentCategories() {
     return apiClient.get('/admin/assessments/categories');
   }
@@ -1036,23 +1097,23 @@ export const adminApi = {
 // Helper functions for JSON parsing
 export const parseContentJSON = (content: any): Content => {
   if (!content) return content;
-  
+
   return {
     ...content,
-    focusAreas: content.focusAreas ? 
-      (typeof content.focusAreas === 'string' ? JSON.parse(content.focusAreas) : content.focusAreas) 
+    focusAreas: content.focusAreas ?
+      (typeof content.focusAreas === 'string' ? JSON.parse(content.focusAreas) : content.focusAreas)
       : null
   };
 };
 
 export const parsePracticeJSON = (practice: any): Practice => {
   if (!practice) return practice;
-  
+
   const parseField = (field: any): any => {
     if (!field) return null;
     return typeof field === 'string' ? JSON.parse(field) : field;
   };
-  
+
   return {
     ...practice,
     requiredEquipment: parseField(practice.requiredEquipment),

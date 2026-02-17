@@ -1,7 +1,7 @@
 {
-  "name": "maanasarathi",
+  "name": "MaanSarathi",
   "version": "1.0.0",
-  "description": "MaanaSarathi - Full Stack Monorepo",
+  "description": "MaanSarathi - Full Stack Monorepo",
   "private": true,
   "workspaces": [
     "frontend",
@@ -52,12 +52,12 @@
     "nodejs",
     "typescript",
     "monorepo",
-    "maanasarathi"
+    "MaanSarathi"
   ],
   "author": "",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/maanasarathi.git"
+    "url": "https://github.com/Aditya3525/MaanSarathi.git"
   }
 }

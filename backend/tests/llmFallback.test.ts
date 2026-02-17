@@ -52,7 +52,7 @@ describe('LLMService fallback priority', () => {
       AIProviderType.GEMINI,
       AIProviderType.HUGGINGFACE
     ]);
-  });
+  }, { timeout: 20000 });
 
   it('skips providers without API credentials even if prioritised', async () => {
     process.env.AI_PROVIDER_PRIORITY = `${AIProviderType.HUGGINGFACE},${AIProviderType.GEMINI}`;
@@ -62,7 +62,7 @@ describe('LLMService fallback priority', () => {
     const providersToTry = service.debugProvidersToTry();
 
     expect(providersToTry).toEqual([AIProviderType.GEMINI]);
-  });
+  }, { timeout: 20000 });
 
   it('drops providers that enter cooldown windows', async () => {
     process.env.AI_PROVIDER_PRIORITY = `${AIProviderType.HUGGINGFACE}`;

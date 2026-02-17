@@ -93,17 +93,17 @@ export function MetricsSection() {
             Trusted by <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">thousands</span> on their wellness journey
           </h2>
         </div>
-        
+
         {/* Mobile: Swipeable Carousel */}
         <div className="md:hidden">
-          <div 
+          <div
             ref={metricsContainerRef}
             className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             role="region"
             aria-label="Impact metrics carousel"
           >
             {METRICS.map(({ icon: Icon, value, label, helper, accent, bgAccent }, index) => (
-              <Card 
+              <Card
                 key={label}
                 className="group min-w-[80vw] flex-shrink-0 snap-center border-none bg-background/80 backdrop-blur-sm shadow-lg ring-1 ring-border/40 transition-all duration-300 hover:shadow-xl hover:ring-primary/30"
                 role="group"
@@ -121,7 +121,7 @@ export function MetricsSection() {
               </Card>
             ))}
           </div>
-          
+
           {/* Enhanced Pagination Dots */}
           <div className="mt-6 flex justify-center gap-2" role="tablist" aria-label="Metrics pagination">
             {METRICS.map((stat, index) => (
@@ -130,19 +130,19 @@ export function MetricsSection() {
                 role="tab"
                 aria-selected={activeMetricIndex === index}
                 aria-label={`View metric ${index + 1} of ${METRICS.length}: ${stat.label}`}
-                className={`h-2.5 rounded-full transition-all duration-300 ${
-                  activeMetricIndex === index 
-                    ? 'w-8 bg-primary shadow-md shadow-primary/30' 
+                className={`h-2.5 rounded-full transition-all duration-300 ${activeMetricIndex === index
+                    ? 'w-8 bg-primary shadow-md shadow-primary/30'
                     : 'w-2.5 bg-muted-foreground/25 hover:bg-muted-foreground/40'
-                }`}
+                  }`}
                 onClick={() => {
                   const container = metricsContainerRef.current;
                   const child = container?.children[index] as HTMLElement;
-                  child?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                    inline: 'center'
-                  });
+                  if (child && container) {
+                    container.scrollTo({
+                      left: child.offsetLeft - container.offsetLeft,
+                      behavior: 'smooth'
+                    });
+                  }
                   setActiveMetricIndex(index);
                 }}
               />
@@ -172,7 +172,7 @@ export function MetricsSection() {
             <Card key={label} className="group relative overflow-hidden border-none bg-background/80 backdrop-blur-sm shadow-lg ring-1 ring-border/40 transition-all duration-300 hover:shadow-xl hover:ring-primary/30 hover:-translate-y-1">
               {/* Hover gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-              
+
               <CardContent className="relative flex flex-col items-center p-8 text-center">
                 <span className={`mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl ${bgAccent} ${accent} transition-all duration-300 group-hover:scale-110`}>
                   <Icon className="h-8 w-8" />

@@ -84,9 +84,9 @@ try {
 const ADMIN_EMAILS = ['admin@example.com', 'admin@mentalwellbeing.ai'];
 
 // Multer storage configuration with validation
-const ALLOWED_AUDIO = ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/webm','audio/ogg','audio/m4a','audio/aac'];
-const ALLOWED_VIDEO = ['video/mp4','video/webm','video/ogg'];
-const ALLOWED_IMAGE = ['image/png','image/jpeg','image/webp','image/gif'];
+const ALLOWED_AUDIO = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/m4a', 'audio/aac'];
+const ALLOWED_VIDEO = ['video/mp4', 'video/webm', 'video/ogg'];
+const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 // Validation schemas for content management
 const contentValidationSchema = Joi.object({
@@ -142,7 +142,7 @@ const practiceValidationSchema = Joi.object({
   // New enhanced fields
   category: Joi.string().valid(
     'MEDITATION', 'YOGA', 'BREATHING', 'MINDFULNESS', 'JOURNALING',
-    'CBT_TECHNIQUE', 'GROUNDING_EXERCISE', 'SELF_REFLECTION', 
+    'CBT_TECHNIQUE', 'GROUNDING_EXERCISE', 'SELF_REFLECTION',
     'MOVEMENT', 'SLEEP_HYGIENE'
   ).allow(null).optional(),
   intensityLevel: Joi.string().valid('low', 'medium', 'high').allow(null).optional(),
@@ -177,14 +177,14 @@ const storage = multer.diskStorage({
     cb(null, unique + ext);
   }
 });
-const upload = multer({ 
-  storage, 
+const upload = multer({
+  storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB hard cap
   fileFilter: (req, file, cb) => {
     const { mimetype } = file;
     const ok = ALLOWED_IMAGE.includes(mimetype) || ALLOWED_AUDIO.includes(mimetype) || ALLOWED_VIDEO.includes(mimetype);
     if (!ok) {
-      return cb(new Error('Unsupported file type')); 
+      return cb(new Error('Unsupported file type'));
     }
     cb(null, true);
   }
@@ -342,9 +342,9 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
+      {
+        id: user.id,
+        email: user.email,
         isAdmin: true
       },
       process.env.JWT_SECRET || 'fallback-secret',
@@ -400,7 +400,7 @@ router.get('/check-user-admin', async (req, res) => {
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId }
     });
@@ -410,7 +410,7 @@ router.get('/check-user-admin', async (req, res) => {
     }
 
     const isAdmin = ADMIN_EMAILS.includes(user.email.toLowerCase());
-    res.json({ 
+    res.json({
       isAdmin,
       email: user.email,
       id: user.id
@@ -431,7 +431,7 @@ router.post('/auto-login', async (req, res) => {
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId }
     });
@@ -447,9 +447,9 @@ router.post('/auto-login', async (req, res) => {
 
     // Generate admin JWT token
     const adminToken = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
+      {
+        id: user.id,
+        email: user.email,
         isAdmin: true
       },
       process.env.JWT_SECRET || 'fallback-secret',
@@ -495,7 +495,7 @@ router.get('/session', async (req, res) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
+
     // Get fresh admin data
     const admin = await prisma.user.findUnique({
       where: { id: decoded.id },
@@ -529,7 +529,7 @@ export const requireAdmin = async (req: any, res: any, next: any) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
+
     const admin = await prisma.user.findUnique({
       where: { id: decoded.id }
     });
@@ -552,7 +552,7 @@ export const requireAdmin = async (req: any, res: any, next: any) => {
 (router as any).post('/upload/:type', requireAdmin as any, (upload as any).single('file'), async (req: any, res: any) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const rel = req.file.path.split('uploads')[1].replace(/\\/g,'/').replace(/^\//,'');
+    const rel = req.file.path.split('uploads')[1].replace(/\\/g, '/').replace(/^\//, '');
     const publicUrl = `/uploads/${rel}`;
     const kind = req.params.type;
     const isImage = req.file.mimetype.startsWith('image/');
@@ -660,7 +660,7 @@ router.get('/media/metadata', requireAdmin as any, async (req, res) => {
       let seconds: number | null = null;
       if (meta?.format?.duration) seconds = Math.round(meta.format.duration);
       // Derive title from filename
-      const base = path.basename(diskPath).replace(/\.[^.]+$/, '').replace(/[-_]/g,' ');
+      const base = path.basename(diskPath).replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
       return res.json({
         success: true,
         provider: 'local',
@@ -668,7 +668,7 @@ router.get('/media/metadata', requireAdmin as any, async (req, res) => {
         description: null,
         thumbnail: null,
         durationSeconds: seconds,
-        durationMinutes: seconds ? Math.max(1, Math.round(seconds/60)) : null,
+        durationMinutes: seconds ? Math.max(1, Math.round(seconds / 60)) : null,
         originalUrl: value
       });
     } else {
@@ -698,7 +698,7 @@ router.post('/practices', requireAdmin, async (req, res) => {
   try {
     // Log incoming request for debugging
     console.log('Practice creation request body:', JSON.stringify(req.body, null, 2));
-    
+
     // Validate request body
     const { error, value } = practiceValidationSchema.validate(req.body, { abortEarly: false });
     if (error) {
@@ -821,9 +821,9 @@ router.post('/practices', requireAdmin, async (req, res) => {
 router.put('/practices/:id', requireAdmin, async (req, res) => {
   try {
     // Validate request body
-    const { error, value } = practiceValidationSchema.validate(req.body, { 
+    const { error, value } = practiceValidationSchema.validate(req.body, {
       abortEarly: false,
-      allowUnknown: true 
+      allowUnknown: true
     });
     if (error) {
       return res.status(400).json({
@@ -861,8 +861,8 @@ router.put('/practices/:id', requireAdmin, async (req, res) => {
 
     // Handle tags
     if (value.tags !== undefined) {
-      updateData.tags = Array.isArray(value.tags) 
-        ? value.tags.join(',') 
+      updateData.tags = Array.isArray(value.tags)
+        ? value.tags.join(',')
         : (typeof value.tags === 'string' ? value.tags : null);
     }
 
@@ -926,8 +926,8 @@ router.put('/practices/:id', requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Audio URL or uploaded audio is required for Audio format' });
       }
     } else if (merged.format === 'Video') {
-      const hasVideo = (merged.videoUrl && String(merged.videoUrl).trim()) || 
-                       (merged.youtubeUrl && String(merged.youtubeUrl).trim());
+      const hasVideo = (merged.videoUrl && String(merged.videoUrl).trim()) ||
+        (merged.youtubeUrl && String(merged.youtubeUrl).trim());
       if (!hasVideo) {
         return res.status(400).json({ error: 'Video URL, YouTube URL, or uploaded video file is required for Video format' });
       }
@@ -1078,7 +1078,7 @@ router.post('/content', requireAdmin, async (req, res) => {
 router.put('/content/:id', requireAdmin, async (req, res) => {
   try {
     // Validate request body (partial update allowed)
-    const { error, value } = contentValidationSchema.validate(req.body, { 
+    const { error, value } = contentValidationSchema.validate(req.body, {
       abortEarly: false,
       allowUnknown: true // Allow extra fields for flexibility
     });
@@ -1098,7 +1098,7 @@ router.put('/content/:id', requireAdmin, async (req, res) => {
 
     // Prepare update data
     const updateData: any = {};
-    
+
     // Basic fields
     if (value.title !== undefined) updateData.title = String(value.title).trim();
     if (value.type !== undefined) updateData.type = String(value.type);
@@ -1111,11 +1111,11 @@ router.put('/content/:id', requireAdmin, async (req, res) => {
     if (value.duration !== undefined) updateData.duration = value.duration;
     if (value.difficulty !== undefined) updateData.difficulty = value.difficulty;
     if (value.isPublished !== undefined) updateData.isPublished = value.isPublished;
-    
+
     // Handle tags
     if (value.tags !== undefined) {
-      updateData.tags = Array.isArray(value.tags) 
-        ? value.tags.join(',') 
+      updateData.tags = Array.isArray(value.tags)
+        ? value.tags.join(',')
         : (typeof value.tags === 'string' ? value.tags : '');
     }
 
@@ -1142,26 +1142,26 @@ router.put('/content/:id', requireAdmin, async (req, res) => {
     if (!merged.description || !String(merged.description).trim()) {
       return res.status(400).json({ success: false, error: 'Description is required' });
     }
-    
+
     // Media validation
     if (merged.type === 'video') {
-      const hasVideo = (merged.url && String(merged.url).trim()) || 
-                       (merged.youtubeUrl && String(merged.youtubeUrl).trim()) || 
-                       (merged.content && String(merged.content).trim());
+      const hasVideo = (merged.url && String(merged.url).trim()) ||
+        (merged.youtubeUrl && String(merged.youtubeUrl).trim()) ||
+        (merged.content && String(merged.content).trim());
       if (!hasVideo) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Video URL, YouTube URL, uploaded video, or embedded content is required for video type' 
+        return res.status(400).json({
+          success: false,
+          error: 'Video URL, YouTube URL, uploaded video, or embedded content is required for video type'
         });
       }
     }
     if (merged.type === 'audio') {
-      const hasAudio = (merged.url && String(merged.url).trim()) || 
-                       (merged.content && String(merged.content).trim());
+      const hasAudio = (merged.url && String(merged.url).trim()) ||
+        (merged.content && String(merged.content).trim());
       if (!hasAudio) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Audio URL or uploaded audio is required for audio type' 
+        return res.status(400).json({
+          success: false,
+          error: 'Audio URL or uploaded audio is required for audio type'
         });
       }
     }
@@ -1339,6 +1339,47 @@ router.get('/activity-logs/export', requireAdmin, exportActivityLogs);
 // THERAPIST MANAGEMENT ROUTES (ADMIN ONLY)
 // ==========================================
 
+// Normalize availability from legacy { day, times: ['9:00 AM - 5:00 PM'] } format
+// to the expected { day, startTime, endTime } format
+function normalizeAvailability(slots: any[]): { day: string; startTime: string; endTime: string }[] {
+  if (!Array.isArray(slots)) return [];
+  const result: { day: string; startTime: string; endTime: string }[] = [];
+  for (const slot of slots) {
+    if (slot.startTime && slot.endTime) {
+      // Already in correct format
+      result.push({ day: slot.day, startTime: slot.startTime, endTime: slot.endTime });
+    } else if (slot.times && Array.isArray(slot.times)) {
+      // Legacy format: { day: 'Monday', times: ['9:00 AM - 5:00 PM'] }
+      for (const timeRange of slot.times) {
+        const parts = timeRange.split(' - ');
+        if (parts.length === 2) {
+          result.push({
+            day: slot.day,
+            startTime: convertTo24h(parts[0].trim()),
+            endTime: convertTo24h(parts[1].trim())
+          });
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function convertTo24h(time12: string): string {
+  // If already in 24h format like "09:00", return as-is
+  if (/^\d{1,2}:\d{2}$/.test(time12) && !time12.includes('AM') && !time12.includes('PM')) {
+    return time12;
+  }
+  const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return time12;
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
 // Therapist validation schema
 const therapistValidationSchema = Joi.object({
   name: Joi.string().required().max(100),
@@ -1367,13 +1408,17 @@ const therapistValidationSchema = Joi.object({
   yearsExperience: Joi.number().integer().min(0).allow(null).optional(),
   languages: Joi.string().max(200).allow('', null).optional(),
   isActive: Joi.boolean().default(true),
-  isVerified: Joi.boolean().default(false)
+  isVerified: Joi.boolean().default(false),
+  // Portal account fields (optional — if provided, a User account is created/linked)
+  portalEmail: Joi.string().email().allow('', null).optional(),
+  portalPassword: Joi.string().min(6).max(128).allow('', null).optional(),
+  enablePortal: Joi.boolean().optional()
 });
 
 // Get all therapists (admin - includes inactive/unverified)
 router.get('/therapists', requireAdmin, async (req, res) => {
   try {
-    const { 
+    const {
       search,
       specialty,
       credential,
@@ -1426,13 +1471,17 @@ router.get('/therapists', requireAdmin, async (req, res) => {
       prisma.therapist.count({ where })
     ]);
 
-    // Parse JSON fields
-    const therapistsWithParsed = therapists.map(t => ({
-      ...t,
-      specialties: JSON.parse(t.specialtiesJson || '[]'),
-      availability: JSON.parse(t.availabilityJson || '[]'),
-      insurancesList: t.insurances ? JSON.parse(t.insurances) : []
-    }));
+    // Parse JSON fields and strip raw JSON columns
+    const therapistsWithParsed = therapists.map(t => {
+      const { insurances: _raw, specialtiesJson: _sj, availabilityJson: _aj, ...rest } = t;
+      return {
+        ...rest,
+        specialties: JSON.parse(t.specialtiesJson || '[]'),
+        availability: normalizeAvailability(JSON.parse(t.availabilityJson || '[]')),
+        insurancesList: t.insurances ? JSON.parse(t.insurances) : [],
+        portalLinked: !!t.userId
+      };
+    });
 
     res.json({
       success: true,
@@ -1457,6 +1506,7 @@ router.get('/therapists/:id', requireAdmin, async (req, res) => {
     const therapist = await prisma.therapist.findUnique({
       where: { id },
       include: {
+        user: { select: { id: true, email: true, name: true } },
         bookings: {
           take: 10,
           orderBy: { createdAt: 'desc' }
@@ -1468,11 +1518,14 @@ router.get('/therapists/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Therapist not found' });
     }
 
+    const { insurances: _raw, specialtiesJson: _sj, availabilityJson: _aj, ...therapistRest } = therapist;
     const therapistData = {
-      ...therapist,
+      ...therapistRest,
       specialties: JSON.parse(therapist.specialtiesJson || '[]'),
-      availability: JSON.parse(therapist.availabilityJson || '[]'),
-      insurancesList: therapist.insurances ? JSON.parse(therapist.insurances) : []
+      availability: normalizeAvailability(JSON.parse(therapist.availabilityJson || '[]')),
+      insurancesList: therapist.insurances ? JSON.parse(therapist.insurances) : [],
+      portalLinked: !!therapist.userId,
+      portalEmail: therapist.user?.email || null
     };
 
     res.json({ success: true, data: therapistData });
@@ -1487,35 +1540,83 @@ router.post('/therapists', requireAdmin, async (req, res) => {
   try {
     const { error, value } = therapistValidationSchema.validate(req.body);
     if (error) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Validation error', 
-        details: error.details.map(d => d.message) 
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: error.details.map(d => d.message)
       });
     }
 
-    const { specialties, insurances, availability, ...rest } = value;
+    const { specialties, insurances, availability, portalEmail, portalPassword, enablePortal, ...rest } = value;
+
+    // ─── Portal account creation / linking ─────────────────────────────
+    let userId: string | null = null;
+
+    if (enablePortal && portalEmail) {
+      const normalizedEmail = portalEmail.toLowerCase().trim();
+
+      // Check if a User already exists with this email
+      let existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+      if (existingUser) {
+        // Check if this user is already linked to another therapist
+        const alreadyLinked = await prisma.therapist.findFirst({ where: { userId: existingUser.id } });
+        if (alreadyLinked) {
+          return res.status(400).json({
+            success: false,
+            error: `This email is already linked to therapist "${alreadyLinked.name}". A user can only be linked to one therapist.`
+          });
+        }
+        // Update password if a new one was provided
+        if (portalPassword) {
+          const hashedPassword = await bcrypt.hash(portalPassword, 10);
+          await prisma.user.update({ where: { id: existingUser.id }, data: { password: hashedPassword } });
+        }
+        userId = existingUser.id;
+      } else {
+        // Create a new User account
+        if (!portalPassword) {
+          return res.status(400).json({
+            success: false,
+            error: 'Password is required when creating a new portal account'
+          });
+        }
+        const hashedPassword = await bcrypt.hash(portalPassword, 10);
+        const newUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            name: rest.name,
+            password: hashedPassword,
+            isOnboarded: true
+          }
+        });
+        userId = newUser.id;
+      }
+    }
 
     const therapist = await prisma.therapist.create({
       data: {
         ...rest,
         specialtiesJson: JSON.stringify(specialties || []),
         insurances: insurances ? JSON.stringify(insurances) : null,
-        availabilityJson: JSON.stringify(availability || [])
+        availabilityJson: JSON.stringify(availability || []),
+        ...(userId && { userId })
       }
     });
 
     // Log activity
     const adminEmail = (req.session as any)?.adminId ? 'admin' : 'unknown';
-    await logActivity(adminEmail, 'CREATE', 'THERAPIST', therapist.id, therapist.name, { created: therapist }, req);
+    await logActivity(adminEmail, 'CREATE', 'THERAPIST', therapist.id, therapist.name, { created: therapist, portalLinked: !!userId }, req);
 
     res.status(201).json({
       success: true,
       data: {
-        ...therapist,
+        ...(() => { const { insurances: _r, specialtiesJson: _s, availabilityJson: _a, ...clean } = therapist; return clean; })(),
         specialties: specialties || [],
         availability: availability || [],
-        insurancesList: insurances || []
+        insurancesList: insurances || [],
+        portalLinked: !!userId,
+        portalEmail: portalEmail || null
       }
     });
   } catch (error) {
@@ -1536,14 +1637,61 @@ router.put('/therapists/:id', requireAdmin, async (req, res) => {
 
     const { error, value } = therapistValidationSchema.validate(req.body);
     if (error) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Validation error', 
-        details: error.details.map(d => d.message) 
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: error.details.map(d => d.message)
       });
     }
 
-    const { specialties, insurances, availability, ...rest } = value;
+    const { specialties, insurances, availability, portalEmail, portalPassword, enablePortal, ...rest } = value;
+
+    // ─── Portal account management ─────────────────────────────────────
+    let userId: string | null | undefined = undefined; // undefined = don't change
+
+    if (enablePortal === false) {
+      // Admin explicitly disabled portal — unlink user
+      userId = null;
+    } else if (enablePortal && portalEmail) {
+      const normalizedEmail = portalEmail.toLowerCase().trim();
+
+      let existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+      if (existingUser) {
+        // Check if this user is already linked to a DIFFERENT therapist
+        const alreadyLinked = await prisma.therapist.findFirst({
+          where: { userId: existingUser.id, id: { not: id } }
+        });
+        if (alreadyLinked) {
+          return res.status(400).json({
+            success: false,
+            error: `This email is already linked to therapist "${alreadyLinked.name}".`
+          });
+        }
+        if (portalPassword) {
+          const hashedPassword = await bcrypt.hash(portalPassword, 10);
+          await prisma.user.update({ where: { id: existingUser.id }, data: { password: hashedPassword } });
+        }
+        userId = existingUser.id;
+      } else {
+        if (!portalPassword) {
+          return res.status(400).json({
+            success: false,
+            error: 'Password is required when creating a new portal account'
+          });
+        }
+        const hashedPassword = await bcrypt.hash(portalPassword, 10);
+        const newUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            name: rest.name || existing.name,
+            password: hashedPassword,
+            isOnboarded: true
+          }
+        });
+        userId = newUser.id;
+      }
+    }
 
     const therapist = await prisma.therapist.update({
       where: { id },
@@ -1551,7 +1699,8 @@ router.put('/therapists/:id', requireAdmin, async (req, res) => {
         ...rest,
         specialtiesJson: JSON.stringify(specialties || []),
         insurances: insurances ? JSON.stringify(insurances) : null,
-        availabilityJson: JSON.stringify(availability || [])
+        availabilityJson: JSON.stringify(availability || []),
+        ...(userId !== undefined && { userId })
       }
     });
 
@@ -1562,10 +1711,12 @@ router.put('/therapists/:id', requireAdmin, async (req, res) => {
     res.json({
       success: true,
       data: {
-        ...therapist,
+        ...(() => { const { insurances: _r, specialtiesJson: _s, availabilityJson: _a, ...clean } = therapist; return clean; })(),
         specialties: specialties || [],
         availability: availability || [],
-        insurancesList: insurances || []
+        insurancesList: insurances || [],
+        portalLinked: !!therapist.userId,
+        portalEmail: portalEmail || null
       }
     });
   } catch (error) {
@@ -1639,7 +1790,7 @@ router.patch('/therapists/:id/status', requireAdmin, async (req, res) => {
     res.json({
       success: true,
       data: {
-        ...therapist,
+        ...(() => { const { insurances: _r, specialtiesJson: _s, availabilityJson: _a, ...clean } = therapist; return clean; })(),
         specialties: JSON.parse(therapist.specialtiesJson || '[]'),
         availability: JSON.parse(therapist.availabilityJson || '[]'),
         insurancesList: therapist.insurances ? JSON.parse(therapist.insurances) : []
