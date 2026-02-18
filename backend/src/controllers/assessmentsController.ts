@@ -606,6 +606,7 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
 
     // Fetch custom/dynamic assessment templates by type
     if (customTypes.length > 0) {
+      // First try by type field
       const customDefinitions = await prisma.assessmentDefinition.findMany({
         where: {
           type: { in: customTypes },
@@ -619,11 +620,33 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
         }
       });
 
+      const foundTypes = new Set(customDefinitions.map(d => d.type));
       const customTemplates = customDefinitions.map((definition) => {
         return formatCustomAssessmentTemplate(definition);
       });
-      
       templates.push(...customTemplates);
+
+      // Fallback: try remaining IDs as database primary key IDs
+      const notFoundByType = customTypes.filter(t => !foundTypes.has(t));
+      if (notFoundByType.length > 0) {
+        const idDefinitions = await prisma.assessmentDefinition.findMany({
+          where: {
+            id: { in: notFoundByType },
+            isActive: true
+          },
+          include: {
+            questions: {
+              include: { options: true },
+              orderBy: { order: 'asc' }
+            }
+          }
+        });
+
+        const idTemplates = idDefinitions.map((definition) => {
+          return formatCustomAssessmentTemplate(definition);
+        });
+        templates.push(...idTemplates);
+      }
     }
 
     if (!templates.length) {

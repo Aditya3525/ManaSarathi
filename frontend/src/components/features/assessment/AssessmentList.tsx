@@ -373,9 +373,10 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
       icon: getCategoryIcon(assessment.category),
       difficulty: getAssessmentDifficulty(assessment.type, assessment.questions),
       category: primaryCategory,
-      // Use the assessment definition id as the `typeKey` so the frontend
-      // passes the correct template identifier to the backend.
-      typeKey: assessment.id,
+      // Use the assessment type so the backend template lookup works correctly.
+      // The backend resolves templates by type (e.g. 'anxiety', 'stress'), not by
+      // the database primary key ID.
+      typeKey: assessment.type || assessment.id,
       tags: tags.length > 0 ? tags : ['all']
     };
   });
