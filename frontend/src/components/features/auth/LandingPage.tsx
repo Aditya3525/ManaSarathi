@@ -1077,8 +1077,19 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                     className="inline-flex items-center py-2 text-xs opacity-50 transition-opacity hover:opacity-100"
                     onClick={() => openModal('admin')}
                   >
+
                     Admin Access
                   </button>
+                </li>
+                <li>
+                  <a
+                    href="/therapist_login"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center py-2 text-xs opacity-50 transition-opacity hover:opacity-100"
+                  >
+                    Therapist Portal
+                  </a>
                 </li>
               </ul>
             </nav>
