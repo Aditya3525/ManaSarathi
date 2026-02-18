@@ -366,14 +366,13 @@ router.post('/login', async (req, res) => {
 
 // Admin logout
 router.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Session destroy error:', err);
-      return res.status(500).json({ error: 'Failed to logout' });
-    }
-    res.clearCookie('connect.sid');
-    res.json({ message: 'Logged out successfully' });
-  });
+  // Token-based auth: client just discards the token.
+  // Destroy session too if present (dev / same-origin fallback).
+  if (req.session) {
+    req.session.destroy(() => {});
+  }
+  res.clearCookie('connect.sid');
+  res.json({ message: 'Logged out successfully' });
 });
 
 // Check if current JWT user is an admin (for auto-login from user dashboard)
@@ -459,7 +458,7 @@ router.get('/session', async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = (authHeader && authHeader.startsWith('Bearer '))
       ? authHeader.substring(7)
-      : (req.session as any).adminToken;
+      : (req.session as any)?.adminToken;
 
     if (!token) {
       return res.status(401).json({ error: 'No admin session' });

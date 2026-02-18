@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import axios from 'axios';
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Database, Brain, Shield, Activity, MessageSquare, FileText, Copy, Check, Youtube, KeyRound } from 'lucide-react';
 import React, { useState } from 'react';
 
@@ -41,16 +40,14 @@ export function SystemDiagnostics() {
   const testDatabase = async () => {
     updateTest('database', { status: 'testing' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/health', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await adminFetch(`${getApiBaseUrl().replace('/api', '')}/api/health`);
+      const response = await res.json();
       
-      if (response.data.status === 'OK') {
+      if (response.status === 'OK') {
         updateTest('database', { 
           status: 'success', 
           message: 'Database connected successfully',
-          details: { timestamp: response.data.timestamp }
+          details: { timestamp: response.timestamp }
         });
       } else {
         throw new Error('Health check failed');
@@ -59,9 +56,7 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'Database connection failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
         code: err.code
       };
       updateTest('database', { 
@@ -75,12 +70,10 @@ export function SystemDiagnostics() {
   const testAIProviders = async () => {
     updateTest('aiProviders', { status: 'testing' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/health/ready', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await adminFetch(`${getApiBaseUrl()}/health/ready`);
+      const response = await res.json();
       
-      const providers = response.data.checks?.providers || {};
+      const providers = response.checks?.providers || {};
       const activeProviders = Object.entries(providers)
         .filter(([, info]: [string, { available: boolean }]) => info.available)
         .map(([name]) => name);
@@ -98,9 +91,7 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'AI providers check failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
         code: err.code
       };
       updateTest('aiProviders', { 
@@ -114,12 +105,10 @@ export function SystemDiagnostics() {
   const testAPIKeys = async () => {
     updateTest('apiKeys', { status: 'testing' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/health/ready', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await adminFetch(`${getApiBaseUrl()}/health/ready`);
+      const response = await res.json();
       
-      const providers = response.data.checks?.providers || {};
+      const providers = response.checks?.providers || {};
       const keysStatus: Record<string, { available: boolean; name: string }> = {};
       
       Object.entries(providers).forEach(([name, info]: [string, { available: boolean; name: string }]) => {
@@ -144,9 +133,7 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'API keys validation failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
         code: err.code
       };
       updateTest('apiKeys', { 
@@ -160,16 +147,17 @@ export function SystemDiagnostics() {
   const testGoogleAuth = async () => {
     updateTest('googleAuth', { status: 'testing' });
     try {
-      const response = await axios.get('/api/auth/google/status');
+      const res = await adminFetch(`${getApiBaseUrl()}/auth/google/status`);
+      const response = await res.json();
       
-      if (response.data.configured) {
+      if (response.configured) {
         updateTest('googleAuth', { 
           status: 'success', 
           message: 'Google OAuth is configured and working',
           details: { 
-            clientIdPresent: response.data.clientIdPresent,
-            clientSecretPresent: response.data.clientSecretPresent,
-            message: response.data.message
+            clientIdPresent: response.clientIdPresent,
+            clientSecretPresent: response.clientSecretPresent,
+            message: response.message
           }
         });
       } else {
@@ -177,9 +165,9 @@ export function SystemDiagnostics() {
           status: 'error', 
           message: 'Google OAuth is not configured',
           details: {
-            clientIdPresent: response.data.clientIdPresent,
-            clientSecretPresent: response.data.clientSecretPresent,
-            message: response.data.message,
+            clientIdPresent: response.clientIdPresent,
+            clientSecretPresent: response.clientSecretPresent,
+            message: response.message,
             instruction: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env'
           }
         });
@@ -188,9 +176,7 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'Google OAuth test failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
         code: err.code
       };
       updateTest('googleAuth', { 
@@ -204,16 +190,17 @@ export function SystemDiagnostics() {
   const testYouTubeAPI = async () => {
     updateTest('youtubeApi', { status: 'testing' });
     try {
-      const response = await axios.get('/api/content/youtube/status');
+      const res = await adminFetch(`${getApiBaseUrl()}/content/youtube/status`);
+      const response = await res.json();
       
-      if (response.data.configured) {
+      if (response.configured) {
         updateTest('youtubeApi', { 
           status: 'success', 
           message: 'YouTube API key is configured and working',
           details: { 
-            apiKeyPresent: response.data.apiKeyPresent,
-            quotaAvailable: response.data.quotaAvailable,
-            message: response.data.message
+            apiKeyPresent: response.apiKeyPresent,
+            quotaAvailable: response.quotaAvailable,
+            message: response.message
           }
         });
       } else {
@@ -221,8 +208,8 @@ export function SystemDiagnostics() {
           status: 'error', 
           message: 'YouTube API key is not configured',
           details: {
-            apiKeyPresent: response.data.apiKeyPresent,
-            message: response.data.message,
+            apiKeyPresent: response.apiKeyPresent,
+            message: response.message,
             instruction: 'Set YOUTUBE_API_KEY in backend/.env'
           }
         });

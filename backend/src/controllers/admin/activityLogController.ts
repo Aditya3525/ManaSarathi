@@ -172,12 +172,12 @@ export async function getActivityStats(req: Request, res: Response) {
       Array<{ date: string; count: number }>
     >`
       SELECT 
-        date(createdAt) as date,
+        date("createdAt") as date,
         COUNT(*) as count
       FROM activity_logs
-      WHERE createdAt >= ${sevenDaysAgo}
-      GROUP BY date(createdAt)
-      ORDER BY date(createdAt) ASC
+      WHERE "createdAt" >= ${sevenDaysAgo}
+      GROUP BY date("createdAt")
+      ORDER BY date("createdAt") ASC
     `;
 
     res.json({

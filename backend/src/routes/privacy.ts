@@ -81,7 +81,8 @@ router.put('/settings', async (req: any, res) => {
     if (researchParticipation !== undefined) setClauses.push(`"researchParticipation" = ${researchParticipation ? 'true' : 'false'}`);
 
     await prisma.$executeRawUnsafe(
-      `UPDATE "users" SET ${setClauses.join(', ')} WHERE "id" = '${userId}'`
+      `UPDATE "users" SET ${setClauses.join(', ')} WHERE "id" = $1`,
+      userId
     );
 
     // Fetch updated values

@@ -6,10 +6,21 @@ import { PrismaClient } from '@prisma/client';
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// ─── Helper: extract therapist JWT from Authorization header (or session fallback) ───
+function extractTherapistToken(req: any): string | null {
+    // 1. Authorization header (cross-domain compatible)
+    const authHeader = req.headers?.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7);
+    }
+    // 2. Session fallback (same-origin / dev)
+    return (req.session as any)?.therapistToken || null;
+}
+
 // ─── Middleware: requireTherapist ─────────────────────────────────────────────
 export const requireTherapist = async (req: any, res: any, next: any) => {
     try {
-        const token = (req.session as any).therapistToken;
+        const token = extractTherapistToken(req);
         if (!token) {
             return res.status(401).json({ error: 'Therapist authentication required' });
         }
@@ -81,29 +92,15 @@ router.post('/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
-        // Store in session
-        req.session.regenerate((regenErr) => {
-            if (regenErr) {
-                console.error('Therapist login session regenerate error:', regenErr);
-                return res.status(500).json({ error: 'Session error' });
-            }
-            (req.session as any).therapistToken = token;
-            (req.session as any).therapistId = therapist.id;
-
-            req.session.save((saveErr) => {
-                if (saveErr) {
-                    console.error('Therapist login session save error:', saveErr);
-                    return res.status(500).json({ error: 'Session error' });
-                }
-                console.log('Therapist login success:', user.email);
-                const { password: _, ...userData } = user as any;
-                res.json({
-                    ...userData,
-                    role: 'Therapist',
-                    therapistId: therapist.id,
-                    therapistName: therapist.name
-                });
-            });
+        // Return JWT token in response body (cross-domain compatible)
+        console.log('Therapist login success:', user.email);
+        const { password: _, ...userData } = user as any;
+        res.json({
+            ...userData,
+            role: 'Therapist',
+            therapistId: therapist.id,
+            therapistName: therapist.name,
+            token  // <-- client stores this and sends via Authorization header
         });
     } catch (error) {
         console.error('Therapist login error:', error);
@@ -113,20 +110,19 @@ router.post('/login', async (req, res) => {
 
 // ─── POST /logout ────────────────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            console.error('Session destroy error:', err);
-            return res.status(500).json({ error: 'Failed to logout' });
-        }
-        res.clearCookie('connect.sid');
-        res.json({ message: 'Logged out successfully' });
-    });
+    // Token-based auth: client just discards the token.
+    // Destroy session too if present (dev / same-origin fallback).
+    if (req.session) {
+        req.session.destroy(() => {});
+    }
+    res.clearCookie('connect.sid');
+    res.json({ message: 'Logged out successfully' });
 });
 
 // ─── GET /session ────────────────────────────────────────────────────────────
 router.get('/session', async (req, res) => {
     try {
-        const token = (req.session as any).therapistToken;
+        const token = extractTherapistToken(req);
         if (!token) {
             return res.status(401).json({ error: 'No therapist session' });
         }

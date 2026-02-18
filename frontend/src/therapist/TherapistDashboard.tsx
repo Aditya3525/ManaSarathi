@@ -74,13 +74,23 @@ interface Stats {
 }
 
 // ─── API helpers ────────────────────────────────────────────────────────────
-const API = '/api/therapist-portal';
+import { getApiBaseUrl } from '../config/apiConfig';
+
+const API = `${getApiBaseUrl()}/therapist-portal`;
+
+function getTherapistToken(): string | null {
+    return localStorage.getItem('therapistToken');
+}
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
+    const token = getTherapistToken();
     const res = await fetch(`${API}${path}`, {
         ...opts,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...opts.headers },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...opts.headers,
+        },
     });
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));

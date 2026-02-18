@@ -687,7 +687,6 @@ function AppInner() {
       setTherapistLoginError(null);
       const res = await fetch(`${getApiBaseUrl()}/therapist-portal/login`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
       });
@@ -695,6 +694,10 @@ function AppInner() {
       if (!res.ok) {
         setTherapistLoginError(data.error || 'Login failed');
         return;
+      }
+      // Store therapist JWT token for cross-domain auth
+      if (data.token) {
+        localStorage.setItem('therapistToken', data.token);
       }
       setTherapistSession({ therapistId: data.therapistId, therapistName: data.therapistName });
       navigateTo('therapist-portal');
@@ -705,8 +708,13 @@ function AppInner() {
 
   const handleTherapistLogout = async () => {
     try {
-      await fetch(`${getApiBaseUrl()}/therapist-portal/logout`, { method: 'POST', credentials: 'include' });
+      const therapistToken = localStorage.getItem('therapistToken');
+      await fetch(`${getApiBaseUrl()}/therapist-portal/logout`, {
+        method: 'POST',
+        headers: therapistToken ? { Authorization: `Bearer ${therapistToken}` } : {}
+      });
     } catch (_) { }
+    localStorage.removeItem('therapistToken');
     setTherapistSession(null);
     navigateTo('therapist-login');
   };
@@ -714,10 +722,20 @@ function AppInner() {
   // Check therapist session on mount if on therapist-portal page
   useEffect(() => {
     if (currentPage === 'therapist-portal' && !therapistSession) {
-      fetch(`${getApiBaseUrl()}/therapist-portal/session`, { credentials: 'include' })
+      const therapistToken = localStorage.getItem('therapistToken');
+      if (!therapistToken) {
+        navigateTo('therapist-login');
+        return;
+      }
+      fetch(`${getApiBaseUrl()}/therapist-portal/session`, {
+        headers: { Authorization: `Bearer ${therapistToken}` }
+      })
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(data => setTherapistSession({ therapistId: data.therapistId, therapistName: data.therapistName }))
-        .catch(() => navigateTo('therapist-login'));
+        .catch(() => {
+          localStorage.removeItem('therapistToken');
+          navigateTo('therapist-login');
+        });
     }
   }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 

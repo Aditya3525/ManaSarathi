@@ -47,13 +47,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
     try {
       // Call AI service
-      const response = await fetch(`${getApiBaseUrl()}/chat`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${getApiBaseUrl()}/chat/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ message: messageText }),
-        credentials: 'include'
       });
 
       if (!response.ok) {
