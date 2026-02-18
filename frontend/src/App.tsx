@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { getServerBaseUrl, getApiBaseUrl } from './config/apiConfig';
 
@@ -1228,6 +1229,7 @@ export default function App() {
             <AppInner />
             <ToastContainer />
             <PWAInstallPrompt />
+            <SpeedInsights />
           </ChatProvider>
         </AdminAuthProvider>
       </ToastProvider>
