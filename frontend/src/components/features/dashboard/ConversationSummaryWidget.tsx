@@ -1,6 +1,7 @@
 import { MessageSquare, TrendingUp, TrendingDown, Minus, Calendar, Target, Activity } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 
+import { getApiBaseUrl } from '../../../config/apiConfig';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
@@ -68,7 +69,7 @@ export const ConversationSummaryWidget: React.FC<ConversationSummaryWidgetProps>
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(`/api/chat/summary/${userId}?days=${days}`, {
+      const response = await fetch(`${getApiBaseUrl()}/chat/summary/${userId}?days=${days}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

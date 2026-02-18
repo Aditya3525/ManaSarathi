@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getServerBaseUrl } from './config/apiConfig';
+import { getServerBaseUrl, getApiBaseUrl } from './config/apiConfig';
 
 import { AdminDashboard } from './admin/AdminDashboard';
 import { TherapistLoginPage } from './therapist/TherapistLoginPage';
@@ -685,7 +685,7 @@ function AppInner() {
   const handleTherapistLogin = async (credentials: { email: string; password: string }) => {
     try {
       setTherapistLoginError(null);
-      const res = await fetch('/api/therapist-portal/login', {
+      const res = await fetch(`${getApiBaseUrl()}/therapist-portal/login`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -705,7 +705,7 @@ function AppInner() {
 
   const handleTherapistLogout = async () => {
     try {
-      await fetch('/api/therapist-portal/logout', { method: 'POST', credentials: 'include' });
+      await fetch(`${getApiBaseUrl()}/therapist-portal/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) { }
     setTherapistSession(null);
     navigateTo('therapist-login');
@@ -714,7 +714,7 @@ function AppInner() {
   // Check therapist session on mount if on therapist-portal page
   useEffect(() => {
     if (currentPage === 'therapist-portal' && !therapistSession) {
-      fetch('/api/therapist-portal/session', { credentials: 'include' })
+      fetch(`${getApiBaseUrl()}/therapist-portal/session`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(data => setTherapistSession({ therapistId: data.therapistId, therapistName: data.therapistName }))
         .catch(() => navigateTo('therapist-login'));

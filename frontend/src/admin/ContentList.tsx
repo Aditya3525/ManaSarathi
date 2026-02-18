@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
+import { getApiBaseUrl } from '../config/apiConfig';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -142,7 +143,7 @@ export const ContentList: React.FC<ContentListProps> = ({
     }
 
     try {
-      const response = await fetch(`/api/admin/content/${id}`, {
+      const response = await fetch(`${getApiBaseUrl()}/admin/content/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });

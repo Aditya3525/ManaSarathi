@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, Minus, Smile, Meh, Frown } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
+import { getApiBaseUrl } from '../../../config/apiConfig';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Progress } from '../../ui/progress';
 import { Skeleton } from '../../ui/skeleton';
@@ -83,7 +84,7 @@ export const EmotionalPatternWidget: React.FC<EmotionalPatternWidgetProps> = ({ 
           throw new Error('Not authenticated');
         }
 
-        const response = await fetch(`/api/chat/memory/${userId}`, {
+        const response = await fetch(`${getApiBaseUrl()}/chat/memory/${userId}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

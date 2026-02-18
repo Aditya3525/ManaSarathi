@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 
+import { getApiBaseUrl } from '../config/apiConfig';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -131,7 +132,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
     console.log('ContentForm fetchYouTubeFull called with id:', id, 'force:', force);
     setMetaLoading(true);
     try {
-      const resp = await fetch(`/api/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
+      const resp = await fetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
       console.log('ContentForm metadata response status:', resp.status);
       if (!resp.ok) {
         let msg = `Metadata request failed (${resp.status})`;
@@ -193,7 +194,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   const uploadFile = async (file: File, type: 'media' | 'thumbnail') => {
     const form = new FormData();
     form.append('file', file);
-    const resp = await fetch(`/api/admin/upload/${type}`, { method: 'POST', body: form, credentials: 'include' });
+    const resp = await fetch(`${getApiBaseUrl()}/admin/upload/${type}`, { method: 'POST', body: form, credentials: 'include' });
     if (!resp.ok) throw new Error('Upload failed');
     const data = await resp.json();
     return data.url as string;
@@ -201,7 +202,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
 
   const fetchFileMetadata = async (fileUrl: string) => {
     try {
-      const resp = await fetch(`/api/admin/media/metadata?type=file&value=${encodeURIComponent(fileUrl)}`, { credentials: 'include' });
+      const resp = await fetch(`${getApiBaseUrl()}/admin/media/metadata?type=file&value=${encodeURIComponent(fileUrl)}`, { credentials: 'include' });
       if (!resp.ok) return null;
       const json = await resp.json();
       return json.success ? json : null;
@@ -213,7 +214,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
 
   const fetchYouTubeDuration = async (id: string) => {
     try {
-      const resp = await fetch(`/api/admin/youtube/metadata/${id}`, { credentials: 'include' });
+      const resp = await fetch(`${getApiBaseUrl()}/admin/youtube/metadata/${id}`, { credentials: 'include' });
       if (!resp.ok) return;
       const json = await resp.json();
       if (json.success && json.durationMinutes && (!formData.duration || !existing)) {

@@ -26,6 +26,7 @@ import {
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getApiBaseUrl } from '../../../config/apiConfig';
 import { useDevice } from '../../../hooks/use-device';
 import { ImageWithFallback } from '../../common/ImageWithFallback';
 import { Badge } from '../../ui/badge';
@@ -139,8 +140,8 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
       setError(null);
       try {
         const [practicesResp, contentResp] = await Promise.all([
-          fetch('/api/practices'),
-          fetch('/api/public/content')
+          fetch(`${getApiBaseUrl()}/practices`),
+          fetch(`${getApiBaseUrl()}/public/content`)
         ]);
 
         type RawPractice = {

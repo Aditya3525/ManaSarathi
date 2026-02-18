@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 
+import { getApiBaseUrl } from '../config/apiConfig';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,7 +144,7 @@ export const UserManagement: React.FC = () => {
         ...(filterOnboarded !== 'all' && { isOnboarded: filterOnboarded })
       });
 
-      const response = await fetch(`/api/admin/users?${params}`, {
+      const response = await fetch(`${getApiBaseUrl()}/admin/users?${params}`, {
         credentials: 'include'
       });
 
@@ -182,8 +183,8 @@ export const UserManagement: React.FC = () => {
       setDetailModalOpen(true);
       
       const [detailsRes, activityRes] = await Promise.all([
-        fetch(`/api/admin/users/${user.id}`, { credentials: 'include' }),
-        fetch(`/api/admin/users/${user.id}/activity`, { credentials: 'include' })
+        fetch(`${getApiBaseUrl()}/admin/users/${user.id}`, { credentials: 'include' }),
+        fetch(`${getApiBaseUrl()}/admin/users/${user.id}/activity`, { credentials: 'include' })
       ]);
 
       if (!detailsRes.ok || !activityRes.ok) {
@@ -212,7 +213,7 @@ export const UserManagement: React.FC = () => {
 
   const handleTogglePremium = async (userId: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
+      const response = await fetch(`${getApiBaseUrl()}/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -246,7 +247,7 @@ export const UserManagement: React.FC = () => {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
+      const response = await fetch(`${getApiBaseUrl()}/admin/users/${userToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include'
       });

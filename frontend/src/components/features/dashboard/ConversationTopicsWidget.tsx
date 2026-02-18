@@ -1,6 +1,7 @@
 import { MessageCircle, TrendingUp } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
+import { getApiBaseUrl } from '../../../config/apiConfig';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Progress } from '../../ui/progress';
 import { Skeleton } from '../../ui/skeleton';
@@ -82,7 +83,7 @@ export function ConversationTopicsWidget({ userId }: ConversationTopicsWidgetPro
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`/api/chat/memory/${userId}`, {
+        const response = await fetch(`${getApiBaseUrl()}/chat/memory/${userId}`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`
           },
