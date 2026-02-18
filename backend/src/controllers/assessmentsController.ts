@@ -711,11 +711,11 @@ export const submitAssessment = async (req: any, res: Response) => {
     const insightId = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "assessment_insights" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       insightId,
       userId,
-  JSON.stringify(insightsPayload),
+      JSON.stringify(insightsPayload),
       insightsPayload.insights.overallTrend,
       insightsPayload.insights.aiSummary,
       insightsPayload.insights.wellnessScore?.value ?? 0
@@ -794,7 +794,7 @@ export const getAssessmentHistory = async (req: any, res: Response) => {
     const historyInsightId = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "assessment_insights" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       historyInsightId,
       userId,
@@ -1143,7 +1143,7 @@ export const submitCombinedAssessments = async (req: any, res: Response) => {
     const insightId = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "assessment_insights" ("id", "userId", "summary", "overallTrend", "aiSummary", "wellness_score", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT("userId") DO UPDATE SET "summary" = EXCLUDED."summary", "overallTrend" = EXCLUDED."overallTrend", "aiSummary" = EXCLUDED."aiSummary", "wellness_score" = EXCLUDED."wellness_score", "updatedAt" = CURRENT_TIMESTAMP`,
       insightId,
       userId,

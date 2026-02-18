@@ -402,7 +402,7 @@ router.get('/check-user-admin', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.id || decoded.userId }
     });
 
     if (!user) {
@@ -433,7 +433,7 @@ router.post('/auto-login', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.id || decoded.userId }
     });
 
     if (!user) {
