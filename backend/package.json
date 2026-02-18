@@ -14,6 +14,7 @@
     "db:studio:direct": "npx prisma studio",
     "db:reset": "npx prisma migrate reset",
     "seed": "ts-node src/prisma/seed.ts",
+    "seed:production": "ts-node src/prisma/seed-production.ts",
     "test": "cross-env NODE_ENV=test vitest run",
     "test:watch": "cross-env NODE_ENV=test vitest",
     "test:ai": "node test-ai-providers.js",

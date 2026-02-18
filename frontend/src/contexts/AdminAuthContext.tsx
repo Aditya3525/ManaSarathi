@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getApiBaseUrl } from '../config/apiConfig';
 
 interface Admin {
   id: string;
@@ -38,7 +39,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await fetch('/api/admin/session', {
+        const response = await fetch(`${getApiBaseUrl()}/admin/session`, {
           credentials: 'include'
         });
         
@@ -61,7 +62,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
     try {
       console.log('Attempting admin login with:', credentials.email);
       
-      const response = await fetch('/api/admin/login', {
+      const response = await fetch(`${getApiBaseUrl()}/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -102,7 +103,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
         return false;
       }
 
-      const response = await fetch('/api/admin/check-user-admin', {
+      const response = await fetch(`${getApiBaseUrl()}/admin/check-user-admin`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -129,7 +130,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
 
       setIsLoading(true);
 
-      const response = await fetch('/api/admin/auto-login', {
+      const response = await fetch(`${getApiBaseUrl()}/admin/auto-login`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -157,7 +158,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
 
   const adminLogout = async () => {
     try {
-      await fetch('/api/admin/logout', {
+      await fetch(`${getApiBaseUrl()}/admin/logout`, {
         method: 'POST',
         credentials: 'include'
       });

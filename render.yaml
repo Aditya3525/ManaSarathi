@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma db push --accept-data-loss && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma db push --accept-data-loss && npm run build && npx ts-node src/prisma/seed-production.ts
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

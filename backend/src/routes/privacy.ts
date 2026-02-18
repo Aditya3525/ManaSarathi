@@ -38,7 +38,7 @@ router.get('/settings', async (req: any, res) => {
       marketingEmails: boolean | null;
       researchParticipation: boolean | null;
       consentUpdatedAt: string | null;
-    }>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
+    }>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "users" WHERE "id" = ${userId}`;
 
     const extra = rawUser[0] || {} as any;
 
@@ -81,7 +81,7 @@ router.put('/settings', async (req: any, res) => {
     if (researchParticipation !== undefined) setClauses.push(`"researchParticipation" = ${researchParticipation ? 'true' : 'false'}`);
 
     await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET ${setClauses.join(', ')} WHERE "id" = '${userId}'`
+      `UPDATE "users" SET ${setClauses.join(', ')} WHERE "id" = '${userId}'`
     );
 
     // Fetch updated values
@@ -92,7 +92,7 @@ router.put('/settings', async (req: any, res) => {
       marketingEmails: boolean | null;
       researchParticipation: boolean | null;
       consentUpdatedAt: string | null;
-    }>>`SELECT "dataConsent", "clinicianSharing", "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
+    }>>`SELECT "dataConsent", "clinicianSharing", "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "users" WHERE "id" = ${userId}`;
 
     const row = rawUser[0];
 
@@ -154,7 +154,7 @@ router.post('/export-data', async (req: any, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    const privacyRaw = await prisma.$queryRaw<Array<any>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "User" WHERE "id" = ${userId}`;
+    const privacyRaw = await prisma.$queryRaw<Array<any>>`SELECT "anonymousAnalytics", "marketingEmails", "researchParticipation", "consentUpdatedAt" FROM "users" WHERE "id" = ${userId}`;
     const privacyExtra = privacyRaw[0] || {};
 
     // Fetch only requested sections in parallel
