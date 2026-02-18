@@ -55,7 +55,7 @@ app.set('trust proxy', 1);
 // Rate limiting (enabled only in production to avoid noisy 429s during local dev)
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500'), // limit each IP to 500 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -88,9 +88,7 @@ app.use((req, res, next) => {
   } catch { }
   next();
 });
-if (process.env.NODE_ENV === 'production') {
-  app.use(limiter);
-}
+// CORS must come before rate limiter so rate-limited 429 responses still carry CORS headers
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [
@@ -111,6 +109,11 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Platform'],
 }));
+
+// Rate limiter after CORS so 429 responses still carry CORS headers
+if (process.env.NODE_ENV === 'production') {
+  app.use(limiter);
+}
 
 // Session middleware (required for passport)
 app.use(session({
