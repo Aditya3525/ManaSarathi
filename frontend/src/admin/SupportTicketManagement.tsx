@@ -47,6 +47,7 @@ import { Textarea } from '../components/ui/textarea';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { AdminSectionCard } from './AdminSectionCard';
+import { adminFetch } from './adminApi';
 import { AdminStatCard } from './AdminStatCard';
 
 // Types
@@ -87,7 +88,7 @@ const supportTicketAdminApi = {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.priority) queryParams.append('priority', params.priority);
 
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/support/tickets?${queryParams}`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/support/tickets?${queryParams}`, {
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to fetch support tickets');
@@ -96,7 +97,7 @@ const supportTicketAdminApi = {
   },
 
   respond: async (id: string, response: string): Promise<SupportTicket> => {
-    const res = await fetch(`${API_BASE}/api/admin/help-safety/support/tickets/${id}/respond`, {
+    const res = await adminFetch(`${API_BASE}/api/admin/help-safety/support/tickets/${id}/respond`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -108,7 +109,7 @@ const supportTicketAdminApi = {
   },
 
   close: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/support/tickets/${id}/close`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/support/tickets/${id}/close`, {
       method: 'PUT',
       credentials: 'include'
     });

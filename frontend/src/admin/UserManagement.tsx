@@ -19,6 +19,7 @@ import {
 import React, { useState, useEffect, useCallback } from 'react';
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -144,9 +145,7 @@ export const UserManagement: React.FC = () => {
         ...(filterOnboarded !== 'all' && { isOnboarded: filterOnboarded })
       });
 
-      const response = await fetch(`${getApiBaseUrl()}/admin/users?${params}`, {
-        credentials: 'include'
-      });
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/users?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch users');
@@ -183,8 +182,8 @@ export const UserManagement: React.FC = () => {
       setDetailModalOpen(true);
       
       const [detailsRes, activityRes] = await Promise.all([
-        fetch(`${getApiBaseUrl()}/admin/users/${user.id}`, { credentials: 'include' }),
-        fetch(`${getApiBaseUrl()}/admin/users/${user.id}/activity`, { credentials: 'include' })
+        adminFetch(`${getApiBaseUrl()}/admin/users/${user.id}`),
+        adminFetch(`${getApiBaseUrl()}/admin/users/${user.id}/activity`)
       ]);
 
       if (!detailsRes.ok || !activityRes.ok) {
@@ -213,10 +212,9 @@ export const UserManagement: React.FC = () => {
 
   const handleTogglePremium = async (userId: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/admin/users/${userId}`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ isPremium: !currentStatus })
       });
 
@@ -247,9 +245,8 @@ export const UserManagement: React.FC = () => {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`${getApiBaseUrl()}/admin/users/${userToDelete.id}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/users/${userToDelete.id}`, {
+        method: 'DELETE'
       });
 
       if (!response.ok) {

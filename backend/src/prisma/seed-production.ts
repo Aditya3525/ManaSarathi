@@ -1,10 +1,10 @@
 /**
  * Production seed: populates essential app data if it doesn't already exist.
  * Safe to run on every deploy — each section checks for existing data first.
- * Seeds: Assessment templates, Practices, Content, FAQs, Crisis Resources, Therapists.
- * Does NOT create demo users or admin accounts.
+ * Seeds: Assessment templates, Practices, Content, FAQs, Crisis Resources, Therapists, Admin user.
  */
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -234,9 +234,30 @@ async function seedTherapists() {
   console.log(`  ✅ Created ${result.count} therapists`);
 }
 
+async function seedAdminUser() {
+  const adminEmail = (process.env.ADMIN_EMAILS || 'admin@example.com').split(',')[0].trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
+  if (existing) {
+    console.log(`  ✅ Admin user already exists (${adminEmail}) — skipping`);
+    return;
+  }
+  console.log(`  🌱 Creating admin user (${adminEmail})...`);
+  const hashedPassword = await bcrypt.hash('admin123', 10);
+  await prisma.user.create({
+    data: {
+      email: adminEmail,
+      password: hashedPassword,
+      name: 'Admin',
+      isOnboarded: true,
+    }
+  });
+  console.log(`  ✅ Admin user created (${adminEmail}). Default password: admin123 — CHANGE IT IMMEDIATELY.`);
+}
+
 async function main() {
   console.log('🌱 Production seed — checking all data categories...\n');
 
+  await seedAdminUser();
   await seedAssessments();
   await seedPractices();
   await seedContent();

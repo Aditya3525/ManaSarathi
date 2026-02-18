@@ -41,6 +41,7 @@ import {
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { useNotificationStore } from '../stores/notificationStore';
 import { AdminSectionCard } from './AdminSectionCard';
 
@@ -118,9 +119,7 @@ export const AnalyticsDashboard: React.FC = () => {
   const fetchAnalytics = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${getApiBaseUrl()}/admin/analytics?timeframe=${timeframe}`, {
-        credentials: 'include'
-      });
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/analytics?timeframe=${timeframe}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

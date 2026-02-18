@@ -51,6 +51,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { AdminStatCard } from './AdminStatCard';
+import { adminFetch } from './adminApi';
 import { AdminSectionCard } from './AdminSectionCard';
 import { TherapistForm, TherapistFormData } from './TherapistForm';
 
@@ -136,7 +137,7 @@ const therapistAdminApi = {
     if (params?.limit) searchParams.set('limit', String(params.limit));
     if (params?.offset) searchParams.set('offset', String(params.offset));
 
-    const response = await fetch(`${API_BASE}/therapists?${searchParams}`, {
+    const response = await adminFetch(`${API_BASE}/therapists?${searchParams}`, {
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to fetch therapists');
@@ -145,7 +146,7 @@ const therapistAdminApi = {
   },
 
   getById: async (id: string): Promise<Therapist> => {
-    const response = await fetch(`${API_BASE}/therapists/${id}`, {
+    const response = await adminFetch(`${API_BASE}/therapists/${id}`, {
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to fetch therapist');
@@ -154,7 +155,7 @@ const therapistAdminApi = {
   },
 
   create: async (data: TherapistFormData): Promise<Therapist> => {
-    const response = await fetch(`${API_BASE}/therapists`, {
+    const response = await adminFetch(`${API_BASE}/therapists`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -169,7 +170,7 @@ const therapistAdminApi = {
   },
 
   update: async (id: string, data: TherapistFormData): Promise<Therapist> => {
-    const response = await fetch(`${API_BASE}/therapists/${id}`, {
+    const response = await adminFetch(`${API_BASE}/therapists/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -184,7 +185,7 @@ const therapistAdminApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/therapists/${id}`, {
+    const response = await adminFetch(`${API_BASE}/therapists/${id}`, {
       method: 'DELETE',
       credentials: 'include'
     });
@@ -195,7 +196,7 @@ const therapistAdminApi = {
   },
 
   updateStatus: async (id: string, status: { isActive?: boolean; isVerified?: boolean }): Promise<Therapist> => {
-    const response = await fetch(`${API_BASE}/therapists/${id}/status`, {
+    const response = await adminFetch(`${API_BASE}/therapists/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -207,7 +208,7 @@ const therapistAdminApi = {
   },
 
   getStats: async (): Promise<TherapistStats> => {
-    const response = await fetch(`${API_BASE}/therapists-stats`, {
+    const response = await adminFetch(`${API_BASE}/therapists-stats`, {
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to fetch stats');

@@ -32,6 +32,7 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Skeleton } from '../components/ui/skeleton';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { adminApi, type ApiResponse } from '../services/api';
+import { adminFetch } from './adminApi';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { ActivityLog } from './ActivityLog';
@@ -130,7 +131,7 @@ const fetchAdminCollection = async <TItem, TMapped>(
   mapFn: (item: TItem) => TMapped,
   signal?: AbortSignal
 ): Promise<TMapped[]> => {
-  const response = await fetch(`${ADMIN_API_BASE}${endpoint}`, {
+  const response = await adminFetch(`${ADMIN_API_BASE}${endpoint}`, {
     credentials: 'include',
     signal
   });

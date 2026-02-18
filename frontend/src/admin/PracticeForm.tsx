@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -138,7 +139,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
     console.log('fetchYouTubeFull called with id:', id, 'force:', force);
     setMetaLoading(true);
     try {
-      const resp = await fetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
+      const resp = await adminFetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
       console.log('Metadata response status:', resp.status);
       if (!resp.ok) {
         let msg = `Metadata request failed (${resp.status})`;
@@ -199,7 +200,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
 
   const fetchFileMetadata = async (fileUrl: string) => {
     try {
-      const resp = await fetch(`${getApiBaseUrl()}/admin/media/metadata?type=file&value=${encodeURIComponent(fileUrl)}`, { credentials: 'include' });
+      const resp = await adminFetch(`${getApiBaseUrl()}/admin/media/metadata?type=file&value=${encodeURIComponent(fileUrl)}`, { credentials: 'include' });
       if (!resp.ok) return null;
       const json = await resp.json();
       return json.success ? json : null;
@@ -212,7 +213,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
   const uploadFile = async (file: File, type: 'media' | 'thumbnail') => {
     const form = new FormData();
     form.append('file', file);
-    const resp = await fetch(`${getApiBaseUrl()}/admin/upload/${type}`, { method: 'POST', body: form, credentials: 'include' });
+    const resp = await adminFetch(`${getApiBaseUrl()}/admin/upload/${type}`, { method: 'POST', body: form, credentials: 'include' });
     if (!resp.ok) throw new Error('Upload failed');
     const data = await resp.json();
     return data.url as string;
@@ -220,7 +221,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
 
   const fetchYouTubeDuration = async (id: string) => {
     try {
-      const resp = await fetch(`${getApiBaseUrl()}/admin/youtube/metadata/${id}`, { credentials: 'include' });
+      const resp = await adminFetch(`${getApiBaseUrl()}/admin/youtube/metadata/${id}`, { credentials: 'include' });
       if (!resp.ok) return; // silent
       const json = await resp.json();
       if (json.success && json.durationMinutes && (!formData.duration || !existing)) {
@@ -360,13 +361,12 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
 
       console.log('Sending practice payload:', JSON.stringify(finalPayload, null, 2));
 
-      const response = await fetch(url, {
+      const response = await adminFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalPayload),
-        credentials: 'include'
       });
 
       if (!response.ok) {

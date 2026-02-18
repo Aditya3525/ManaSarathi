@@ -15,6 +15,7 @@ import {
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -182,7 +183,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
     setLoading(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/admin/practices`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/practices`, {
         credentials: 'include'
       });
       
@@ -216,7 +217,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
     }
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/admin/practices/${id}`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/practices/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -255,7 +256,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
   const handleBulkPublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(`${getApiBaseUrl()}/admin/bulk/practices/publish`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/practices/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -291,7 +292,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
   const handleBulkUnpublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(`${getApiBaseUrl()}/admin/bulk/practices/publish`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/practices/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -327,7 +328,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
   const handleBulkDelete = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(`${getApiBaseUrl()}/admin/bulk/practices`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/practices`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

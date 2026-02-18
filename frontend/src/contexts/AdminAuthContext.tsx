@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch, setAdminToken, getAdminToken, clearAdminToken } from '../admin/adminApi';
 
 interface Admin {
   id: string;
@@ -35,17 +36,20 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing session on mount
+  // Check for existing session on mount (uses stored adminToken via Authorization header)
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await fetch(`${getApiBaseUrl()}/admin/session`, {
-          credentials: 'include'
-        });
+        if (!getAdminToken()) {
+          return; // no token stored, skip
+        }
+        const response = await adminFetch(`${getApiBaseUrl()}/admin/session`);
         
         if (response.ok) {
           const adminData = await response.json();
           setAdmin(adminData);
+        } else {
+          clearAdminToken(); // stale token
         }
       } catch (error) {
         console.error('Session check failed:', error);
@@ -60,36 +64,27 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
   const adminLogin = async (credentials: { email: string; password: string }) => {
     setIsLoading(true);
     try {
-      console.log('Attempting admin login with:', credentials.email);
-      
       const response = await fetch(`${getApiBaseUrl()}/admin/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
-        credentials: 'include'
       });
-
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Response error text:', error);
         throw new Error(error || 'Login failed');
       }
 
       const adminData = await response.json();
-      console.log('Admin data received:', adminData);
+
+      // Store the admin JWT for all future admin requests
+      if (adminData.token) {
+        setAdminToken(adminData.token);
+      }
+
       setAdmin(adminData);
-      console.log('Admin login successful');
     } catch (error) {
       console.error('Admin login failed:', error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
       throw error;
     } finally {
       setIsLoading(false);
@@ -104,14 +99,10 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
       }
 
       const response = await fetch(`${getApiBaseUrl()}/admin/check-user-admin`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (!response.ok) {
-        return false;
-      }
+      if (!response.ok) return false;
 
       const data = await response.json();
       return data.isAdmin === true;
@@ -124,9 +115,7 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
   const adminAutoLogin = async (): Promise<boolean> => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        return false;
-      }
+      if (!token) return false;
 
       setIsLoading(true);
 
@@ -136,16 +125,17 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        credentials: 'include'
       });
 
-      if (!response.ok) {
-        console.error('Auto-login failed with status:', response.status);
-        return false;
-      }
+      if (!response.ok) return false;
 
       const adminData = await response.json();
-      console.log('Admin auto-login successful:', adminData.email);
+
+      // Store the admin JWT for all future admin requests
+      if (adminData.token) {
+        setAdminToken(adminData.token);
+      }
+
       setAdmin(adminData);
       return true;
     } catch (error) {
@@ -158,13 +148,11 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
 
   const adminLogout = async () => {
     try {
-      await fetch(`${getApiBaseUrl()}/admin/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
+      await adminFetch(`${getApiBaseUrl()}/admin/logout`, { method: 'POST' });
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
+      clearAdminToken();
       setAdmin(null);
     }
   };

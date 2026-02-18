@@ -47,6 +47,7 @@ import { Textarea } from '../components/ui/textarea';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { AdminSectionCard } from './AdminSectionCard';
+import { adminFetch } from './adminApi';
 import { AdminStatCard } from './AdminStatCard';
 
 // Types
@@ -100,7 +101,7 @@ const faqAdminApi = {
   },
 
   create: async (data: FAQFormData): Promise<FAQ> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/faq`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/faq`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -112,7 +113,7 @@ const faqAdminApi = {
   },
 
   update: async (id: string, data: Partial<FAQFormData>): Promise<FAQ> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/faq/${id}`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/faq/${id}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -124,7 +125,7 @@ const faqAdminApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/faq/${id}`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/faq/${id}`, {
       method: 'DELETE',
       credentials: 'include'
     });

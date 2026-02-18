@@ -80,8 +80,11 @@ try {
   console.warn('FFmpeg setup warning:', e);
 }
 
-// Admin emails (can be moved to environment variables)
-const ADMIN_EMAILS = ['admin@example.com', 'admin@mentalwellbeing.ai'];
+// Admin emails – configurable via ADMIN_EMAILS env var (comma-separated)
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@example.com,admin@mentalwellbeing.ai')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
 
 // Multer storage configuration with validation
 const ALLOWED_AUDIO = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/m4a', 'audio/aac'];
@@ -351,27 +354,10 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Store in session with regeneration and save to ensure persistence
-    const beforeId = (req as any).sessionID;
-    req.session.regenerate((regenErr) => {
-      if (regenErr) {
-        console.error('Admin login session regenerate error:', regenErr);
-        return res.status(500).json({ error: 'Session error' });
-      }
-      (req.session as any).adminToken = token;
-      (req.session as any).adminId = user.id;
-      const afterId = (req as any).sessionID;
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error('Admin login session save error:', saveErr);
-          return res.status(500).json({ error: 'Session error' });
-        }
-        console.log('Admin login success', { email: user.email, sessionBefore: beforeId, sessionAfter: afterId });
-        // Return admin data (without password)
-        const { password: _, ...adminData } = user as any;
-        res.json({ ...adminData, role: 'Admin' });
-      });
-    });
+    // Return token in response body for cross-domain compatibility
+    console.log('Admin login success', { email: user.email });
+    const { password: _, ...adminData } = user as any;
+    res.json({ ...adminData, role: 'Admin', token });
   } catch (error) {
     console.error('Admin login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -456,40 +442,26 @@ router.post('/auto-login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Store in session
-    const beforeId = (req as any).sessionID;
-    req.session.regenerate((regenErr) => {
-      if (regenErr) {
-        console.error('Admin auto-login session regenerate error:', regenErr);
-        return res.status(500).json({ error: 'Session error' });
-      }
-      (req.session as any).adminToken = adminToken;
-      (req.session as any).adminId = user.id;
-      const afterId = (req as any).sessionID;
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error('Admin auto-login session save error:', saveErr);
-          return res.status(500).json({ error: 'Session error' });
-        }
-        console.log('Admin auto-login success', { email: user.email, sessionBefore: beforeId, sessionAfter: afterId });
-        // Return admin data
-        const { password: _, ...adminData } = user as any;
-        res.json({ ...adminData, role: 'Admin' });
-      });
-    });
+    // Return token in response body for cross-domain compatibility
+    console.log('Admin auto-login success', { email: user.email });
+    const { password: _, ...adminData } = user as any;
+    res.json({ ...adminData, role: 'Admin', token: adminToken });
   } catch (error) {
     console.error('Admin auto-login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Check admin session
+// Check admin session (supports Authorization header and session cookie)
 router.get('/session', async (req, res) => {
   try {
-    const token = (req.session as any).adminToken;
-    const sid = (req as any).sessionID;
+    // Try Authorization header first (cross-domain), then fall back to session
+    const authHeader = req.headers.authorization;
+    const token = (authHeader && authHeader.startsWith('Bearer '))
+      ? authHeader.substring(7)
+      : (req.session as any).adminToken;
+
     if (!token) {
-      console.warn('Admin session check: no token in session', { sid });
       return res.status(401).json({ error: 'No admin session' });
     }
 
@@ -519,13 +491,18 @@ router.get('/session', async (req, res) => {
   }
 });
 
-// Middleware to check admin authentication
+// Middleware to check admin authentication (supports Authorization header and session)
 export const requireAdmin = async (req: any, res: any, next: any) => {
   try {
-    const token = (req.session as any).adminToken;
+    // Try Authorization header first (cross-domain), then fall back to session
+    const authHeader = req.headers.authorization;
+    const token = (authHeader && authHeader.startsWith('Bearer '))
+      ? authHeader.substring(7)
+      : (req.session as any)?.adminToken;
+
     if (!token) {
-      console.error('Admin middleware: No admin token in session');
-      return res.status(401).json({ error: 'Admin authentication required', details: 'No session token' });
+      console.error('Admin middleware: No admin token found (checked Authorization header and session)');
+      return res.status(401).json({ error: 'Admin authentication required', details: 'No token' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;

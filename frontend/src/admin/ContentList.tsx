@@ -15,6 +15,7 @@ import {
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -87,7 +88,7 @@ export const ContentList: React.FC<ContentListProps> = ({
 
     setLoading(true);
     try {
-      const response = await fetch(getApiUrl('/api/admin/content'), {
+      const response = await adminFetch(getApiUrl('/api/admin/content'), {
         credentials: 'include'
       });
       
@@ -143,7 +144,7 @@ export const ContentList: React.FC<ContentListProps> = ({
     }
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/admin/content/${id}`, {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/content/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -182,7 +183,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkPublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(getApiUrl('/api/admin/bulk/content/publish'), {
+      const response = await adminFetch(getApiUrl('/api/admin/bulk/content/publish'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -218,7 +219,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkUnpublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(getApiUrl('/api/admin/bulk/content/publish'), {
+      const response = await adminFetch(getApiUrl('/api/admin/bulk/content/publish'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -254,7 +255,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkDelete = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await fetch(getApiUrl('/api/admin/bulk/content'), {
+      const response = await adminFetch(getApiUrl('/api/admin/bulk/content'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -49,6 +49,7 @@ import { Textarea } from '../components/ui/textarea';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { AdminSectionCard } from './AdminSectionCard';
+import { adminFetch } from './adminApi';
 import { AdminStatCard } from './AdminStatCard';
 
 // Types
@@ -110,7 +111,7 @@ const crisisResourceAdminApi = {
   },
 
   create: async (data: CrisisResourceFormData): Promise<CrisisResource> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/crisis/resources`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/crisis/resources`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -122,7 +123,7 @@ const crisisResourceAdminApi = {
   },
 
   update: async (id: string, data: Partial<CrisisResourceFormData>): Promise<CrisisResource> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/crisis/resources/${id}`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/crisis/resources/${id}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -134,7 +135,7 @@ const crisisResourceAdminApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/api/admin/help-safety/crisis/resources/${id}`, {
+    const response = await adminFetch(`${API_BASE}/api/admin/help-safety/crisis/resources/${id}`, {
       method: 'DELETE',
       credentials: 'include'
     });

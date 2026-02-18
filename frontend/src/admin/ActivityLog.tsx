@@ -13,6 +13,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -160,7 +161,7 @@ export const ActivityLog: React.FC = () => {
 
   const fetchFilterOptions = useCallback(async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/admin/activity-logs/filters`);
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/activity-logs/filters`);
       const result = await response.json();
 
       if (result?.success) {
@@ -184,7 +185,7 @@ export const ActivityLog: React.FC = () => {
       if (entityTypeFilter !== 'all') params.append('entityType', entityTypeFilter);
       if (adminFilter !== 'all') params.append('adminEmail', adminFilter);
 
-      const response = await fetch(`${getApiBaseUrl()}/admin/activity-logs/stats?${params}`);
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/activity-logs/stats?${params}`);
       const result = await response.json();
 
       if (result?.success) {
@@ -218,7 +219,7 @@ export const ActivityLog: React.FC = () => {
         if (entityType !== 'all') params.append('entityType', entityType);
         if (admin !== 'all') params.append('adminEmail', admin);
 
-        const response = await fetch(`${getApiBaseUrl()}/admin/activity-logs?${params}`);
+        const response = await adminFetch(`${getApiBaseUrl()}/admin/activity-logs?${params}`);
         const result = await response.json();
 
         if (!result?.success) {
@@ -257,7 +258,7 @@ export const ActivityLog: React.FC = () => {
       if (entityTypeFilter !== 'all') params.append('entityType', entityTypeFilter);
       if (adminFilter !== 'all') params.append('adminEmail', adminFilter);
 
-      const response = await fetch(`${getApiBaseUrl()}/admin/activity-logs/export?${params}`);
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/activity-logs/export?${params}`);
 
       if (!response.ok) {
         throw new Error('Export request failed');
