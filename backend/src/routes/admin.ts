@@ -480,7 +480,7 @@ router.get('/session', async (req, res) => {
     });
 
     if (!admin || !ADMIN_EMAILS.includes(admin.email)) {
-      console.warn('Admin session check: invalid admin or not whitelisted', { sid, decodedId: (decoded as any)?.id });
+      console.warn('Admin session check: invalid admin or not whitelisted', { decodedId: (decoded as any)?.id });
       return res.status(401).json({ error: 'Invalid admin session' });
     }
 
