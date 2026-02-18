@@ -88,7 +88,7 @@ export const ContentList: React.FC<ContentListProps> = ({
 
     setLoading(true);
     try {
-      const response = await adminFetch(getApiUrl('/api/admin/content'), {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/content`, {
         credentials: 'include'
       });
       
@@ -183,7 +183,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkPublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await adminFetch(getApiUrl('/api/admin/bulk/content/publish'), {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/content/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -219,7 +219,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkUnpublish = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await adminFetch(getApiUrl('/api/admin/bulk/content/publish'), {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/content/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -255,7 +255,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const handleBulkDelete = async () => {
     try {
       setIsBulkActionLoading(true);
-      const response = await adminFetch(getApiUrl('/api/admin/bulk/content'), {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/bulk/content`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

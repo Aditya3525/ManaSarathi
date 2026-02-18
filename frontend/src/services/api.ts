@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch, getAdminToken } from '../admin/adminApi';
 
 // API Configuration - uses shared dynamic URL detection
 const API_BASE_URL = getApiBaseUrl();
@@ -1052,45 +1053,57 @@ export const crisisApi = {
   }
 };
 
-// Admin API
+// Admin API — uses adminFetch to attach the admin JWT token
+async function adminRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+  const response = await adminFetch(url, { ...options, headers });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `Admin request failed: ${response.status}`);
+  }
+  return data;
+}
+
 export const adminApi = {
-  // Assessments
   async listAssessments(params?: { category?: string; isActive?: boolean; search?: string }) {
     const query = new URLSearchParams();
     if (params?.category) query.append('category', params.category);
     if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
     if (params?.search) query.append('search', params.search);
-
-    const queryString = query.toString();
-    return apiClient.get(`/admin/assessments${queryString ? `?${queryString}` : ''}`);
+    const qs = query.toString();
+    return adminRequest(`/admin/assessments${qs ? `?${qs}` : ''}`);
   },
 
   async getAssessment(id: string) {
-    return apiClient.get(`/admin/assessments/${id}`);
+    return adminRequest(`/admin/assessments/${id}`);
   },
 
   async createAssessment(data: any) {
-    return apiClient.post('/admin/assessments', data);
+    return adminRequest('/admin/assessments', { method: 'POST', body: JSON.stringify(data) });
   },
 
   async updateAssessment(id: string, data: any) {
-    return apiClient.put(`/admin/assessments/${id}`, data);
+    return adminRequest(`/admin/assessments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
 
   async deleteAssessment(id: string) {
-    return apiClient.delete(`/admin/assessments/${id}`);
+    return adminRequest(`/admin/assessments/${id}`, { method: 'DELETE' });
   },
 
   async duplicateAssessment(id: string) {
-    return apiClient.post(`/admin/assessments/${id}/duplicate`);
+    return adminRequest(`/admin/assessments/${id}/duplicate`, { method: 'POST' });
   },
 
   async previewAssessment(id: string, responses: Record<string, string>) {
-    return apiClient.post(`/admin/assessments/${id}/preview`, { responses });
+    return adminRequest(`/admin/assessments/${id}/preview`, { method: 'POST', body: JSON.stringify({ responses }) });
   },
 
   async getAssessmentCategories() {
-    return apiClient.get('/admin/assessments/categories');
+    return adminRequest('/admin/assessments/categories');
   }
 };
 

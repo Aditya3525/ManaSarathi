@@ -31,6 +31,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Skeleton } from '../components/ui/skeleton';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { adminApi, type ApiResponse } from '../services/api';
 import { adminFetch } from './adminApi';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -124,7 +125,7 @@ const mapContent = (rec: ContentRecord): ContentItem => {
   };
 };
 
-const ADMIN_API_BASE = '/api/admin';
+const ADMIN_API_BASE = `${getApiBaseUrl()}/admin`;
 
 const fetchAdminCollection = async <TItem, TMapped>(
   endpoint: string,

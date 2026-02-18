@@ -320,7 +320,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
         }
       }
 
-      const url = existing ? `/api/admin/practices/${existing.id}` : '/api/admin/practices';
+      const url = existing ? `${getApiBaseUrl()}/admin/practices/${existing.id}` : `${getApiBaseUrl()}/admin/practices`;
       const method = existing ? 'PUT' : 'POST';
       
       // Build payload with level as difficulty for backend compatibility

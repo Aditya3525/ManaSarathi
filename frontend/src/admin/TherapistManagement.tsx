@@ -48,6 +48,7 @@ import {
   SelectValue
 } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { AdminStatCard } from './AdminStatCard';
@@ -115,7 +116,7 @@ const SPECIALTIES = [
   'EMDR', 'MINDFULNESS', 'PSYCHODYNAMIC', 'COUPLES_THERAPY'
 ];
 
-const API_BASE = '/api/admin';
+const API_BASE = `${getApiBaseUrl()}/admin`;
 
 // API Functions
 const therapistAdminApi = {

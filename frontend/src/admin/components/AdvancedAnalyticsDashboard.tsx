@@ -5,7 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Activity, Brain, AlertTriangle, TrendingUp, Users, Database } from 'lucide-react';
-import axios from 'axios';
+
+import { getApiBaseUrl } from '../../config/apiConfig';
+import { adminFetch } from '../adminApi';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -30,12 +32,9 @@ export function AdvancedAnalyticsDashboard() {
   const { data: analytics, isLoading, error } = useQuery({
     queryKey: ['comprehensive-analytics', timeframe],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const response = await axios.get<{ success: boolean; data: ComprehensiveAnalytics }>(
-        `/api/admin/analytics/comprehensive?timeframe=${timeframe}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      return response.data.data;
+      const res = await adminFetch(`${getApiBaseUrl()}/admin/analytics/comprehensive?timeframe=${timeframe}`);
+      const responseData = await res.json() as { success: boolean; data: ComprehensiveAnalytics };
+      return responseData.data;
     },
     refetchInterval: 60000 // Refresh every minute
   });

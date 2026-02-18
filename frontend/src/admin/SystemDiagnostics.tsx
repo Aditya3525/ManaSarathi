@@ -3,6 +3,8 @@ import axios from 'axios';
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Database, Brain, Shield, Activity, MessageSquare, FileText, Copy, Check, Youtube, KeyRound } from 'lucide-react';
 import React, { useState } from 'react';
 
+import { getApiBaseUrl } from '../config/apiConfig';
+import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -297,18 +299,16 @@ export function SystemDiagnostics() {
   const testAnalytics = async () => {
     updateTest('analytics', { status: 'testing' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/admin/analytics/comprehensive?timeframe=7d', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await adminFetch(`${getApiBaseUrl()}/admin/analytics/comprehensive?timeframe=7d`);
+      const responseData = await res.json();
       
-      if (response.data.success) {
+      if (responseData.success) {
         updateTest('analytics', { 
           status: 'success', 
           message: 'Analytics system operational',
           details: { 
-            aiMetrics: response.data.data.aiPerformance !== undefined,
-            crisisMetrics: response.data.data.crisisDetection !== undefined
+            aiMetrics: responseData.data.aiPerformance !== undefined,
+            crisisMetrics: responseData.data.crisisDetection !== undefined
           }
         });
       } else {
@@ -318,9 +318,9 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'Analytics test failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
+        statusText: err.statusText,
+        data: undefined,
         code: err.code
       };
       updateTest('analytics', { 
@@ -334,13 +334,11 @@ export function SystemDiagnostics() {
   const testSystemHealth = async () => {
     updateTest('health', { status: 'testing' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/admin/analytics/system-health?timeframe=7d', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await adminFetch(`${getApiBaseUrl()}/admin/analytics/system-health?timeframe=7d`);
+      const responseData = await res.json();
       
-      if (response.data.success) {
-        const health = response.data.data;
+      if (responseData.success) {
+        const health = responseData.data;
         updateTest('health', { 
           status: 'success', 
           message: `Avg API response: ${Math.round(health.api.avgResponseTime)}ms`,
@@ -353,9 +351,9 @@ export function SystemDiagnostics() {
       const err = error as any;
       const errorDetails = {
         message: err.message || 'System health test failed',
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
+        status: err.status,
+        statusText: err.statusText,
+        data: undefined,
         code: err.code
       };
       updateTest('health', { 

@@ -293,7 +293,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         }
       }
 
-      const url = existing ? `/api/admin/content/${existing.id}` : '/api/admin/content';
+      const url = existing ? `${getApiBaseUrl()}/admin/content/${existing.id}` : `${getApiBaseUrl()}/admin/content`;
       const method = existing ? 'PUT' : 'POST';
       
       // Build payload matching backend requirements
