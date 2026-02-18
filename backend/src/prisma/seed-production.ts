@@ -175,112 +175,63 @@ async function seedCrisisResources() {
 }
 
 async function seedTherapists() {
-  // Check if therapists already have linked User accounts
-  const unlinked = await prisma.therapist.count({ where: { userId: null } });
-  const total = await prisma.therapist.count();
-  if (total > 0 && unlinked === 0) {
-    console.log(`  ✅ Therapists already exist with login accounts (${total}) — skipping`);
+  const count = await prisma.therapist.count();
+  if (count > 0) {
+    console.log(`  ✅ Therapists already exist (${count}) — skipping`);
     return;
   }
-  console.log('  🌱 Seeding therapist directory (with login accounts)...');
-
-  // Default password for all demo therapists — change in production
-  const defaultPassword = process.env.THERAPIST_DEFAULT_PASSWORD || 'Therapist@123';
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
-  const therapistData = [
-    {
-      name: 'Dr. Sarah Johnson', credential: 'PSYCHOLOGIST' as const, title: 'Clinical Psychologist, PhD',
-      bio: 'Specializes in CBT and mindfulness-based interventions with 15+ years of experience helping clients manage anxiety, depression, and stress.',
-      specialties: ['Anxiety', 'Depression', 'Stress Management', 'CBT', 'Mindfulness'],
-      email: 'sarah.johnson@example.com', phone: '(555) 123-4567',
-      city: 'San Francisco', state: 'CA', country: 'US',
-      acceptsInsurance: true, sessionFee: 150, offersSliding: true,
-      yearsExperience: 15, languages: 'English, Spanish'
-    },
-    {
-      name: 'Michael Chen, LCSW', credential: 'LCSW' as const, title: 'Licensed Clinical Social Worker',
-      bio: 'Specializes in trauma-informed care and EMDR therapy for individuals who have experienced trauma, PTSD, grief, and relationship issues.',
-      specialties: ['Trauma', 'PTSD', 'EMDR', 'Grief', 'Relationship Issues'],
-      email: 'michael.chen@example.com', phone: '(555) 234-5678',
-      city: 'Los Angeles', state: 'CA', country: 'US',
-      acceptsInsurance: true, sessionFee: 120, offersSliding: true,
-      yearsExperience: 10, languages: 'English, Mandarin'
-    },
-    {
-      name: 'Dr. Emily Rodriguez', credential: 'PSYCHIATRIST' as const, title: 'Board-Certified Psychiatrist, MD',
-      bio: 'Expertise in medication management for depression, anxiety, bipolar disorder. Takes a holistic approach combining medication with therapy referrals.',
-      specialties: ['Medication Management', 'Depression', 'Anxiety', 'Bipolar Disorder'],
-      email: 'emily.rodriguez@example.com', phone: '(555) 345-6789',
-      city: 'New York', state: 'NY', country: 'US',
-      acceptsInsurance: true, sessionFee: 200, offersSliding: false,
-      yearsExperience: 12, languages: 'English, Spanish'
-    },
-    {
-      name: 'Jessica Williams, LMFT', credential: 'LMFT' as const, title: 'Licensed Marriage and Family Therapist',
-      bio: 'Specializes in couples therapy, family therapy, and relationship counseling with a collaborative, strengths-based approach.',
-      specialties: ['Couples Therapy', 'Family Therapy', 'Relationship Issues', 'Communication'],
-      email: 'jessica.williams@example.com', phone: '(555) 456-7890',
-      city: 'Seattle', state: 'WA', country: 'US',
-      acceptsInsurance: true, sessionFee: 140, offersSliding: true,
-      yearsExperience: 8, languages: 'English'
-    },
-    {
-      name: 'Dr. James Thompson', credential: 'PSYCHOLOGIST' as const, title: 'Clinical Psychologist, PsyD',
-      bio: 'Specializes in treating OCD, panic disorder, and phobias using Exposure and Response Prevention (ERP) and CBT.',
-      specialties: ['OCD', 'Panic Disorder', 'Phobias', 'ERP', 'CBT', 'Anxiety Disorders'],
-      email: 'james.thompson@example.com', phone: '(555) 567-8901',
-      city: 'Boston', state: 'MA', country: 'US',
-      acceptsInsurance: true, sessionFee: 160, offersSliding: false,
-      yearsExperience: 18, languages: 'English'
-    }
-  ];
-
-  let created = 0;
-  for (const t of therapistData) {
-    // Create or find the User account for this therapist
-    let user = await prisma.user.findUnique({ where: { email: t.email } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email: t.email,
-          name: t.name,
-          password: hashedPassword,
-          isOnboarded: true,
-        }
-      });
-    } else if (!user.password) {
-      // User exists but has no password — set one so they can log in
-      await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
-    }
-
-    // Create or update Therapist record linked to User
-    const existing = await prisma.therapist.findFirst({ where: { email: t.email } });
-    if (!existing) {
-      await prisma.therapist.create({
-        data: {
-          name: t.name, credential: t.credential, title: t.title, bio: t.bio,
-          specialtiesJson: JSON.stringify(t.specialties),
-          email: t.email, phone: t.phone,
-          city: t.city, state: t.state, country: t.country,
-          acceptsInsurance: t.acceptsInsurance, sessionFee: t.sessionFee, offersSliding: t.offersSliding,
-          yearsExperience: t.yearsExperience, languages: t.languages,
-          isVerified: true, isActive: true,
-          userId: user.id  // Link to User account for portal login
-        }
-      });
-      created++;
-    } else if (!existing.userId) {
-      // Existing therapist without a linked User account — link it now
-      await prisma.therapist.update({
-        where: { id: existing.id },
-        data: { userId: user.id }
-      });
-      created++;
-    }
-  }
-  console.log(`  ✅ Created ${created} therapists with login accounts`);
-  console.log(`  📋 Demo therapist login: any email above with password "${defaultPassword}"`);
+  console.log('  🌱 Seeding therapist directory...');
+  const result = await prisma.therapist.createMany({
+    data: [
+      {
+        name: 'Dr. Sarah Johnson', credential: 'PSYCHOLOGIST', title: 'Clinical Psychologist, PhD',
+        bio: 'Specializes in CBT and mindfulness-based interventions with 15+ years of experience helping clients manage anxiety, depression, and stress.',
+        specialtiesJson: JSON.stringify(['Anxiety', 'Depression', 'Stress Management', 'CBT', 'Mindfulness']),
+        email: 'sarah.johnson@example.com', phone: '(555) 123-4567',
+        city: 'San Francisco', state: 'CA', country: 'US',
+        acceptsInsurance: true, sessionFee: 150, offersSliding: true,
+        yearsExperience: 15, languages: 'English, Spanish', isVerified: true, isActive: true
+      },
+      {
+        name: 'Michael Chen, LCSW', credential: 'LCSW', title: 'Licensed Clinical Social Worker',
+        bio: 'Specializes in trauma-informed care and EMDR therapy for individuals who have experienced trauma, PTSD, grief, and relationship issues.',
+        specialtiesJson: JSON.stringify(['Trauma', 'PTSD', 'EMDR', 'Grief', 'Relationship Issues']),
+        email: 'michael.chen@example.com', phone: '(555) 234-5678',
+        city: 'Los Angeles', state: 'CA', country: 'US',
+        acceptsInsurance: true, sessionFee: 120, offersSliding: true,
+        yearsExperience: 10, languages: 'English, Mandarin', isVerified: true, isActive: true
+      },
+      {
+        name: 'Dr. Emily Rodriguez', credential: 'PSYCHIATRIST', title: 'Board-Certified Psychiatrist, MD',
+        bio: 'Expertise in medication management for depression, anxiety, bipolar disorder. Takes a holistic approach combining medication with therapy referrals.',
+        specialtiesJson: JSON.stringify(['Medication Management', 'Depression', 'Anxiety', 'Bipolar Disorder']),
+        email: 'emily.rodriguez@example.com', phone: '(555) 345-6789',
+        city: 'New York', state: 'NY', country: 'US',
+        acceptsInsurance: true, sessionFee: 200, offersSliding: false,
+        yearsExperience: 12, languages: 'English, Spanish', isVerified: true, isActive: true
+      },
+      {
+        name: 'Jessica Williams, LMFT', credential: 'LMFT', title: 'Licensed Marriage and Family Therapist',
+        bio: 'Specializes in couples therapy, family therapy, and relationship counseling with a collaborative, strengths-based approach.',
+        specialtiesJson: JSON.stringify(['Couples Therapy', 'Family Therapy', 'Relationship Issues', 'Communication']),
+        email: 'jessica.williams@example.com', phone: '(555) 456-7890',
+        city: 'Seattle', state: 'WA', country: 'US',
+        acceptsInsurance: true, sessionFee: 140, offersSliding: true,
+        yearsExperience: 8, languages: 'English', isVerified: true, isActive: true
+      },
+      {
+        name: 'Dr. James Thompson', credential: 'PSYCHOLOGIST', title: 'Clinical Psychologist, PsyD',
+        bio: 'Specializes in treating OCD, panic disorder, and phobias using Exposure and Response Prevention (ERP) and CBT.',
+        specialtiesJson: JSON.stringify(['OCD', 'Panic Disorder', 'Phobias', 'ERP', 'CBT', 'Anxiety Disorders']),
+        email: 'james.thompson@example.com', phone: '(555) 567-8901',
+        city: 'Boston', state: 'MA', country: 'US',
+        acceptsInsurance: true, sessionFee: 160, offersSliding: false,
+        yearsExperience: 18, languages: 'English', isVerified: true, isActive: true
+      }
+    ],
+    skipDuplicates: true
+  });
+  console.log(`  ✅ Created ${result.count} therapists`);
 }
 
 async function seedAdminUser() {
