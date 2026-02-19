@@ -388,6 +388,45 @@ function AppInner() {
     }
   }, [user, adminUser, adminAutoLogin]);
 
+  // Keep auth/session state synchronized across browser tabs.
+  useEffect(() => {
+    const handleStorage = async (event: StorageEvent) => {
+      if (event.key !== 'auth-storage' && event.key !== 'token') {
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        logoutFromStore();
+        setActiveSession(null);
+        queryClient.removeQueries({ queryKey: ['dashboard'] });
+
+        if (!PUBLIC_PAGES.has(currentPage) && !THERAPIST_PAGES.has(currentPage)) {
+          navigateTo('landing');
+        }
+        return;
+      }
+
+      try {
+        const latestUser = await getCurrentUser();
+        if (!latestUser) {
+          logoutFromStore();
+          setActiveSession(null);
+          queryClient.removeQueries({ queryKey: ['dashboard'] });
+          return;
+        }
+
+        setUser(latestUser, token);
+      } catch (error) {
+        console.error('Cross-tab auth sync failed:', error);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [currentPage, logoutFromStore, navigateTo, setUser]);
+
   const startGoogleOAuth = useCallback(() => {
     window.location.assign(`${getServerBaseUrl()}/api/auth/google`);
   }, []);

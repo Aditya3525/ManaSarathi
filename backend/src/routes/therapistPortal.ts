@@ -1,10 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { BookingStatus } from '@prisma/client';
+import prisma from '../config/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // ─── Helper: extract therapist JWT from Authorization header (or session fallback) ───
 function extractTherapistToken(req: any): string | null {
@@ -255,6 +255,7 @@ router.put('/bookings/:id/status', requireTherapist, async (req: any, res) => {
         if (!['CONFIRMED', 'CANCELLED', 'COMPLETED'].includes(status)) {
             return res.status(400).json({ error: 'Invalid status. Must be CONFIRMED, CANCELLED, or COMPLETED' });
         }
+        const nextStatus = status as BookingStatus;
 
         const normalizedNotes = typeof therapistNotes === 'string' ? therapistNotes.trim() : '';
         if (status === 'CANCELLED' && normalizedNotes.length < 3) {
@@ -270,14 +271,38 @@ router.put('/bookings/:id/status', requireTherapist, async (req: any, res) => {
             return res.status(404).json({ error: 'Booking not found' });
         }
 
-        const updated = await prisma.therapistBooking.update({
-            where: { id },
+        const allowedFromStatuses: BookingStatus[] =
+            nextStatus === 'COMPLETED'
+                ? ['CONFIRMED']
+                : ['PENDING'];
+
+        const updateResult = await prisma.therapistBooking.updateMany({
+            where: {
+                id,
+                therapistId: req.therapist.id,
+                status: { in: allowedFromStatuses }
+            },
             data: {
-                status,
+                status: nextStatus,
                 ...(therapistNotes !== undefined && { therapistNotes: normalizedNotes || null }),
                 processedBy: req.therapist.name,
                 processedAt: new Date()
-            },
+            }
+        });
+
+        if (updateResult.count === 0) {
+            const latest = await prisma.therapistBooking.findFirst({
+                where: { id, therapistId: req.therapist.id },
+                select: { status: true }
+            });
+
+            return res.status(409).json({
+                error: `Booking status was already updated to ${latest?.status ?? 'an unknown state'}. Please refresh.`
+            });
+        }
+
+        const updated = await prisma.therapistBooking.findUnique({
+            where: { id },
             include: {
                 user: { select: { id: true, name: true, email: true } }
             }

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+
+import { useAuthStore } from '../stores/authStore';
 
 import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 
@@ -226,94 +227,59 @@ async function refreshInsights(token: string): Promise<InsightsResponse> {
 
 // Custom hooks
 export function useDashboardData() {
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useQuery({
-    queryKey: ['dashboard', 'summary'],
+    queryKey: ['dashboard', 'summary', userId],
     queryFn: () => fetchDashboardSummary(token!),
-    enabled: !!token,
+    enabled: !!token && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: true,
   });
 }
 
 export function useInsights() {
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useQuery({
-    queryKey: ['dashboard', 'insights'],
+    queryKey: ['dashboard', 'insights', userId],
     queryFn: () => fetchInsights(token!),
-    enabled: !!token,
+    enabled: !!token && !!userId,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 }
 
 export function useWeeklyProgress() {
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useQuery({
-    queryKey: ['dashboard', 'weekly-progress'],
+    queryKey: ['dashboard', 'weekly-progress', userId],
     queryFn: () => fetchWeeklyProgress(token!),
-    enabled: !!token,
+    enabled: !!token && !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
   });
 }
 
 export function useRecommendedPractice() {
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useQuery({
-    queryKey: ['dashboard', 'recommended-practice'],
+    queryKey: ['dashboard', 'recommended-practice', userId],
     queryFn: () => fetchRecommendedPractice(token!),
-    enabled: !!token,
+    enabled: !!token && !!userId,
     staleTime: 15 * 60 * 1000, // 15 minutes
   });
 }
 
 export function useSaveMood() {
   const queryClient = useQueryClient();
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useMutation({
     mutationFn: ({ mood, notes }: { mood: string; notes?: string }) =>
@@ -322,28 +288,28 @@ export function useSaveMood() {
       // Invalidate and refetch dashboard data
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
+    onSettled: () => {
+      // Keep user-specific widgets in sync under concurrent updates.
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary', userId] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard', 'weekly-progress', userId] });
+      }
+    },
   });
 }
 
 export function useRefreshInsights() {
   const queryClient = useQueryClient();
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get token from localStorage (stored by TokenManager in api.ts)
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useMutation({
     mutationFn: () => refreshInsights(token!),
     onSuccess: (data) => {
       // Update the insights cache with fresh data
-      queryClient.setQueryData(['dashboard', 'insights'], data);
+      queryClient.setQueryData(['dashboard', 'insights', userId], data);
       // Also invalidate summary to reflect updated insights
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary', userId] });
     },
   });
 }

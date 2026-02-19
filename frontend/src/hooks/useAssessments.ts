@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '../lib/queryClient';
 import { assessmentsApi } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 import { useNotificationStore } from '../stores/notificationStore';
 
 /**
@@ -50,8 +51,11 @@ export function useAvailableAssessments() {
  * Fetch assessment history for current user
  */
 export function useAssessmentHistory(options?: { enabled?: boolean }) {
+  const userId = useAuthStore((state) => state.user?.id);
+  const token = useAuthStore((state) => state.token);
+
   return useQuery({
-    queryKey: queryKeys.assessmentHistory(),
+    queryKey: queryKeys.assessmentHistory(userId),
     queryFn: async () => {
       const response = await assessmentsApi.getAssessmentHistory();
       if (!response.success) {
@@ -60,7 +64,7 @@ export function useAssessmentHistory(options?: { enabled?: boolean }) {
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // Cache for 2 minutes
-    enabled: options?.enabled ?? true, // Only run if enabled
+    enabled: (options?.enabled ?? true) && !!userId && !!token, // Only run if enabled for authenticated user
   });
 }
 
@@ -68,8 +72,11 @@ export function useAssessmentHistory(options?: { enabled?: boolean }) {
  * Fetch assessment insights (returns both history and insights)
  */
 export function useAssessmentInsights() {
+  const userId = useAuthStore((state) => state.user?.id);
+  const token = useAuthStore((state) => state.token);
+
   return useQuery({
-    queryKey: queryKeys.assessmentInsights(),
+    queryKey: queryKeys.assessmentInsights(userId),
     queryFn: async () => {
       const response = await assessmentsApi.getAssessmentHistory();
       if (!response.success) {
@@ -78,6 +85,7 @@ export function useAssessmentInsights() {
       return response.data?.insights;
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    enabled: !!userId && !!token,
   });
 }
 
@@ -86,6 +94,7 @@ export function useAssessmentInsights() {
  */
 export function useSubmitAssessment() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.user?.id);
   const { push } = useNotificationStore();
 
   return useMutation({
@@ -102,8 +111,8 @@ export function useSubmitAssessment() {
     },
     onSuccess: () => {
       // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.assessments });
       
       push({
@@ -155,6 +164,7 @@ export function useStartAssessmentSession() {
  */
 export function useCompleteAssessmentSession() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.user?.id);
 
   return useMutation({
     mutationFn: async (sessionId: string) => {
@@ -167,8 +177,8 @@ export function useCompleteAssessmentSession() {
     onSuccess: () => {
       // Invalidate all assessment-related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.assessments });
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
     },
   });
 }
