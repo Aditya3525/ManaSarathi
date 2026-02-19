@@ -1049,7 +1049,7 @@ function AppInner() {
           />
         );
       case 'landing':
-        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} onNavigate={(page) => navigateTo(page as Page)} />;
       case 'oauth-callback':
         return <OAuthCallback onAuthSuccess={handleOAuthSuccess} onAuthError={handleOAuthError} />;
       case 'password-setup':
@@ -1185,7 +1185,7 @@ function AppInner() {
         return <HelpSafety onNavigate={navigateTo} userRegion={user?.region} />;
       case 'admin':
         // Show admin dashboard if admin session exists (either old 'admin' or new 'adminUser')
-        return (admin || adminUser) ? <AdminDashboard /> : <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+        return (admin || adminUser) ? <AdminDashboard /> : <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} onNavigate={(page) => navigateTo(page as Page)} />;
       case 'therapist-login':
         return (
           <TherapistLoginPage
@@ -1205,7 +1205,7 @@ function AppInner() {
           <div className="flex items-center justify-center h-screen text-muted-foreground">Loading therapist portal...</div>
         );
       default:
-        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} />;
+        return <LandingPage onSignUp={signUp} onLogin={login} onAdminLogin={handleAdminLogin} authError={authError} loginError={loginError} onNavigate={(page) => navigateTo(page as Page)} />;
     }
   };
   return (

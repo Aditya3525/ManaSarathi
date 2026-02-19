@@ -50,9 +50,10 @@ interface LandingPageProps {
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
   loginError?: { message?: string } | null;
+  onNavigate?: (page: string) => void;
 }
 
-export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginError }: LandingPageProps) {
+export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginError, onNavigate }: LandingPageProps) {
   const device = useDevice();
   const analytics = useAnalytics();
   const [email, setEmail] = useState('');
@@ -1082,12 +1083,13 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   </button>
                 </li>
                 <li>
-                  <a
-                    href="/therapist_login"
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('therapist-login')}
                     className="inline-flex items-center py-2 text-xs opacity-50 transition-opacity hover:opacity-100"
                   >
                     Therapist Portal Access
-                  </a>
+                  </button>
                 </li>
               </ul>
             </nav>
