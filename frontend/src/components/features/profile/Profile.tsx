@@ -19,6 +19,7 @@ import {
   FileDown,
   CheckCircle2
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
@@ -67,6 +68,7 @@ interface ProfileProps {
 }
 
 export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
+  const queryClient = useQueryClient();
   const device = useDevice();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -333,6 +335,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
       // Merge returned user with existing user data to preserve all fields (like isOnboarded)
       const updatedUser = { ...user, ...resp.data.user };
       setUser(updatedUser as ProfileUser);
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       setSaveSuccess(true);
       setIsEditing(false);
     } catch (e) {
@@ -577,6 +580,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
       // Merge returned user with existing user data to preserve all fields (like isOnboarded)
       const updatedUser = { ...user, ...response.data.user };
       setUser(updatedUser as ProfileUser);
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 
       setApproachUpdateSuccess('Approach preference updated successfully.');
       setApproachForm({ password: '', approach: response.data!.user.approach as 'western' | 'eastern' | 'hybrid' });

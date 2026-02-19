@@ -197,6 +197,11 @@ const DEFAULT_COMBINED_SELECTION = (() => {
 })();
 
 const DASHBOARD_TOUR_STORAGE_KEY = 'mw-dashboard-tour-pending';
+const PERSISTED_UI_PREFERENCE_KEYS = [
+  'mw-accessibility-settings-v1',
+  'mw-dashboard-widget-visibility',
+  DASHBOARD_TOUR_STORAGE_KEY
+];
 
 function AppInner() {
   const [currentPage, setCurrentPage] = useState<Page>(() => pathToPage(window.location.pathname));
@@ -665,13 +670,25 @@ function AppInner() {
   };
 
   const logout = () => {
+    const preservedPreferences = new Map<string, string>();
+    PERSISTED_UI_PREFERENCE_KEYS.forEach((key) => {
+      const value = localStorage.getItem(key);
+      if (value !== null) {
+        preservedPreferences.set(key, value);
+      }
+    });
+
     signOut();
     logoutFromStore(); // Clear all auth state (user, isAuthenticated, isLoading, error)
+
+    preservedPreferences.forEach((value, key) => {
+      localStorage.setItem(key, value);
+    });
+
     navigateTo('landing');
     // React Query will clear assessment data automatically
     // Clear active session
     setActiveSession(null);
-    updateDashboardTourPending(false);
     // Clear any query params that might trigger OAuth callback logic
     window.history.replaceState({}, document.title, '/');
   };
