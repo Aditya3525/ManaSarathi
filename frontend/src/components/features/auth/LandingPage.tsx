@@ -1085,7 +1085,13 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 <li>
                   <button
                     type="button"
-                    onClick={() => onNavigate?.('therapist-login')}
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('therapist-login');
+                      } else {
+                        window.location.assign('/therapist_login');
+                      }
+                    }}
                     className="inline-flex items-center py-2 text-xs opacity-50 transition-opacity hover:opacity-100"
                   >
                     Therapist Portal Access

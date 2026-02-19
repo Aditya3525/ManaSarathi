@@ -95,6 +95,7 @@ const PATH_TO_PAGE: Record<string, Page> = Object.entries(PAGE_ROUTES).reduce((a
 }, {} as Record<string, Page>);
 
 const PUBLIC_PAGES = new Set<Page>(['landing', 'user-login', 'admin-login', 'therapist-login', 'oauth-callback']);
+const THERAPIST_PAGES = new Set<Page>(['therapist-login', 'therapist-portal']);
 
 const PRE_ONBOARDING_ALLOWED_PAGES = new Set<Page>([
   'landing', // Allow non-onboarded users to return to landing page
@@ -109,6 +110,15 @@ const PRE_ONBOARDING_ALLOWED_PAGES = new Set<Page>([
 
 const pathToPage = (rawPath: string): Page => {
   const normalized = normalizePath(rawPath);
+
+  if (normalized === '/therapist-login') {
+    return 'therapist-login';
+  }
+
+  if (normalized === '/therapist-portal') {
+    return 'therapist-portal';
+  }
+
   return PATH_TO_PAGE[normalized] ?? 'landing';
 };
 
@@ -1000,6 +1010,10 @@ function AppInner() {
 
   useEffect(() => {
     if (loadingUser) {
+      return;
+    }
+
+    if (THERAPIST_PAGES.has(currentPage)) {
       return;
     }
 
