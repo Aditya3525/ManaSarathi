@@ -15,6 +15,9 @@ export class HuggingFaceProvider extends BaseAIProvider {
     }
 
     this.hf = new HfInference(apiKey);
+    if (config.model?.trim()) {
+      this.model = config.model.trim();
+    }
   }
 
   async generateResponse(
