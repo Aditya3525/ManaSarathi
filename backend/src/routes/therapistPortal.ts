@@ -256,6 +256,11 @@ router.put('/bookings/:id/status', requireTherapist, async (req: any, res) => {
             return res.status(400).json({ error: 'Invalid status. Must be CONFIRMED, CANCELLED, or COMPLETED' });
         }
 
+        const normalizedNotes = typeof therapistNotes === 'string' ? therapistNotes.trim() : '';
+        if (status === 'CANCELLED' && normalizedNotes.length < 3) {
+            return res.status(400).json({ error: 'Please provide a brief reason when declining a booking.' });
+        }
+
         // Verify the booking belongs to this therapist
         const booking = await prisma.therapistBooking.findFirst({
             where: { id, therapistId: req.therapist.id }
@@ -269,7 +274,7 @@ router.put('/bookings/:id/status', requireTherapist, async (req: any, res) => {
             where: { id },
             data: {
                 status,
-                ...(therapistNotes !== undefined && { therapistNotes }),
+                ...(therapistNotes !== undefined && { therapistNotes: normalizedNotes || null }),
                 processedBy: req.therapist.name,
                 processedAt: new Date()
             },

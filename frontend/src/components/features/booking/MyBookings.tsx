@@ -90,6 +90,8 @@ export function MyBookings() {
     const { data: bookings = [], isLoading, isError, isFetching, refetch } = useQuery({
         queryKey: ['myBookings'],
         queryFn: () => therapistApi.getMyBookings(),
+        refetchInterval: 15000,
+        refetchOnWindowFocus: true,
     });
 
     const cancelMutation = useMutation({
@@ -171,6 +173,8 @@ export function MyBookings() {
             {sortedBookings.map((booking) => {
                 const consultInfo = parseConsultationType(booking.message);
                 const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
+                const wasRejectedByTherapist = booking.status === 'CANCELLED' && Boolean(booking.processedBy);
+                const statusLabel = wasRejectedByTherapist ? 'Rejected' : getStatusLabel(booking.status);
 
                 return (
                     <div key={booking.id} className="booking-card">
@@ -199,7 +203,7 @@ export function MyBookings() {
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className={`booking-status-badge ${getStatusClass(booking.status)}`}>
                                     <span className="booking-status-dot" />
-                                    {getStatusLabel(booking.status)}
+                                    {statusLabel}
                                 </span>
                             </div>
                         </div>
@@ -210,7 +214,9 @@ export function MyBookings() {
                                 <div className="flex items-start gap-2 text-sm">
                                     <MessageSquare className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
                                     <div>
-                                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Therapist&apos;s Note</p>
+                                        <p className="text-xs font-medium text-muted-foreground mb-0.5">
+                                            {wasRejectedByTherapist ? 'Rejection Reason' : 'Therapist Note'}
+                                        </p>
                                         <p className="text-sm text-foreground">{booking.therapistNotes}</p>
                                     </div>
                                 </div>

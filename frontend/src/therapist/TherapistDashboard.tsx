@@ -145,11 +145,29 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    // Keep therapist queue fresh so booking state changes sync quickly.
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            fetchData();
+        }, 30000);
+        return () => window.clearInterval(interval);
+    }, [fetchData]);
+
     // ─ Booking actions
-    const updateBookingStatus = async (id: string, status: string) => {
+    const updateBookingStatus = async (
+        id: string,
+        status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED',
+        note?: string
+    ) => {
         try {
+            const resolvedNote = (note ?? noteInput).trim();
+            if (status === 'CANCELLED' && resolvedNote.length < 3) {
+                showToast('Please add a short reason before declining.');
+                return;
+            }
+
             const body: any = { status };
-            if (noteInput.trim()) body.therapistNotes = noteInput.trim();
+            if (resolvedNote) body.therapistNotes = resolvedNote;
             await apiFetch(`/bookings/${id}/status`, { method: 'PUT', body: JSON.stringify(body) });
             showToast(`Booking ${status.toLowerCase()}`);
             setActionBookingId(null);
@@ -306,11 +324,18 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                                 {b.message && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{b.message}</p>}
                                             </div>
                                             <div className="flex gap-2">
-                                                <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700 h-8" onClick={() => updateBookingStatus(b.id, 'CONFIRMED')}>
-                                                    <CheckCircle className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <Button size="sm" variant="destructive" className="h-8" onClick={() => updateBookingStatus(b.id, 'CANCELLED')}>
-                                                    <XCircle className="h-3.5 w-3.5" />
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8"
+                                                    onClick={() => {
+                                                        setTab('bookings');
+                                                        setStatusFilter('PENDING');
+                                                        setActionBookingId(b.id);
+                                                        setNoteInput('');
+                                                    }}
+                                                >
+                                                    Respond
                                                 </Button>
                                             </div>
                                         </div>
@@ -384,12 +409,24 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                                     <div className="flex flex-col gap-1.5 shrink-0">
                                                         {actionBookingId === b.id ? (
                                                             <div className="space-y-2 w-56">
-                                                                <Textarea placeholder="Add a note (optional)..." value={noteInput} onChange={e => setNoteInput(e.target.value)} rows={2} className="text-xs" />
+                                                                <Textarea
+                                                                    placeholder="Add context for this decision (required for decline)..."
+                                                                    value={noteInput}
+                                                                    onChange={e => setNoteInput(e.target.value)}
+                                                                    rows={2}
+                                                                    className="text-xs"
+                                                                />
                                                                 <div className="flex gap-1.5">
                                                                     <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={() => updateBookingStatus(b.id, 'CONFIRMED')}>
                                                                         Approve
                                                                     </Button>
-                                                                    <Button size="sm" variant="destructive" className="flex-1 h-7 text-xs" onClick={() => updateBookingStatus(b.id, 'CANCELLED')}>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        className="flex-1 h-7 text-xs"
+                                                                        disabled={noteInput.trim().length < 3}
+                                                                        onClick={() => updateBookingStatus(b.id, 'CANCELLED')}
+                                                                    >
                                                                         Decline
                                                                     </Button>
                                                                     <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setActionBookingId(null); setNoteInput(''); }}>
