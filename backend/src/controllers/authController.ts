@@ -56,6 +56,7 @@ const updateApproachWithPasswordSchema = Joi.object({
 });
 
 const normalizeSecurityAnswer = (answer: string): string => answer.trim().toLowerCase();
+const getFrontendBaseUrl = (): string => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 // Generate JWT token
 const generateToken = (userId: string): string => {
@@ -71,8 +72,9 @@ const generateToken = (userId: string): string => {
 // Google OAuth Success callback
 export const googleAuthSuccess = async (req: Request, res: Response) => {
   try {
+    const frontendBaseUrl = getFrontendBaseUrl();
     if (!req.user) {
-      return res.redirect('http://localhost:3000/auth/callback?error=oauth_failed');
+      return res.redirect(`${frontendBaseUrl}/auth/callback?error=oauth_failed`);
     }
 
     const user = req.user as any;
@@ -117,16 +119,16 @@ export const googleAuthSuccess = async (req: Request, res: Response) => {
 
     // Redirect to frontend OAuth callback with token and comprehensive user data
     const userDataEncoded = encodeURIComponent(JSON.stringify(userData));
-    res.redirect(`http://localhost:3000/auth/callback?token=${token}&redirect=${redirectParam}&needs_setup=${needsSetup}&user_data=${userDataEncoded}`);
+    res.redirect(`${frontendBaseUrl}/auth/callback?token=${token}&redirect=${redirectParam}&needs_setup=${needsSetup}&user_data=${userDataEncoded}`);
   } catch (error) {
     console.error('Google OAuth success error:', error);
-    res.redirect('http://localhost:3000/auth/callback?error=oauth_error');
+    res.redirect(`${getFrontendBaseUrl()}/auth/callback?error=oauth_error`);
   }
 };
 
 // Google OAuth Failure callback
 export const googleAuthFailure = (req: Request, res: Response) => {
-  res.redirect('http://localhost:3000/auth/callback?error=oauth_cancelled');
+  res.redirect(`${getFrontendBaseUrl()}/auth/callback?error=oauth_cancelled`);
 };
 
 // Stateless logout (client simply discards token; endpoint provided for future blacklisting/session tracking)
