@@ -29,38 +29,48 @@ const TEMPLATE_TYPE_ALIASES: Record<string, TemplateBaseType> = {
   'gad7': 'anxiety',
   'gad-7': 'anxiety',
   'anxiety_gad7': 'anxiety',
-  'anxiety_gad2': 'anxiety', // Basic GAD-2 screening
   'stress_pss10': 'stress',
   'stressassessment': 'stress',
   'stresslevelcheck': 'stress',
   'pss10': 'stress',
-  'stress_pss4': 'stress', // Basic PSS-4 screening
   'trauma_pcl5': 'trauma',
   'traumafear': 'trauma',
   'trauma-fear': 'trauma',
   'pcl5': 'trauma',
-  'trauma_pcptsd5': 'trauma', // Basic PC-PTSD-5 screening
   'overthinking_brooding': 'overthinking',
   'overthinkingpatterns': 'overthinking',
   'overthinking_ptq': 'overthinking',
   'ptq': 'overthinking',
-  'overthinking_rrs4': 'overthinking', // Basic RRS-4 screening
   'emotional_intelligence_ei10': 'emotionalIntelligence',
   'emotional_intelligence_teique': 'emotionalIntelligence',
   'emotional-intelligence': 'emotionalIntelligence',
   'teique_sf': 'emotionalIntelligence',
-  'emotional_intelligence_eq5': 'emotionalIntelligence', // Basic EQ-5 screening
   'personality_mini_ipip': 'personality',
   'personality': 'personality',
   'mini_ipip': 'personality',
   'archetypes': 'personality',
   'psychological_archetypes': 'personality',
   'psychologicalarchetypes': 'personality',
-  'personality_bigfive10': 'personality', // Basic Big Five-10 screening
   'depression_phq9': 'depression',
   'phq9': 'depression',
-  'phq-9': 'depression',
-  'depression_phq2': 'depression' // Basic PHQ-2 screening
+  'phq-9': 'depression'
+};
+
+const SHORT_FORM_DEFINITION_ID_ALIASES: Record<string, string[]> = {
+  anxiety_gad2: ['anxiety_gad2', 'gad2'],
+  gad2: ['anxiety_gad2', 'gad2'],
+  depression_phq2: ['depression_phq2', 'phq2'],
+  phq2: ['depression_phq2', 'phq2'],
+  stress_pss4: ['stress_pss4', 'pss4'],
+  pss4: ['stress_pss4', 'pss4'],
+  overthinking_rrs4: ['overthinking_rrs4', 'rrs4'],
+  rrs4: ['overthinking_rrs4', 'rrs4'],
+  trauma_pcptsd5: ['trauma_pcptsd5', 'pc_ptsd_5', 'pcptsd5'],
+  pcptsd5: ['trauma_pcptsd5', 'pc_ptsd_5', 'pcptsd5'],
+  emotional_intelligence_eq5: ['emotional_intelligence_eq5', 'eq5'],
+  eq5: ['emotional_intelligence_eq5', 'eq5'],
+  personality_bigfive10: ['personality_bigfive10', 'big_five_short', 'bigfive10'],
+  bigfive10: ['personality_bigfive10', 'big_five_short', 'bigfive10']
 };
 
 type TemplateInterpretationBand = { max: number; label: string };
@@ -257,6 +267,157 @@ type AssessmentDefinitionWithQuestions = Prisma.AssessmentDefinitionGetPayload<{
   };
 }>;
 
+type CategoryBreakdownEntry = {
+  raw: number;
+  normalized: number;
+  interpretation?: string;
+};
+
+type VerifiedScorePayload = {
+  score: number;
+  rawScore: number | null;
+  maxScore: number | null;
+  categoryBreakdown?: Record<string, CategoryBreakdownEntry>;
+};
+
+type ParsedScoringDomain = {
+  id: string;
+  label: string;
+  items: string[];
+  minScore: number;
+  maxScore: number;
+  interpretationBands: TemplateInterpretationBand[] | undefined;
+};
+
+type ParsedScoringConfig = {
+  minScore?: number;
+  maxScore?: number;
+  reverseScored?: string[];
+  interpretationBands?: TemplateInterpretationBand[];
+  domains?: ParsedScoringDomain[];
+};
+
+type ShortFormVerificationRule = {
+  minScore: number;
+  maxScore: number;
+  questionBounds: Record<string, { min: number; max: number }>;
+  reverseScored?: string[];
+  interpretationBands: TemplateInterpretationBand[];
+};
+
+const SHORT_FORM_VERIFICATION_RULES: Record<string, ShortFormVerificationRule> = {
+  anxiety_gad2: {
+    minScore: 0,
+    maxScore: 6,
+    questionBounds: {
+      gad2_q1: { min: 0, max: 3 },
+      gad2_q2: { min: 0, max: 3 }
+    },
+    interpretationBands: [
+      { max: 2, label: 'Minimal anxiety' },
+      { max: 4, label: 'Mild anxiety symptoms' },
+      { max: 6, label: 'Elevated anxiety symptoms' }
+    ]
+  },
+  depression_phq2: {
+    minScore: 0,
+    maxScore: 6,
+    questionBounds: {
+      phq2_q1: { min: 0, max: 3 },
+      phq2_q2: { min: 0, max: 3 }
+    },
+    interpretationBands: [
+      { max: 2, label: 'Minimal depression symptoms' },
+      { max: 4, label: 'Mild depression symptoms' },
+      { max: 6, label: 'Elevated depression symptoms' }
+    ]
+  },
+  stress_pss4: {
+    minScore: 0,
+    maxScore: 16,
+    questionBounds: {
+      pss4_q1: { min: 0, max: 4 },
+      pss4_q2: { min: 0, max: 4 },
+      pss4_q3: { min: 0, max: 4 },
+      pss4_q4: { min: 0, max: 4 }
+    },
+    reverseScored: ['pss4_q2', 'pss4_q3'],
+    interpretationBands: [
+      { max: 5, label: 'Low perceived stress' },
+      { max: 10, label: 'Moderate perceived stress' },
+      { max: 16, label: 'High perceived stress' }
+    ]
+  },
+  overthinking_rrs4: {
+    minScore: 0,
+    maxScore: 12,
+    questionBounds: {
+      rrs4_q1: { min: 0, max: 3 },
+      rrs4_q2: { min: 0, max: 3 },
+      rrs4_q3: { min: 0, max: 3 },
+      rrs4_q4: { min: 0, max: 3 }
+    },
+    interpretationBands: [
+      { max: 3, label: 'Low overthinking' },
+      { max: 8, label: 'Moderate overthinking' },
+      { max: 12, label: 'High overthinking' }
+    ]
+  },
+  trauma_pcptsd5: {
+    minScore: 0,
+    maxScore: 5,
+    questionBounds: {
+      pcptsd5_q1: { min: 0, max: 1 },
+      pcptsd5_q2: { min: 0, max: 1 },
+      pcptsd5_q3: { min: 0, max: 1 },
+      pcptsd5_q4: { min: 0, max: 1 },
+      pcptsd5_q5: { min: 0, max: 1 }
+    },
+    interpretationBands: [
+      { max: 2, label: 'Low trauma symptom activation' },
+      { max: 5, label: 'Further trauma assessment recommended' }
+    ]
+  },
+  emotional_intelligence_eq5: {
+    minScore: 0,
+    maxScore: 20,
+    questionBounds: {
+      eq5_q1: { min: 0, max: 4 },
+      eq5_q2: { min: 0, max: 4 },
+      eq5_q3: { min: 0, max: 4 },
+      eq5_q4: { min: 0, max: 4 },
+      eq5_q5: { min: 0, max: 4 }
+    },
+    interpretationBands: [
+      { max: 7, label: 'Developing emotional intelligence' },
+      { max: 14, label: 'Growing emotional intelligence' },
+      { max: 20, label: 'Strong emotional intelligence' }
+    ]
+  },
+  personality_bigfive10: {
+    minScore: 0,
+    maxScore: 40,
+    questionBounds: {
+      bigfive10_q1: { min: 0, max: 4 },
+      bigfive10_q2: { min: 0, max: 4 },
+      bigfive10_q3: { min: 0, max: 4 },
+      bigfive10_q4: { min: 0, max: 4 },
+      bigfive10_q5: { min: 0, max: 4 },
+      bigfive10_q6: { min: 0, max: 4 },
+      bigfive10_q7: { min: 0, max: 4 },
+      bigfive10_q8: { min: 0, max: 4 },
+      bigfive10_q9: { min: 0, max: 4 },
+      bigfive10_q10: { min: 0, max: 4 }
+    },
+    reverseScored: ['bigfive10_q2', 'bigfive10_q6', 'bigfive10_q8', 'bigfive10_q9', 'bigfive10_q10'],
+    interpretationBands: [
+      { max: 16, label: 'Subtle trait expression' },
+      { max: 28, label: 'Balanced trait expression' },
+      { max: 40, label: 'Strong trait expression' }
+    ]
+  }
+};
+
 const cloneInterpretationBands = (bands: TemplateInterpretationBand[] | undefined): TemplateInterpretationBand[] | undefined => {
   if (!bands) return undefined;
   return bands.map((band) => ({ ...band }));
@@ -279,6 +440,157 @@ const cloneScoring = (scoring: TemplateScoring): TemplateScoring => ({
   domains: cloneDomains(scoring.domains),
   higherIsBetter: scoring.higherIsBetter
 });
+
+const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
+
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const normalizeToPercent = (rawScore: number, minScore: number, maxScore: number): number => {
+  if (!Number.isFinite(rawScore) || !Number.isFinite(minScore) || !Number.isFinite(maxScore) || maxScore <= minScore) {
+    return 0;
+  }
+
+  const bounded = Math.min(Math.max(rawScore, minScore), maxScore);
+  return roundToOneDecimal(((bounded - minScore) / (maxScore - minScore)) * 100);
+};
+
+const resolveInterpretationBand = (
+  bands: TemplateInterpretationBand[] | undefined,
+  value: number
+): string | undefined => {
+  if (!bands || bands.length === 0) {
+    return undefined;
+  }
+
+  for (const band of bands) {
+    if (value <= band.max) {
+      return band.label;
+    }
+  }
+
+  return bands[bands.length - 1]?.label;
+};
+
+const parseInterpretationBands = (rawBands: unknown): TemplateInterpretationBand[] | undefined => {
+  if (!Array.isArray(rawBands)) {
+    return undefined;
+  }
+
+  const parsedBands = rawBands
+    .map((band) => {
+      if (!band || typeof band !== 'object') {
+        return null;
+      }
+      const candidate = band as Record<string, unknown>;
+      const max = toFiniteNumber(candidate.max);
+      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+
+      if (max === null || !label) {
+        return null;
+      }
+
+      return { max, label };
+    })
+    .filter((band): band is TemplateInterpretationBand => band !== null)
+    .sort((a, b) => a.max - b.max);
+
+  return parsedBands.length > 0 ? parsedBands : undefined;
+};
+
+const parseScoringConfig = (rawConfig: string | null | undefined): ParsedScoringConfig | null => {
+  if (!rawConfig) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawConfig) as Record<string, unknown>;
+    const minScore = toFiniteNumber(parsed.minScore) ?? undefined;
+    const maxScore = toFiniteNumber(parsed.maxScore) ?? undefined;
+    const interpretationBands = parseInterpretationBands(parsed.interpretationBands);
+    const reverseScored = Array.isArray(parsed.reverseScored)
+      ? parsed.reverseScored.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : undefined;
+
+    const domains = Array.isArray(parsed.domains)
+      ? parsed.domains
+          .map((domain, index) => {
+            if (!domain || typeof domain !== 'object') {
+              return null;
+            }
+
+            const candidate = domain as Record<string, unknown>;
+            const rawItems = Array.isArray(candidate.items)
+              ? candidate.items
+              : Array.isArray(candidate.questionIds)
+                ? candidate.questionIds
+                : [];
+
+            const items = rawItems.filter(
+              (item): item is string => typeof item === 'string' && item.trim().length > 0
+            );
+
+            if (items.length === 0) {
+              return null;
+            }
+
+            const id =
+              typeof candidate.id === 'string' && candidate.id.trim().length > 0
+                ? candidate.id
+                : `domain-${index + 1}`;
+            const label =
+              typeof candidate.label === 'string' && candidate.label.trim().length > 0
+                ? candidate.label
+                : id;
+
+            return {
+              id,
+              label,
+              items,
+              minScore: toFiniteNumber(candidate.minScore) ?? 0,
+              maxScore: toFiniteNumber(candidate.maxScore) ?? 0,
+              interpretationBands: parseInterpretationBands(candidate.interpretationBands)
+            } satisfies ParsedScoringDomain;
+          })
+          .filter((domain): domain is ParsedScoringDomain => domain !== null)
+      : undefined;
+
+    return {
+      minScore,
+      maxScore,
+      interpretationBands,
+      reverseScored,
+      domains: domains && domains.length > 0 ? domains : undefined
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+const resolveShortFormVerificationRule = (assessmentType: string): ShortFormVerificationRule | null => {
+  const normalized = assessmentType.trim().toLowerCase();
+  const aliasCandidates = SHORT_FORM_DEFINITION_ID_ALIASES[normalized] ?? [];
+  const candidates = [normalized, ...aliasCandidates];
+
+  for (const candidate of candidates) {
+    const rule = SHORT_FORM_VERIFICATION_RULES[candidate];
+    if (rule) {
+      return rule;
+    }
+  }
+
+  return null;
+};
 
 const mapResponseTypeToUi = (responseType: string): 'likert' | 'binary' | 'multiple-choice' => {
   switch (responseType) {
@@ -309,6 +621,320 @@ const resolveTemplateType = (rawType: string): TemplateBaseType | null => {
 
   const alias = TEMPLATE_TYPE_ALIASES[lower];
   return alias ?? null;
+};
+
+const buildDefinitionCandidates = (assessmentType: string): string[] => {
+  const candidates = new Set<string>();
+
+  const addCandidate = (value: string | null | undefined) => {
+    if (!value) {
+      return;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    candidates.add(trimmed);
+    candidates.add(trimmed.toLowerCase());
+  };
+
+  addCandidate(assessmentType);
+
+  const normalized = assessmentType.trim().toLowerCase();
+  (SHORT_FORM_DEFINITION_ID_ALIASES[normalized] ?? []).forEach((candidate) => addCandidate(candidate));
+
+  const resolvedBaseType = resolveTemplateType(assessmentType);
+  if (resolvedBaseType) {
+    addCandidate(resolvedBaseType);
+    addCandidate(ASSESSMENT_TEMPLATE_MAP[resolvedBaseType].definitionId);
+  }
+
+  return Array.from(candidates);
+};
+
+const findDefinitionByCandidates = (
+  definitions: AssessmentDefinitionWithQuestions[],
+  candidates: string[]
+): AssessmentDefinitionWithQuestions | null => {
+  for (const candidate of candidates) {
+    const lowerCandidate = candidate.toLowerCase();
+    const matched = definitions.find(
+      (definition) =>
+        definition.id.toLowerCase() === lowerCandidate || definition.type.toLowerCase() === lowerCandidate
+    );
+    if (matched) {
+      return matched;
+    }
+  }
+
+  return null;
+};
+
+const fetchAssessmentDefinitionForVerification = async (
+  assessmentType: string
+): Promise<AssessmentDefinitionWithQuestions | null> => {
+  const candidates = buildDefinitionCandidates(assessmentType);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const definitions = await prisma.assessmentDefinition.findMany({
+    where: {
+      isActive: true,
+      OR: [{ type: { in: candidates } }, { id: { in: candidates } }]
+    },
+    include: {
+      questions: {
+        include: { options: true },
+        orderBy: { order: 'asc' }
+      }
+    }
+  });
+
+  return findDefinitionByCandidates(definitions, candidates);
+};
+
+const resolveQuestionOptionValue = (option: AssessmentDefinitionWithQuestions['questions'][number]['options'][number]): number => {
+  if (typeof option.value === 'number' && Number.isFinite(option.value)) {
+    return option.value;
+  }
+  return option.order - 1;
+};
+
+const resolveSubmittedResponseValue = (
+  submittedValue: unknown,
+  question: AssessmentDefinitionWithQuestions['questions'][number]
+): number | null => {
+  const asString =
+    typeof submittedValue === 'string' || typeof submittedValue === 'number'
+      ? String(submittedValue).trim()
+      : null;
+
+  if (asString !== null && asString.length > 0) {
+    for (const option of question.options) {
+      const optionValue = resolveQuestionOptionValue(option);
+      if (asString === option.id || asString === String(optionValue)) {
+        return optionValue;
+      }
+    }
+
+    const parsed = Number(asString);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  if (typeof submittedValue === 'boolean') {
+    return submittedValue ? 1 : 0;
+  }
+
+  return null;
+};
+
+const computeVerifiedScoreFromDefinition = (
+  assessmentType: string,
+  definition: AssessmentDefinitionWithQuestions,
+  responses: Record<string, unknown>
+): VerifiedScorePayload => {
+  const parsedScoring = parseScoringConfig(definition.scoringConfig);
+  const baseType = resolveTemplateType(assessmentType);
+  const builtInScoring = baseType ? cloneScoring(TEMPLATE_SCORING[baseType]) : null;
+  const shortRule = resolveShortFormVerificationRule(assessmentType);
+
+  const reverseScored = new Set<string>([
+    ...(parsedScoring?.reverseScored ?? []),
+    ...(builtInScoring?.reverseScored ?? []),
+    ...(shortRule?.reverseScored ?? [])
+  ]);
+
+  const questionBounds = new Map<string, { min: number; max: number }>();
+  const adjustedByQuestion = new Map<string, number>();
+  let rawScore = 0;
+  let fallbackMinScore = 0;
+  let fallbackMaxScore = 0;
+
+  for (const question of definition.questions) {
+    const optionValues = question.options.map(resolveQuestionOptionValue);
+    const minValue = optionValues.length > 0 ? Math.min(...optionValues) : 0;
+    const maxValue = optionValues.length > 0 ? Math.max(...optionValues) : 0;
+    questionBounds.set(question.id, { min: minValue, max: maxValue });
+
+    fallbackMinScore += minValue;
+    fallbackMaxScore += maxValue;
+
+    const submittedValue = resolveSubmittedResponseValue(responses[question.id], question);
+    if (submittedValue === null) {
+      continue;
+    }
+
+    const boundedValue = Math.min(Math.max(submittedValue, minValue), maxValue);
+    const adjustedValue = reverseScored.has(question.id) || question.reverseScored
+      ? minValue + maxValue - boundedValue
+      : boundedValue;
+
+    adjustedByQuestion.set(question.id, adjustedValue);
+    rawScore += adjustedValue;
+  }
+
+  const configuredMinScore =
+    parsedScoring?.minScore ?? builtInScoring?.minScore ?? shortRule?.minScore ?? fallbackMinScore;
+  const configuredMaxScore =
+    parsedScoring?.maxScore ?? builtInScoring?.maxScore ?? shortRule?.maxScore ?? fallbackMaxScore;
+
+  const normalizedScore = normalizeToPercent(rawScore, configuredMinScore, configuredMaxScore);
+
+  const scoringDomains =
+    parsedScoring?.domains?.map((domain) => ({
+      id: domain.id,
+      label: domain.label,
+      items: domain.items,
+      minScore: domain.minScore,
+      maxScore: domain.maxScore,
+      interpretationBands: domain.interpretationBands
+    })) ?? builtInScoring?.domains;
+
+  const categoryBreakdown: Record<string, CategoryBreakdownEntry> = {};
+  if (scoringDomains && scoringDomains.length > 0) {
+    for (const domain of scoringDomains) {
+      const domainRaw = domain.items.reduce((sum, questionId) => sum + (adjustedByQuestion.get(questionId) ?? 0), 0);
+
+      const fallbackDomainMin = domain.items.reduce((sum, questionId) => {
+        const bounds = questionBounds.get(questionId);
+        return sum + (bounds?.min ?? 0);
+      }, 0);
+      const fallbackDomainMax = domain.items.reduce((sum, questionId) => {
+        const bounds = questionBounds.get(questionId);
+        return sum + (bounds?.max ?? 0);
+      }, 0);
+
+      const domainMin = Number.isFinite(domain.minScore) ? domain.minScore : fallbackDomainMin;
+      const domainMax = Number.isFinite(domain.maxScore) && domain.maxScore > domainMin
+        ? domain.maxScore
+        : fallbackDomainMax;
+
+      categoryBreakdown[domain.id] = {
+        raw: roundToOneDecimal(domainRaw),
+        normalized: normalizeToPercent(domainRaw, domainMin, domainMax),
+        interpretation: resolveInterpretationBand(domain.interpretationBands, domainRaw)
+      };
+    }
+  }
+
+  return {
+    score: normalizedScore,
+    rawScore: roundToOneDecimal(rawScore),
+    maxScore: configuredMaxScore,
+    categoryBreakdown: Object.keys(categoryBreakdown).length > 0 ? categoryBreakdown : undefined
+  };
+};
+
+const computeVerifiedScoreFromShortRule = (
+  rule: ShortFormVerificationRule,
+  responses: Record<string, unknown>
+): VerifiedScorePayload => {
+  const reverseSet = new Set(rule.reverseScored ?? []);
+  let rawScore = 0;
+
+  Object.entries(rule.questionBounds).forEach(([questionId, bounds]) => {
+    const parsed = toFiniteNumber(responses[questionId]);
+    if (parsed === null) {
+      return;
+    }
+
+    const boundedValue = Math.min(Math.max(parsed, bounds.min), bounds.max);
+    const adjustedValue = reverseSet.has(questionId)
+      ? bounds.min + bounds.max - boundedValue
+      : boundedValue;
+
+    rawScore += adjustedValue;
+  });
+
+  return {
+    score: normalizeToPercent(rawScore, rule.minScore, rule.maxScore),
+    rawScore: roundToOneDecimal(rawScore),
+    maxScore: rule.maxScore
+  };
+};
+
+const computeFallbackVerifiedScore = (
+  responses: Record<string, unknown>,
+  providedScore: number | null | undefined,
+  providedRawScore: number | null | undefined,
+  providedMaxScore: number | null | undefined
+): VerifiedScorePayload => {
+  const numericResponses = Object.values(responses)
+    .map((value) => toFiniteNumber(value))
+    .filter((value): value is number => value !== null);
+
+  const rawScore =
+    typeof providedRawScore === 'number' && Number.isFinite(providedRawScore)
+      ? providedRawScore
+      : numericResponses.reduce((sum, value) => sum + value, 0);
+
+  const maxScore =
+    typeof providedMaxScore === 'number' && Number.isFinite(providedMaxScore) && providedMaxScore > 0
+      ? providedMaxScore
+      : numericResponses.length > 0
+        ? Math.max(rawScore, numericResponses.length)
+        : null;
+
+  const normalizedScore =
+    maxScore && maxScore > 0
+      ? normalizeToPercent(rawScore, 0, maxScore)
+      : typeof providedScore === 'number' && Number.isFinite(providedScore)
+        ? roundToOneDecimal(Math.min(Math.max(providedScore, 0), 100))
+        : 0;
+
+  return {
+    score: normalizedScore,
+    rawScore: roundToOneDecimal(rawScore),
+    maxScore
+  };
+};
+
+const verifyAssessmentSubmission = async (
+  assessmentType: string,
+  responses: Record<string, unknown>,
+  providedScore: number | null | undefined,
+  providedRawScore: number | null | undefined,
+  providedMaxScore: number | null | undefined,
+  providedCategoryBreakdown: unknown
+): Promise<VerifiedScorePayload> => {
+  let definition: AssessmentDefinitionWithQuestions | null = null;
+  try {
+    definition = await fetchAssessmentDefinitionForVerification(assessmentType);
+  } catch (error) {
+    console.warn('Skipping template lookup during assessment verification', {
+      assessmentType,
+      error
+    });
+  }
+
+  if (definition) {
+    const verifiedFromDefinition = computeVerifiedScoreFromDefinition(assessmentType, definition, responses);
+    return {
+      ...verifiedFromDefinition,
+      categoryBreakdown: verifiedFromDefinition.categoryBreakdown
+    };
+  }
+
+  const shortRule = resolveShortFormVerificationRule(assessmentType);
+  if (shortRule) {
+    return computeVerifiedScoreFromShortRule(shortRule, responses);
+  }
+
+  const fallback = computeFallbackVerifiedScore(
+    responses,
+    providedScore,
+    providedRawScore,
+    providedMaxScore
+  );
+
+  if (providedCategoryBreakdown && typeof providedCategoryBreakdown === 'object' && !Array.isArray(providedCategoryBreakdown)) {
+    fallback.categoryBreakdown = providedCategoryBreakdown as Record<string, CategoryBreakdownEntry>;
+  }
+
+  return fallback;
 };
 
 const formatAssessmentTemplate = (
@@ -481,7 +1107,7 @@ const submitSchema = Joi.object({
       })
     )
     .optional(),
-  score: Joi.number().min(0).max(100).required(),
+  score: Joi.number().min(0).max(100).optional(),
   rawScore: Joi.number().optional(),
   maxScore: Joi.number().optional(),
   categoryBreakdown: Joi.object().optional()
@@ -528,17 +1154,27 @@ export const getAvailableAssessments = async (_req: Request, res: Response) => {
       description: assessment.description,
       timeEstimate: assessment.timeEstimate || 'Not specified',
       type: assessment.type,
-      questions: assessment._count.questions,
+      questions: assessment._count?.questions ?? 0,
       tags: assessment.tags || 'all'
     }));
 
     res.json({ success: true, data: formattedAssessments });
   } catch (error) {
     console.error('Error fetching available assessments:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch available assessments' 
-    });
+
+    // Keep assessments discoverable if DB lookup fails.
+    const fallbackAssessments = ASSESSMENT_CATALOG.map((assessment) => ({
+      id: assessment.id,
+      title: assessment.title,
+      category: 'mental_health',
+      description: '',
+      timeEstimate: 'Not specified',
+      type: assessment.id,
+      questions: assessment.questions,
+      tags: 'all'
+    }));
+
+    res.json({ success: true, data: fallbackAssessments });
   }
 };
 
@@ -606,11 +1242,30 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
 
     // Fetch custom/dynamic assessment templates by type
     if (customTypes.length > 0) {
-      // First try by type field
+      const customCandidateMap = new Map<string, string[]>();
+      const expandedCustomCandidates = new Set<string>();
+
+      for (const customType of customTypes) {
+        const normalized = customType.trim().toLowerCase();
+        const expanded = Array.from(
+          new Set([
+            customType,
+            normalized,
+            ...(SHORT_FORM_DEFINITION_ID_ALIASES[normalized] ?? [])
+          ])
+        );
+
+        customCandidateMap.set(customType, expanded);
+        expanded.forEach((candidate) => expandedCustomCandidates.add(candidate));
+      }
+
       const customDefinitions = await prisma.assessmentDefinition.findMany({
         where: {
-          type: { in: customTypes },
-          isActive: true
+          isActive: true,
+          OR: [
+            { type: { in: Array.from(expandedCustomCandidates) } },
+            { id: { in: Array.from(expandedCustomCandidates) } }
+          ]
         },
         include: {
           questions: {
@@ -620,32 +1275,16 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
         }
       });
 
-      const foundTypes = new Set(customDefinitions.map(d => d.type));
-      const customTemplates = customDefinitions.map((definition) => {
-        return formatCustomAssessmentTemplate(definition);
-      });
-      templates.push(...customTemplates);
+      const selectedDefinitionIds = new Set<string>();
+      for (const requestedType of customTypes) {
+        const candidates = customCandidateMap.get(requestedType) ?? [requestedType];
+        const matchedDefinition = findDefinitionByCandidates(customDefinitions, candidates);
+        if (!matchedDefinition || selectedDefinitionIds.has(matchedDefinition.id)) {
+          continue;
+        }
 
-      // Fallback: try remaining IDs as database primary key IDs
-      const notFoundByType = customTypes.filter(t => !foundTypes.has(t));
-      if (notFoundByType.length > 0) {
-        const idDefinitions = await prisma.assessmentDefinition.findMany({
-          where: {
-            id: { in: notFoundByType },
-            isActive: true
-          },
-          include: {
-            questions: {
-              include: { options: true },
-              orderBy: { order: 'asc' }
-            }
-          }
-        });
-
-        const idTemplates = idDefinitions.map((definition) => {
-          return formatCustomAssessmentTemplate(definition);
-        });
-        templates.push(...idTemplates);
+        templates.push(formatCustomAssessmentTemplate(matchedDefinition));
+        selectedDefinitionIds.add(matchedDefinition.id);
       }
     }
 
@@ -672,16 +1311,27 @@ export const submitAssessment = async (req: any, res: Response) => {
   const { assessmentType, responses, responseDetails, score, rawScore, maxScore, categoryBreakdown } = req.body;
     const userId = req.user.id;
 
+    const verifiedScore = await verifyAssessmentSubmission(
+      assessmentType,
+      responses as Record<string, unknown>,
+      typeof score === 'number' ? score : null,
+      typeof rawScore === 'number' ? rawScore : null,
+      typeof maxScore === 'number' ? maxScore : null,
+      categoryBreakdown
+    );
+
     const record = await prisma.assessmentResult.create({
       data: {
         userId,
         assessmentType,
-        score,
-        normalizedScore: score,
+        score: verifiedScore.score,
+        normalizedScore: verifiedScore.score,
         responses: JSON.stringify(responses),
-        rawScore: rawScore ?? null,
-        maxScore: maxScore ?? null,
-        ...(categoryBreakdown ? { categoryScores: categoryBreakdown as Prisma.JsonObject } : {})
+        rawScore: verifiedScore.rawScore,
+        maxScore: verifiedScore.maxScore,
+        ...(verifiedScore.categoryBreakdown
+          ? { categoryScores: verifiedScore.categoryBreakdown as unknown as Prisma.JsonObject }
+          : {})
       }
     });
 
@@ -708,9 +1358,9 @@ export const submitAssessment = async (req: any, res: Response) => {
             answerValue: detail.answerValue ?? null,
             answerScore: typeof detail.answerScore === 'number' ? detail.answerScore : undefined
           })),
-          rawScore: typeof rawScore === 'number' ? rawScore : null,
-          maxScore: typeof maxScore === 'number' ? maxScore : null,
-          score
+          rawScore: verifiedScore.rawScore,
+          maxScore: verifiedScore.maxScore,
+          score: verifiedScore.score
         }]
       : [];
 
@@ -1071,24 +1721,42 @@ export const submitCombinedAssessments = async (req: any, res: Response) => {
     }
 
     // Create all assessment results in a transaction
+    const verifiedCombinedAssessments = await Promise.all(
+      combinedAssessments.map(async (assessment: any) => {
+        const verified = await verifyAssessmentSubmission(
+          assessment.assessmentType,
+          (assessment.responses ?? {}) as Record<string, unknown>,
+          typeof assessment.score === 'number' ? assessment.score : null,
+          typeof assessment.rawScore === 'number' ? assessment.rawScore : null,
+          typeof assessment.maxScore === 'number' ? assessment.maxScore : null,
+          assessment.categoryBreakdown
+        );
+
+        return {
+          ...assessment,
+          score: verified.score,
+          rawScore: verified.rawScore,
+          maxScore: verified.maxScore,
+          categoryBreakdown: verified.categoryBreakdown
+        };
+      })
+    );
+
     const createdAssessments = await prisma.$transaction(
-      combinedAssessments.map((assessment: any) => {
-        const normalizedScore = typeof assessment.score === 'number' ? assessment.score : 0;
-        const rawScoreValue = typeof assessment.rawScore === 'number' ? assessment.rawScore : null;
-        const maxScoreValue = typeof assessment.maxScore === 'number' ? assessment.maxScore : null;
+      verifiedCombinedAssessments.map((assessment) => {
         const categoryScoresValue = assessment.categoryBreakdown
-          ? (assessment.categoryBreakdown as Prisma.JsonObject)
+          ? (assessment.categoryBreakdown as unknown as Prisma.JsonObject)
           : undefined;
 
         return prisma.assessmentResult.create({
           data: {
             userId,
             assessmentType: assessment.assessmentType,
-            score: normalizedScore,
-            normalizedScore,
+            score: assessment.score,
+            normalizedScore: assessment.score,
             responses: JSON.stringify(assessment.responses || {}),
-            rawScore: rawScoreValue,
-            maxScore: maxScoreValue,
+            rawScore: assessment.rawScore,
+            maxScore: assessment.maxScore,
             ...(categoryScoresValue ? { categoryScores: categoryScoresValue } : {}),
             sessionId
           }
@@ -1130,7 +1798,7 @@ export const submitCombinedAssessments = async (req: any, res: Response) => {
 
     // Build comprehensive insights
     const assessmentDetailContexts: AssessmentDetailContext[] = createdAssessments.reduce((accumulator: AssessmentDetailContext[], created, index) => {
-      const requestAssessment = combinedAssessments[index];
+      const requestAssessment = verifiedCombinedAssessments[index];
       if (!requestAssessment || !Array.isArray(requestAssessment.responseDetails) || requestAssessment.responseDetails.length === 0) {
         return accumulator;
       }

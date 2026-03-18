@@ -124,22 +124,30 @@ export function AssessmentFlow({
 				scoring: assessmentDef.scoring
 			});
 
-			const responseDetails = assessmentDef.questions
-				.map((question) => {
+			const responseDetails = assessmentDef.questions.reduce<AssessmentCompletionPayload['responseDetails']>(
+				(details, question) => {
 					const answerScore = responses[question.id];
 					if (answerScore === undefined) {
-						return null;
+						return details;
 					}
+
 					const selectedOption = question.options.find((option) => option.value === answerScore);
-					return {
+					const detail: AssessmentCompletionPayload['responseDetails'][number] = {
 						questionId: question.id,
 						questionText: question.text,
 						answerLabel: selectedOption?.text ?? '',
-						answerValue: selectedOption?.id ?? answerScore ?? null,
-						answerScore: typeof selectedOption?.value === 'number' ? selectedOption.value : undefined
+						answerValue: selectedOption?.id ?? answerScore ?? null
 					};
-				})
-				.filter((detail): detail is AssessmentCompletionPayload['responseDetails'][number] => detail !== null);
+
+					if (typeof selectedOption?.value === 'number') {
+						detail.answerScore = selectedOption.value;
+					}
+
+					details.push(detail);
+					return details;
+				},
+				[]
+			);
 
 			const payload: AssessmentCompletionPayload = {
 				assessmentType: assessmentDef.assessmentType,

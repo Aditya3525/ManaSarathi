@@ -51,6 +51,78 @@ interface CombinedQuestion {
 	}>;
 }
 
+const BASIC_TEMPLATE_SCORING: Record<string, {
+	minScore: number;
+	maxScore: number;
+	reverseScored?: string[];
+	interpretationBands: Array<{ max: number; label: string }>;
+}> = {
+	anxiety_gad2: {
+		minScore: 0,
+		maxScore: 6,
+		interpretationBands: [
+			{ max: 2, label: 'Minimal anxiety' },
+			{ max: 4, label: 'Mild anxiety symptoms' },
+			{ max: 6, label: 'Elevated anxiety symptoms' }
+		]
+	},
+	depression_phq2: {
+		minScore: 0,
+		maxScore: 6,
+		interpretationBands: [
+			{ max: 2, label: 'Minimal depression symptoms' },
+			{ max: 4, label: 'Mild depression symptoms' },
+			{ max: 6, label: 'Elevated depression symptoms' }
+		]
+	},
+	stress_pss4: {
+		minScore: 0,
+		maxScore: 16,
+		reverseScored: ['pss4_q2', 'pss4_q3'],
+		interpretationBands: [
+			{ max: 5, label: 'Low perceived stress' },
+			{ max: 10, label: 'Moderate perceived stress' },
+			{ max: 16, label: 'High perceived stress' }
+		]
+	},
+	overthinking_rrs4: {
+		minScore: 0,
+		maxScore: 12,
+		interpretationBands: [
+			{ max: 3, label: 'Low overthinking' },
+			{ max: 8, label: 'Moderate overthinking' },
+			{ max: 12, label: 'High overthinking' }
+		]
+	},
+	trauma_pcptsd5: {
+		minScore: 0,
+		maxScore: 5,
+		interpretationBands: [
+			{ max: 2, label: 'Low trauma symptom activation' },
+			{ max: 5, label: 'Further trauma assessment recommended' }
+		]
+	},
+	emotional_intelligence_eq5: {
+		minScore: 0,
+		maxScore: 20,
+		interpretationBands: [
+			{ max: 7, label: 'Developing emotional intelligence' },
+			{ max: 14, label: 'Growing emotional intelligence' },
+			{ max: 20, label: 'Strong emotional intelligence' }
+		]
+	},
+	personality_bigfive10: {
+		minScore: 0,
+		maxScore: 40,
+		reverseScored: ['bigfive10_q2', 'bigfive10_q6', 'bigfive10_q8', 'bigfive10_q9', 'bigfive10_q10'],
+		interpretationBands: [
+			{ max: 16, label: 'Subtle trait expression' },
+			{ max: 28, label: 'Balanced trait expression' },
+			{ max: 40, label: 'Strong trait expression' }
+		]
+	}
+};
+
 export default function CombinedAssessmentFlow({
 	selectedTypes,
 	sessionId,
@@ -80,6 +152,12 @@ export default function CombinedAssessmentFlow({
 				// Convert basic assessment definitions to AssessmentTemplate format
 				const basicTemplates: AssessmentTemplate[] = basicTypes.map(type => {
 					const def = BASIC_ASSESSMENT_DEFINITIONS[type];
+					const scoringProfile = BASIC_TEMPLATE_SCORING[type] ?? {
+						minScore: 0,
+						maxScore: def.questions.reduce((sum, q) => sum + Math.max(...q.options.map(o => o.value)), 0),
+						interpretationBands: []
+					};
+					const reverseScoredSet = new Set(scoringProfile.reverseScored ?? []);
 					return {
 						assessmentType: def.assessmentType,
 						definitionId: def.assessmentType, // Use assessment type as definition ID for basic assessments
@@ -91,7 +169,7 @@ export default function CombinedAssessmentFlow({
 							text: q.text,
 							responseType: q.type,
 							uiType: q.type === 'yes-no' ? 'binary' as const : q.type === 'likert' ? 'likert' as const : 'multiple-choice' as const,
-							reverseScored: false,
+							reverseScored: reverseScoredSet.has(q.id),
 							domain: null,
 							options: q.options.map((opt, idx) => ({
 								id: opt.id,
@@ -101,9 +179,10 @@ export default function CombinedAssessmentFlow({
 							}))
 						})),
 						scoring: {
-							minScore: 0,
-							maxScore: def.questions.reduce((sum, q) => sum + Math.max(...q.options.map(o => o.value)), 0),
-							interpretationBands: []
+							minScore: scoringProfile.minScore,
+							maxScore: scoringProfile.maxScore,
+							reverseScored: scoringProfile.reverseScored,
+							interpretationBands: scoringProfile.interpretationBands
 						}
 					};
 				});

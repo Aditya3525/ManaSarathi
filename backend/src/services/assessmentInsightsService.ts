@@ -72,7 +72,12 @@ const MAX_DETAIL_ASSESSMENTS = Number(process.env.AI_MAX_DETAIL_ASSESSMENTS ?? 3
 const MAX_RESPONSES_PER_ASSESSMENT = Number(process.env.AI_MAX_DETAIL_RESPONSES ?? 4);
 const MAX_DETAIL_TEXT_LENGTH = Number(process.env.AI_MAX_DETAIL_LENGTH ?? 140);
 
-const HIGHER_IS_BETTER = new Set(['emotionalIntelligence']);
+const HIGHER_IS_BETTER = new Set([
+  'emotionalintelligence',
+  'emotionalintelligenceteique',
+  'emotionalintelligenceei10',
+  'emotionalintelligenceeq5'
+]);
 
 const normalizeType = (type: string): string => type.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -125,13 +130,32 @@ function friendlyLabel(type: string): string {
   switch (type) {
     case 'anxiety':
     case 'anxiety_assessment':
+    case 'anxiety_gad2':
       return 'Anxiety';
     case 'stress':
+    case 'stress_pss10':
+    case 'stress_pss4':
       return 'Stress';
     case 'emotionalIntelligence':
+    case 'emotional_intelligence_teique':
+    case 'emotional_intelligence_eq5':
       return 'Emotional Intelligence';
     case 'overthinking':
+    case 'overthinking_ptq':
+    case 'overthinking_rrs4':
       return 'Overthinking';
+    case 'depression':
+    case 'depression_phq9':
+    case 'depression_phq2':
+      return 'Depression';
+    case 'trauma':
+    case 'trauma_pcl5':
+    case 'trauma_pcptsd5':
+      return 'Trauma & Fear';
+    case 'personality':
+    case 'personality_mini_ipip':
+    case 'personality_bigfive10':
+      return 'Personality';
     default:
       return type
         .split(/(?=[A-Z])/)
@@ -141,7 +165,7 @@ function friendlyLabel(type: string): string {
 }
 
 function isHigherScoreBetter(type: string): boolean {
-  return HIGHER_IS_BETTER.has(type);
+  return HIGHER_IS_BETTER.has(normalizeType(type));
 }
 
 export function interpretAssessmentScore(assessmentType: string, score: number): string {
@@ -163,6 +187,54 @@ export function interpretAssessmentScore(assessmentType: string, score: number):
     }
     return bands[bands.length - 1]?.label ?? 'Needs interpretation';
   };
+
+  if (matchesType('depressionphq2', 'phq2')) {
+    const rawEquivalent = (score / 100) * 6;
+    if (rawEquivalent <= 2) return 'Minimal depression symptoms';
+    if (rawEquivalent <= 4) return 'Mild depression symptoms';
+    return 'Elevated depression symptoms';
+  }
+
+  if (matchesType('anxietygad2', 'gad2')) {
+    const rawEquivalent = (score / 100) * 6;
+    if (rawEquivalent <= 2) return 'Minimal anxiety';
+    if (rawEquivalent <= 4) return 'Mild anxiety symptoms';
+    return 'Elevated anxiety symptoms';
+  }
+
+  if (matchesType('stresspss4', 'pss4')) {
+    const rawEquivalent = (score / 100) * 16;
+    if (rawEquivalent <= 5) return 'Low perceived stress';
+    if (rawEquivalent <= 10) return 'Moderate perceived stress';
+    return 'High perceived stress';
+  }
+
+  if (matchesType('overthinkingrrs4', 'rrs4')) {
+    const rawEquivalent = (score / 100) * 12;
+    if (rawEquivalent <= 3) return 'Low overthinking';
+    if (rawEquivalent <= 8) return 'Moderate overthinking';
+    return 'High overthinking';
+  }
+
+  if (matchesType('traumapcptsd5', 'pcptsd5', 'pcptsd')) {
+    const rawEquivalent = (score / 100) * 5;
+    if (rawEquivalent <= 2) return 'Low trauma symptom activation';
+    return 'Further trauma assessment recommended';
+  }
+
+  if (matchesType('emotionalintelligenceeq5', 'eq5')) {
+    const rawEquivalent = (score / 100) * 20;
+    if (rawEquivalent <= 7) return 'Developing emotional intelligence';
+    if (rawEquivalent <= 14) return 'Growing emotional intelligence';
+    return 'Strong emotional intelligence';
+  }
+
+  if (matchesType('personalitybigfive10', 'bigfive10')) {
+    const rawEquivalent = (score / 100) * 40;
+    if (rawEquivalent <= 16) return 'Subtle trait expression';
+    if (rawEquivalent <= 28) return 'Balanced trait expression';
+    return 'Strong trait expression';
+  }
 
   if (matchesType('phq9', 'phq', 'depression')) {
     if (score <= 20) return 'Minimal depression';
