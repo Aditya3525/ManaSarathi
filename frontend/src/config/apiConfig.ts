@@ -9,9 +9,10 @@
 /** Returns the API base URL with /api suffix, e.g. http://192.168.1.5:5000/api */
 export const getApiBaseUrl = (): string => {
     // Production: always use the env-var set at build time
-    if (import.meta.env.VITE_API_URL) {
-        const raw = (import.meta.env.VITE_API_URL as string).trim();
-        return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`;
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        const normalized = raw.replace(/\/+$/, '');
+        return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
     }
     // Development: dynamic hostname detection
     const hostname = window.location.hostname;
@@ -24,8 +25,9 @@ export const getApiBaseUrl = (): string => {
 /** Returns just the server origin, e.g. http://192.168.1.5:5000 */
 export const getServerBaseUrl = (): string => {
     // Production: derive from VITE_API_URL by stripping /api
-    if (import.meta.env.VITE_API_URL) {
-        return (import.meta.env.VITE_API_URL as string).trim().replace(/\/api\/?$/, '');
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        return raw.replace(/\/api\/?$/, '');
     }
     // Development: dynamic hostname detection
     const hostname = window.location.hostname;
@@ -37,8 +39,9 @@ export const getServerBaseUrl = (): string => {
 
 /** Returns the WebSocket base URL, e.g. ws://192.168.1.5:5000 */
 export const getWsBaseUrl = (): string => {
-    if (import.meta.env.VITE_API_URL) {
-        return (import.meta.env.VITE_API_URL as string).trim().replace(/\/api\/?$/, '').replace(/^http/, 'ws');
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        return raw.replace(/\/api\/?$/, '').replace(/^http/, 'ws');
     }
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
