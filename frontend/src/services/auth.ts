@@ -1,5 +1,14 @@
 import { authApi, usersApi, User } from './api';
 
+export type AuthActionError = Error & {
+  suggestion?: string;
+  messageHint?: string;
+  status?: number;
+  code?: string;
+  email?: string;
+  suggestLogin?: boolean;
+};
+
 // Updated auth service that uses the backend API
 export interface StoredUser extends User {
   assessmentScores?: {
@@ -20,7 +29,14 @@ export async function registerUser(userData: { name: string; email: string; pass
     const response = await authApi.register(userData);
 
     if (!response.success || !response.data) {
-      throw new Error(response.error || 'Registration failed');
+      const authError = new Error(response.error || 'Registration failed') as AuthActionError;
+      authError.suggestion = response.suggestion;
+      authError.messageHint = response.message;
+      authError.status = response.status;
+      authError.code = response.code;
+      authError.email = response.email || userData.email;
+      authError.suggestLogin = response.suggestion === 'login';
+      throw authError;
     }
 
     return {
@@ -42,7 +58,13 @@ export async function loginUser(credentials: { email: string; password: string }
     const response = await authApi.login(credentials);
 
     if (!response.success || !response.data) {
-      throw new Error(response.error || 'Login failed');
+      const authError = new Error(response.error || 'Login failed') as AuthActionError;
+      authError.suggestion = response.suggestion;
+      authError.messageHint = response.message;
+      authError.status = response.status;
+      authError.code = response.code;
+      authError.email = response.email || credentials.email;
+      throw authError;
     }
 
     return {

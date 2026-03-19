@@ -1,5 +1,5 @@
-import { ArrowLeft, CheckCircle, Shield, Sparkles, UserRound } from 'lucide-react';
-import React, { useState } from 'react';
+import { ArrowLeft, CheckCircle, Eye, EyeOff, Shield, Sparkles, UserRound } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { getServerBaseUrl } from '../../../config/apiConfig';
 
@@ -15,7 +15,7 @@ interface UserLoginPageProps {
   onLogin: (credentials: { email: string; password: string }) => Promise<void> | void;
   onSignUp: (userData: { name: string; email: string; password: string }) => Promise<void> | void;
   authError?: string | null;
-  loginError?: { message?: string; error?: string } | null;
+  loginError?: { message?: string; error?: string; suggestion?: string } | null;
   onNavigateHome: () => void;
   onNavigateAdmin: () => void;
   startOAuth?: () => void;
@@ -39,6 +39,69 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [activeView, setActiveView] = useState<'login' | 'signup'>('login');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+
+  const signupPasswordStrength = useMemo(() => {
+    if (!signupPassword) {
+      return { score: 0, label: '', colorClass: '', progressClass: 'bg-border' };
+    }
+
+    const checks = [
+      signupPassword.length >= 8,
+      /[a-z]/.test(signupPassword),
+      /[A-Z]/.test(signupPassword),
+      /\d/.test(signupPassword),
+      /[^A-Za-z0-9]/.test(signupPassword)
+    ];
+    const passedChecks = checks.filter(Boolean).length;
+    const score = Math.round((passedChecks / checks.length) * 100);
+
+    if (score < 40) {
+      return { score, label: 'Weak', colorClass: 'text-red-600', progressClass: 'bg-red-500' };
+    }
+    if (score < 70) {
+      return { score, label: 'Fair', colorClass: 'text-amber-600', progressClass: 'bg-amber-500' };
+    }
+    if (score < 90) {
+      return { score, label: 'Good', colorClass: 'text-blue-600', progressClass: 'bg-blue-500' };
+    }
+
+    return { score, label: 'Strong', colorClass: 'text-emerald-600', progressClass: 'bg-emerald-500' };
+  }, [signupPassword]);
+
+  useEffect(() => {
+    const handleDuplicateSignup = (event: Event) => {
+      const customEvent = event as CustomEvent<{ email?: string }>;
+      const duplicateEmail = customEvent.detail?.email || '';
+
+      if (duplicateEmail) {
+        setEmail(duplicateEmail);
+        setSignupEmail(duplicateEmail);
+      }
+
+      setActiveView('login');
+    };
+
+    const handleMissingAccount = (event: Event) => {
+      const customEvent = event as CustomEvent<{ email?: string }>;
+      const missingEmail = customEvent.detail?.email || '';
+
+      if (missingEmail) {
+        setSignupEmail(missingEmail);
+      }
+
+      setActiveView('signup');
+    };
+
+    window.addEventListener('show-login-from-duplicate', handleDuplicateSignup as EventListener);
+    window.addEventListener('show-signup-from-missing-account', handleMissingAccount as EventListener);
+
+    return () => {
+      window.removeEventListener('show-login-from-duplicate', handleDuplicateSignup as EventListener);
+      window.removeEventListener('show-signup-from-missing-account', handleMissingAccount as EventListener);
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -194,15 +257,43 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      value={signupPassword}
-                      onChange={(event) => setSignupPassword(event.target.value)}
-                      placeholder="Create a password"
-                      required
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        type={showSignupPassword ? 'text' : 'password'}
+                        value={signupPassword}
+                        onChange={(event) => setSignupPassword(event.target.value)}
+                        placeholder="Create a password"
+                        required
+                        minLength={6}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground"
+                        onClick={() => setShowSignupPassword((prev) => !prev)}
+                        aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {signupPassword.length > 0 && (
+                      <div className="space-y-2 rounded-md border border-border/70 bg-muted/30 p-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Password strength</span>
+                          <span className={signupPasswordStrength.colorClass}>{signupPasswordStrength.label}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-border">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${signupPasswordStrength.progressClass}`}
+                            style={{ width: `${signupPasswordStrength.score}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Strong suggestion: use at least 8 characters with uppercase, lowercase, number, and a symbol.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <Button type="submit" className="w-full" disabled={isCreatingAccount || !fullName || !signupEmail || !signupPassword}>
@@ -265,16 +356,27 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
                   <div className="space-y-2">
                     <Label htmlFor="user-password">Password</Label>
-                    <Input
-                      id="user-password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Enter your password"
-                      required
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="user-password"
+                        type={showLoginPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        required
+                        minLength={6}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground"
+                        onClick={() => setShowLoginPassword((prev) => !prev)}
+                        aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <Button type="submit" className="w-full" disabled={isSubmitting || !email || !password}>
@@ -304,6 +406,29 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
                 </Button>
 
                 <div className="space-y-3 text-center text-sm text-muted-foreground">
+                  {loginError?.suggestion === 'create_account' && (
+                    <p>
+                      No account found.{' '}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => {
+                          setSignupEmail(email);
+                          setActiveView('signup');
+                        }}
+                      >
+                        Create account instead
+                      </button>
+                    </p>
+                  )}
+                  {loginError?.suggestion === 'use_google_or_setup_password' && (
+                    <p>
+                      Password login unavailable.{' '}
+                      <button type="button" className="underline" onClick={handleGoogleAuth}>
+                        Continue with Google
+                      </button>
+                    </p>
+                  )}
                   <p>
                     New to Wellbeing AI?{' '}
                     <button type="button" className="underline" onClick={() => setActiveView('signup')}>

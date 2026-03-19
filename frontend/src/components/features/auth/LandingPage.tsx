@@ -18,6 +18,8 @@ import {
   Moon,
   Sun,
   AlertTriangle,
+  Eye,
+  EyeOff,
   Menu,
   Smile,
   Star,
@@ -49,7 +51,7 @@ interface LandingPageProps {
   onLogin: (credentials: { email: string; password: string }) => void;
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
-  loginError?: { message?: string } | null;
+  loginError?: { message?: string; error?: string; suggestion?: string } | null;
   onNavigate?: (page: string) => void;
 }
 
@@ -60,6 +62,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [activeModal, setActiveModal] = useState<null | 'start' | 'signup' | 'login' | 'admin'>(null);
@@ -79,6 +83,34 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const isAdminOpen = activeModal === 'admin';
 
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
+
+  const signupPasswordStrength = useMemo(() => {
+    if (!password) {
+      return { score: 0, label: '', colorClass: '', progressClass: 'bg-border' };
+    }
+
+    const checks = [
+      password.length >= 8,
+      /[a-z]/.test(password),
+      /[A-Z]/.test(password),
+      /\d/.test(password),
+      /[^A-Za-z0-9]/.test(password)
+    ];
+    const passedChecks = checks.filter(Boolean).length;
+    const score = Math.round((passedChecks / checks.length) * 100);
+
+    if (score < 40) {
+      return { score, label: 'Weak', colorClass: 'text-red-600', progressClass: 'bg-red-500' };
+    }
+    if (score < 70) {
+      return { score, label: 'Fair', colorClass: 'text-amber-600', progressClass: 'bg-amber-500' };
+    }
+    if (score < 90) {
+      return { score, label: 'Good', colorClass: 'text-blue-600', progressClass: 'bg-blue-500' };
+    }
+
+    return { score, label: 'Strong', colorClass: 'text-emerald-600', progressClass: 'bg-emerald-500' };
+  }, [password]);
 
   // Sticky header on scroll + scroll depth tracking
   useEffect(() => {
@@ -104,6 +136,34 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [analytics]);
+
+  useEffect(() => {
+    const handleDuplicateSignup = (event: Event) => {
+      const customEvent = event as CustomEvent<{ email?: string }>;
+      const duplicateEmail = customEvent.detail?.email || '';
+      if (duplicateEmail) {
+        setEmail(duplicateEmail);
+      }
+      setActiveModal('login');
+    };
+
+    const handleMissingAccount = (event: Event) => {
+      const customEvent = event as CustomEvent<{ email?: string }>;
+      const missingEmail = customEvent.detail?.email || '';
+      if (missingEmail) {
+        setEmail(missingEmail);
+      }
+      setActiveModal('signup');
+    };
+
+    window.addEventListener('show-login-from-duplicate', handleDuplicateSignup as EventListener);
+    window.addEventListener('show-signup-from-missing-account', handleMissingAccount as EventListener);
+
+    return () => {
+      window.removeEventListener('show-login-from-duplicate', handleDuplicateSignup as EventListener);
+      window.removeEventListener('show-signup-from-missing-account', handleMissingAccount as EventListener);
+    };
+  }, []);
 
   const closeModal = () => setActiveModal(null);
   const openModal = (modal: Exclude<typeof activeModal, null>) => {
@@ -193,6 +253,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
     // Redirect to Google OAuth endpoint - use smart URL detection
     window.location.href = `${getServerBaseUrl()}/api/auth/google`;
   };
+
+  const combinedLoginError = authError || loginError?.message || loginError?.error;
 
   const handleToggleDarkMode = () => {
     const next = !accessibilitySettings.darkMode;
@@ -1245,7 +1307,43 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
             <div className="space-y-2">
               <Label htmlFor="signup-password">Password</Label>
-              <Input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" minLength={6} required />
+              <div className="relative">
+                <Input
+                  id="signup-password"
+                  type={showSignupPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  minLength={6}
+                  required
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground"
+                  onClick={() => setShowSignupPassword((prev) => !prev)}
+                  aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {password.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border/70 bg-muted/30 p-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Password strength</span>
+                    <span className={signupPasswordStrength.colorClass}>{signupPasswordStrength.label}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-border">
+                    <div
+                      className={`h-1.5 rounded-full transition-all ${signupPasswordStrength.progressClass}`}
+                      style={{ width: `${signupPasswordStrength.score}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Strong suggestion: use at least 8 characters with uppercase, lowercase, number, and a symbol.
+                  </p>
+                </div>
+              )}
             </div>
 
             {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
@@ -1302,17 +1400,28 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             </div>
             <div className="space-y-2">
               <Label htmlFor="login-password">Password</Label>
-              <Input
-                id="login-password"
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="login-password"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground"
+                  onClick={() => setShowLoginPassword((prev) => !prev)}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
-            {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
+            {combinedLoginError && <p className="text-sm text-destructive" role="alert">{combinedLoginError}</p>}
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button type="submit" className="flex-1">
                 Log in
@@ -1346,6 +1455,24 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               </svg>
               Sign in with Google
             </Button>
+
+            {loginError?.suggestion === 'create_account' && (
+              <div className="text-center text-xs text-muted-foreground">
+                No account found.{' '}
+                <button type="button" className="underline" onClick={() => openModal('signup')}>
+                  Create account
+                </button>
+              </div>
+            )}
+
+            {loginError?.suggestion === 'use_google_or_setup_password' && (
+              <div className="text-center text-xs text-muted-foreground">
+                Password login unavailable.{' '}
+                <button type="button" className="underline" onClick={() => { closeModal(); handleGoogleAuth(); }}>
+                  Continue with Google
+                </button>
+              </div>
+            )}
 
             <div className="text-center text-xs text-muted-foreground">
               New here?{' '}

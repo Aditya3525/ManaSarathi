@@ -430,6 +430,11 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  message?: string;
+  suggestion?: string;
+  code?: string;
+  status?: number;
+  email?: string;
 }
 
 // Token management
@@ -489,20 +494,40 @@ class ApiClient {
       }
 
       const response = await fetch(url, config);
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? await response.json()
+        : null;
 
       if (!response.ok) {
         // Handle validation errors (422) specially
-        if (response.status === 422 && data.errors) {
+        if (response.status === 422 && data?.errors) {
           const errorMessages = Object.entries(data.errors)
             .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
             .join('; ');
-          throw new Error(errorMessages || data.error || 'Validation failed');
+          return {
+            success: false,
+            error: errorMessages || data.error || 'Validation failed',
+            message: data?.message,
+            suggestion: data?.suggestion,
+            code: data?.code,
+            status: response.status,
+            email: data?.email,
+          };
         }
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+
+        return {
+          success: false,
+          error: data?.error || `HTTP error! status: ${response.status}`,
+          message: data?.message,
+          suggestion: data?.suggestion,
+          code: data?.code,
+          status: response.status,
+          email: data?.email,
+        };
       }
 
-      return data;
+      return (data ?? { success: true }) as ApiResponse<T>;
     } catch (error) {
       console.error('API request failed:', error);
       return {
