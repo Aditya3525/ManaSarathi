@@ -25,7 +25,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { useAssessmentHistory } from './hooks/useAssessments';
 import { queryClient } from './lib/queryClient';
 import { assessmentsApi, AssessmentInsights, AssessmentSessionSummary } from './services/api';
-import { getCurrentUser, loginUser, registerUser, signOut, StoredUser, completeOnboarding, setupUserPassword, type AuthActionError } from './services/auth';
+import { getCurrentUser, loginUser, registerUser, signOut, StoredUser, completeOnboarding, setupUserPassword } from './services/auth';
 import { useAuthStore } from './stores/authStore';
 
 type Page =
@@ -632,7 +632,6 @@ function AppInner() {
   const signUp = async (userData: { name: string; email: string; password: string }) => {
     try {
       setAuthError(null);
-      setLoginError(null);
       console.log('Starting registration process for:', userData);
 
       const result = await registerUser(userData);
@@ -652,21 +651,15 @@ function AppInner() {
 
     } catch (error) {
       console.error('Registration error:', error);
-      const authActionError = error as AuthActionError;
-
-      if (authActionError.suggestLogin || authActionError.suggestion === 'login') {
-        setAuthError(authActionError.message || 'An account already exists. Please log in instead.');
-        setLoginError({
-          error: authActionError.message,
-          message: authActionError.messageHint,
-          suggestion: 'login'
-        });
-        window.dispatchEvent(new CustomEvent('show-login-from-duplicate', {
-          detail: { email: authActionError.email || userData.email }
-        }));
-        return;
+      // Handle structured ApiResponse thrown from registerUser
+      if (error && typeof error === 'object' && 'suggestLogin' in error) {
+        const errObj = error as { suggestLogin?: boolean; email?: string; error?: string; status?: number };
+        if (errObj.suggestLogin) {
+          setAuthError(errObj.error || 'An account already exists. Please log in instead.');
+          window.dispatchEvent(new CustomEvent('show-login-from-duplicate', { detail: { email: errObj.email || userData.email } }));
+          return;
+        }
       }
-
       setAuthError(error instanceof Error ? error.message : 'Registration failed');
     }
   };
@@ -689,39 +682,29 @@ function AppInner() {
       }
     } catch (error: unknown) {
       console.error('Login error:', error);
-      const authActionError = error as AuthActionError;
-
-      if (authActionError.suggestion === 'create_account') {
-        setLoginError({
-          error: authActionError.message || 'No account found with this email.',
-          suggestion: 'create_account',
-          message: authActionError.messageHint
-        });
-        window.dispatchEvent(new CustomEvent('show-signup-from-missing-account', {
-          detail: { email: authActionError.email || credentials.email }
-        }));
-        return;
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; suggestion?: string; message?: string } } };
+        const errorData = axiosError.response?.data;
+        if (errorData?.suggestion === 'create_account') {
+          setLoginError({
+            error: errorData.error,
+            suggestion: 'create_account',
+            message: errorData.message
+          });
+        } else if (errorData?.suggestion === 'use_google_or_setup_password') {
+          setLoginError({
+            error: errorData.error,
+            suggestion: 'use_google_or_setup_password'
+          });
+        } else {
+          setLoginError({
+            error: errorData?.error || 'Login failed',
+            suggestion: 'check_credentials'
+          });
+        }
+      } else {
+        setAuthError(error instanceof Error ? error.message : 'Login failed');
       }
-
-      if (authActionError.suggestion === 'use_google_or_setup_password') {
-        setLoginError({
-          error: authActionError.message || 'Password login is not available for this account yet.',
-          suggestion: 'use_google_or_setup_password',
-          message: authActionError.messageHint
-        });
-        return;
-      }
-
-      if (authActionError.suggestion) {
-        setLoginError({
-          error: authActionError.message || 'Login failed',
-          suggestion: authActionError.suggestion,
-          message: authActionError.messageHint
-        });
-        return;
-      }
-
-      setAuthError(error instanceof Error ? error.message : 'Login failed');
     }
   };
 

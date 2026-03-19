@@ -6,6 +6,8 @@ import { prisma } from '../config/database';
 import { 
   AppError,
   NotFoundError, 
+  ConflictError, 
+  UnauthorizedError,
   DatabaseError,
   BadRequestError
 } from '../shared/errors/AppError';
@@ -156,13 +158,7 @@ export const register = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      res.status(409).json({
-        success: false,
-        error: 'An account already exists with this email. Please log in instead.',
-        suggestion: 'login',
-        email: email.toLowerCase()
-      });
-      return;
+      throw new ConflictError('User already exists with this email');
     }
 
     // Hash password
@@ -217,34 +213,17 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      res.status(404).json({
-        success: false,
-        error: 'No account found with this email.',
-        suggestion: 'create_account',
-        message: 'Create a new account or continue with Google to get started.'
-      });
-      return;
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     // Check password
     if (!user.password) {
-      res.status(400).json({
-        success: false,
-        error: 'This account does not have a password yet.',
-        suggestion: 'use_google_or_setup_password',
-        message: 'Continue with Google sign-in, then set a password to enable email login.'
-      });
-      return;
+      throw new UnauthorizedError('Invalid credentials');
     }
     
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      res.status(401).json({
-        success: false,
-        error: 'Incorrect password. Please try again.',
-        suggestion: 'check_credentials'
-      });
-      return;
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     // Generate token
