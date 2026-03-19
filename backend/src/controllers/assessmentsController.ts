@@ -93,6 +93,21 @@ type TemplateScoring = {
   higherIsBetter?: boolean;
 };
 
+const GENERIC_ASSESSMENT_TYPE_VALUES = new Set(['basic', 'advanced', 'combined']);
+
+const resolveAssessmentTypeKey = (definitionType: string | null | undefined, definitionId: string): string => {
+  const trimmedType = typeof definitionType === 'string' ? definitionType.trim() : '';
+  if (!trimmedType) {
+    return definitionId;
+  }
+
+  if (GENERIC_ASSESSMENT_TYPE_VALUES.has(trimmedType.toLowerCase())) {
+    return definitionId;
+  }
+
+  return trimmedType;
+};
+
 const TRAUMA_DOMAIN_DEFINITIONS: Array<{ id: string; label: string; items: string[] }> = [
   { id: 'intrusion', label: 'Intrusion', items: ['trauma_pcl5_pcl5_q1', 'trauma_pcl5_pcl5_q2', 'trauma_pcl5_pcl5_q3', 'trauma_pcl5_pcl5_q4', 'trauma_pcl5_pcl5_q5'] },
   { id: 'avoidance', label: 'Avoidance', items: ['trauma_pcl5_pcl5_q6', 'trauma_pcl5_pcl5_q7'] },
@@ -1024,7 +1039,7 @@ const formatCustomAssessmentTemplate = (
   });
 
   return {
-    assessmentType: definition.type,
+    assessmentType: resolveAssessmentTypeKey(definition.type, definition.id),
     definitionId: definition.id,
     title: definition.name,
     description: definition.description ?? '',
@@ -1153,7 +1168,7 @@ export const getAvailableAssessments = async (_req: Request, res: Response) => {
       category: assessment.category,
       description: assessment.description,
       timeEstimate: assessment.timeEstimate || 'Not specified',
-      type: assessment.type,
+      type: resolveAssessmentTypeKey(assessment.type, assessment.id),
       questions: assessment._count?.questions ?? 0,
       tags: assessment.tags || 'all'
     }));

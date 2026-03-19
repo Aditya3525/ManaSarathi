@@ -10,9 +10,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 // --- Prisma mock ---
 const mockAssessmentDefinitions = [
     {
-        id: 'def1',
+        id: 'anxiety_assessment',
         name: 'Anxiety Assessment',
-        type: 'anxiety_assessment',
+        type: 'Advanced',
         category: 'mental_health',
         description: 'Measures anxiety levels',
         timeEstimate: '5-10 min',
@@ -118,6 +118,15 @@ describe('Assessment API', () => {
 
             expect(res.status).toBe(200);
             expect(res.body).toBeDefined();
+            expect(Array.isArray(res.body.data)).toBe(true);
+            const returnedTypes = (res.body.data as Array<{ type?: string }>)
+                .map((item) => item.type)
+                .filter((value): value is string => typeof value === 'string');
+
+            expect(returnedTypes.length).toBeGreaterThan(0);
+            expect(returnedTypes).not.toContain('Advanced');
+            expect(returnedTypes).not.toContain('Basic');
+            expect(returnedTypes).not.toContain('Combined');
         });
     });
 

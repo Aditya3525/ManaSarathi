@@ -132,6 +132,16 @@ const getAssessmentCategory = (category: string): 'required' | 'recommended' | '
   return 'optional';
 };
 
+const GENERIC_TYPE_KEYS = new Set(['basic', 'advanced', 'combined']);
+
+const resolveAssessmentTypeKey = (type: string | undefined, id: string): string => {
+  const normalizedType = type?.trim().toLowerCase() ?? '';
+  if (!normalizedType || GENERIC_TYPE_KEYS.has(normalizedType)) {
+    return id;
+  }
+  return type!.trim();
+};
+
 const baseAssessments: AssessmentCardConfig[] = [
   {
     id: 'anxiety_assessment',
@@ -373,10 +383,9 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
       icon: getCategoryIcon(assessment.category),
       difficulty: getAssessmentDifficulty(assessment.type, assessment.questions),
       category: primaryCategory,
-      // Use the assessment type so the backend template lookup works correctly.
-      // The backend resolves templates by type (e.g. 'anxiety', 'stress'), not by
-      // the database primary key ID.
-      typeKey: assessment.type || assessment.id,
+      // Some legacy rows use generic types (e.g. Advanced/Basic), which are not unique.
+      // Fall back to ID so retake opens the correct template.
+      typeKey: resolveAssessmentTypeKey(assessment.type, assessment.id),
       tags: tags.length > 0 ? tags : ['all']
     };
   });
