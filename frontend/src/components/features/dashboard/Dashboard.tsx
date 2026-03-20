@@ -163,11 +163,22 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
   const getProfileCompletion = () => {
     if (!user) return 0;
-    // Use profileCompletion from API if available
+    // Use profileCompletion from API if available (dashboardData.user has it)
     if ('profileCompletion' in user && typeof user.profileCompletion === 'number') {
       return user.profileCompletion;
     }
-    return 0;
+    // Fall back to computing from known profile fields (mirrors backend logic)
+    const fields = [
+      user.firstName,
+      user.lastName,
+      user.birthday,
+      user.region,
+      user.approach,
+      user.emergencyContact,
+      user.emergencyPhone
+    ];
+    const completed = fields.filter(f => f !== null && f !== undefined && f !== '').length;
+    return Math.round((completed / fields.length) * 100);
   };
 
   // Format score to whole number (no decimals)
@@ -216,7 +227,11 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     }
   })();
 
-  const practiceTags = recommendedPractice?.tags || (() => {
+  const practiceTags = (() => {
+    const raw = recommendedPractice?.tags;
+    // Normalise: the API may return a comma-separated string or an array
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string' && raw.trim()) return raw.split(',').map(t => t.trim());
     switch (user?.approach) {
       case 'western': return ['CBT technique', 'Thought tracking', '5–10 min'];
       case 'eastern': return ['Meditation', 'Breathwork', 'Grounding'];
