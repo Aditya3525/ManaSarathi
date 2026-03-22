@@ -135,7 +135,7 @@ export const TherapistLoginPage: React.FC<TherapistLoginPageProps> = ({
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={isSubmitting || !email || !password}>
+                                <Button type="submit" className="w-full" disabled={isSubmitting || !email || !password}>
                                     {isSubmitting ? 'Signing in…' : 'Sign in to portal'}
                                 </Button>
                             </form>
