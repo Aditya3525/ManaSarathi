@@ -58,6 +58,41 @@ const updateApproachWithPasswordSchema = Joi.object({
 const normalizeSecurityAnswer = (answer: string): string => answer.trim().toLowerCase();
 const getFrontendBaseUrl = (): string => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
+const isAllowedFrontendOrigin = (origin: string): boolean => {
+  const normalizedOrigin = origin.replace(/\/+$/, '');
+  const configuredFrontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+
+  if (configuredFrontendUrl && normalizedOrigin === configuredFrontendUrl) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(normalizedOrigin);
+    const protocol = parsed.protocol.toLowerCase();
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return protocol === 'http:' || protocol === 'https:';
+    }
+
+    if (protocol !== 'https:') {
+      return false;
+    }
+
+    return hostname.endsWith('.vercel.app') || hostname === 'maansarathi.app';
+  } catch {
+    return false;
+  }
+};
+
+const getOAuthFrontendBaseUrl = (req: Request): string => {
+  const sessionOrigin = (req.session as any)?.oauthWebOrigin;
+  if (typeof sessionOrigin === 'string' && isAllowedFrontendOrigin(sessionOrigin)) {
+    return sessionOrigin.replace(/\/+$/, '');
+  }
+  return getFrontendBaseUrl();
+};
+
 // Generate JWT token
 const generateToken = (userId: string): string => {
   // Use provided secret or safe fallback for development to prevent silent flow break
@@ -72,7 +107,10 @@ const generateToken = (userId: string): string => {
 // Google OAuth Success callback
 export const googleAuthSuccess = async (req: Request, res: Response) => {
   try {
-    const frontendBaseUrl = getFrontendBaseUrl();
+    const frontendBaseUrl = getOAuthFrontendBaseUrl(req);
+    if ((req.session as any)?.oauthWebOrigin) {
+      delete (req.session as any).oauthWebOrigin;
+    }
     if (!req.user) {
       return res.redirect(`${frontendBaseUrl}/auth/callback?error=oauth_failed`);
     }
@@ -128,7 +166,11 @@ export const googleAuthSuccess = async (req: Request, res: Response) => {
 
 // Google OAuth Failure callback
 export const googleAuthFailure = (req: Request, res: Response) => {
-  res.redirect(`${getFrontendBaseUrl()}/auth/callback?error=oauth_cancelled`);
+  const frontendBaseUrl = getOAuthFrontendBaseUrl(req);
+  if ((req.session as any)?.oauthWebOrigin) {
+    delete (req.session as any).oauthWebOrigin;
+  }
+  res.redirect(`${frontendBaseUrl}/auth/callback?error=oauth_cancelled`);
 };
 
 // Stateless logout (client simply discards token; endpoint provided for future blacklisting/session tracking)

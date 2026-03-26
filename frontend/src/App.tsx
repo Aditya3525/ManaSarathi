@@ -428,7 +428,8 @@ function AppInner() {
   }, [currentPage, logoutFromStore, navigateTo, setUser]);
 
   const startGoogleOAuth = useCallback(() => {
-    window.location.assign(`${getServerBaseUrl()}/api/auth/google`);
+    const frontendOrigin = encodeURIComponent(window.location.origin);
+    window.location.assign(`${getServerBaseUrl()}/api/auth/google?frontend_origin=${frontendOrigin}`);
   }, []);
 
   const startAssessment = (assessmentId: string, session?: AssessmentSessionSummary | null) => {
