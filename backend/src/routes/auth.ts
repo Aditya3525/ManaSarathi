@@ -67,6 +67,10 @@ const extractOrigin = (value: string): string => {
   }
 };
 
+const encodeOAuthState = (payload: { platform: 'web' | 'mobile'; frontendOrigin?: string }): string => {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+};
+
 // Traditional email/password routes
 router.post('/register', validate(registerSchema), asyncHandler(register));
 router.post('/login', validate(loginSchema), asyncHandler(login));
@@ -75,6 +79,7 @@ router.post('/login', validate(loginSchema), asyncHandler(login));
 // Accept ?platform=mobile query param so the callback knows where to redirect
 router.get('/google', (req, res, next) => {
   const platform = req.query.platform === 'mobile' ? 'mobile' : 'web';
+  let frontendOriginForState = '';
 
   if (platform === 'web') {
     const queryOrigin = typeof req.query.frontend_origin === 'string' ? extractOrigin(req.query.frontend_origin) : '';
@@ -82,13 +87,18 @@ router.get('/google', (req, res, next) => {
     const resolvedOrigin = queryOrigin || refererOrigin;
 
     if (resolvedOrigin && isAllowedFrontendOrigin(resolvedOrigin)) {
+      frontendOriginForState = resolvedOrigin;
       (req.session as any).oauthWebOrigin = resolvedOrigin;
     }
   }
 
+  const statePayload = platform === 'mobile'
+    ? { platform: 'mobile' as const }
+    : { platform: 'web' as const, frontendOrigin: frontendOriginForState || undefined };
+
   passport.authenticate('google', {
     scope: ['profile', 'email'],
-    state: platform, // passed through OAuth and available in callback
+    state: encodeOAuthState(statePayload),
   })(req, res, next);
 });
 
