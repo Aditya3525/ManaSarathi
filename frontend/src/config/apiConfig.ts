@@ -6,12 +6,17 @@
  * access from mobile devices also works.
  */
 
+const PROD_API_ORIGIN_FALLBACK = 'https://maansarathi-backend.onrender.com';
+
 /** Returns the API base URL with /api suffix, e.g. http://192.168.1.5:5000/api */
 export const getApiBaseUrl = (): string => {
     // Production: always use the env-var set at build time
     if (import.meta.env.VITE_API_URL) {
         const raw = import.meta.env.VITE_API_URL as string;
         return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`;
+    }
+    if (import.meta.env.PROD) {
+        return `${PROD_API_ORIGIN_FALLBACK}/api`;
     }
     // Development: dynamic hostname detection
     const hostname = window.location.hostname;
@@ -27,6 +32,9 @@ export const getServerBaseUrl = (): string => {
     if (import.meta.env.VITE_API_URL) {
         return import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
     }
+    if (import.meta.env.PROD) {
+        return PROD_API_ORIGIN_FALLBACK;
+    }
     // Development: dynamic hostname detection
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -39,6 +47,9 @@ export const getServerBaseUrl = (): string => {
 export const getWsBaseUrl = (): string => {
     if (import.meta.env.VITE_API_URL) {
         return import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '').replace(/^http/, 'ws');
+    }
+    if (import.meta.env.PROD) {
+        return PROD_API_ORIGIN_FALLBACK.replace(/^http/, 'ws');
     }
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
