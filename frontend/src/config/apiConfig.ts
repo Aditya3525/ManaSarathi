@@ -9,9 +9,10 @@
 /** Returns the API base URL with /api suffix, e.g. https://maansarathi-backend.onrender.com/api */
 export const getApiBaseUrl = (): string => {
     // Production: always use the env-var set at build time
-    if (import.meta.env.VITE_API_URL) {
-        const raw = (import.meta.env.VITE_API_URL as string).trim();
-        return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`;
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        const normalized = raw.replace(/\/+$/, '');
+        return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
     }
     // Production fallback: use Render backend when env-var not set
     if (import.meta.env.PROD) {
@@ -28,8 +29,9 @@ export const getApiBaseUrl = (): string => {
 /** Returns just the server origin, e.g. https://maansarathi-backend.onrender.com */
 export const getServerBaseUrl = (): string => {
     // Production: derive from VITE_API_URL by stripping /api
-    if (import.meta.env.VITE_API_URL) {
-        return (import.meta.env.VITE_API_URL as string).trim().replace(/\/api\/?$/, '');
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        return raw.replace(/\/api\/?$/, '');
     }
     // Production fallback: use Render backend when env-var not set
     if (import.meta.env.PROD) {
@@ -45,8 +47,9 @@ export const getServerBaseUrl = (): string => {
 
 /** Returns the WebSocket base URL, e.g. wss://maansarathi-backend.onrender.com */
 export const getWsBaseUrl = (): string => {
-    if (import.meta.env.VITE_API_URL) {
-        return (import.meta.env.VITE_API_URL as string).trim().replace(/\/api\/?$/, '').replace(/^http/, 'ws');
+    const raw = (import.meta.env.VITE_API_URL as string).trim();
+    if (raw) {
+        return raw.replace(/\/api\/?$/, '').replace(/^http/, 'ws');
     }
     // Production fallback: use Render backend when env-var not set
     if (import.meta.env.PROD) {
