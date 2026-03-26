@@ -30,6 +30,43 @@ import { prisma } from '../config/database';
 
 const router = express.Router();
 
+const normalizeUrl = (value: string): string => value.replace(/\/+$/, '');
+
+const isAllowedFrontendOrigin = (origin: string): boolean => {
+  const normalizedOrigin = normalizeUrl(origin);
+  const configuredFrontendUrl = process.env.FRONTEND_URL ? normalizeUrl(process.env.FRONTEND_URL) : '';
+
+  if (configuredFrontendUrl && normalizedOrigin === configuredFrontendUrl) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(normalizedOrigin);
+    const protocol = parsed.protocol.toLowerCase();
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return protocol === 'http:' || protocol === 'https:';
+    }
+
+    if (protocol !== 'https:') {
+      return false;
+    }
+
+    return hostname.endsWith('.vercel.app') || hostname === 'maansarathi.app';
+  } catch {
+    return false;
+  }
+};
+
+const extractOrigin = (value: string): string => {
+  try {
+    return normalizeUrl(new URL(value).origin);
+  } catch {
+    return '';
+  }
+};
+
 // Traditional email/password routes
 router.post('/register', validate(registerSchema), asyncHandler(register));
 router.post('/login', validate(loginSchema), asyncHandler(login));
@@ -38,6 +75,17 @@ router.post('/login', validate(loginSchema), asyncHandler(login));
 // Accept ?platform=mobile query param so the callback knows where to redirect
 router.get('/google', (req, res, next) => {
   const platform = req.query.platform === 'mobile' ? 'mobile' : 'web';
+
+  if (platform === 'web') {
+    const queryOrigin = typeof req.query.frontend_origin === 'string' ? extractOrigin(req.query.frontend_origin) : '';
+    const refererOrigin = typeof req.headers.referer === 'string' ? extractOrigin(req.headers.referer) : '';
+    const resolvedOrigin = queryOrigin || refererOrigin;
+
+    if (resolvedOrigin && isAllowedFrontendOrigin(resolvedOrigin)) {
+      (req.session as any).oauthWebOrigin = resolvedOrigin;
+    }
+  }
+
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     state: platform, // passed through OAuth and available in callback
