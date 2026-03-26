@@ -111,8 +111,14 @@ The frontend communicates with the backend through the `services/` layer:
 Create a `.env.local` file (not committed) for local development:
 
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:5000/api
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
+```
+
+For production on Vercel, set:
+
+```env
+VITE_API_URL=https://maansarathi-backend.onrender.com/api
 ```
 
 ## Contributing

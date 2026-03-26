@@ -3,12 +3,11 @@
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'MaanSarathi-v1.0.1';
-const API_CACHE_NAME = 'MaanSarathi-api-v1.0.1';
+const CACHE_NAME = 'MaanSarathi-v1.0.3';
+const API_CACHE_NAME = 'MaanSarathi-api-v1.0.3';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
-  '/',
   '/index.html',
   '/favicon.svg',
   '/manifest.json',
@@ -70,6 +69,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       networkFirstStrategy(request, API_CACHE_NAME)
     );
+    return;
+  }
+
+  // Never cache HTML/document requests; always go to network first to avoid stale bundles.
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(fetch(request));
     return;
   }
 
