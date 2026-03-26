@@ -11,7 +11,7 @@ export const getApiBaseUrl = (): string => {
     // Production: always use the env-var set at build time
     if (import.meta.env.VITE_API_URL) {
         const raw = (import.meta.env.VITE_API_URL as string).trim();
-        return raw.endsWith('/api') ? raw : `$${raw.replace(/\/+$/, '')}/api`;
+        return raw.endsWith('/api') ? raw : `${raw.replace(/\/+$/, '')}/api`;
     }
     // Production fallback: use Render backend when env-var not set
     if (import.meta.env.PROD) {
@@ -22,7 +22,7 @@ export const getApiBaseUrl = (): string => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:5000/api';
     }
-    return `http://$${hostname}:5000/api`;
+    return `http://${hostname}:5000/api`;
 };
 
 /** Returns just the server origin, e.g. https://maansarathi-backend.onrender.com */
@@ -40,7 +40,7 @@ export const getServerBaseUrl = (): string => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:5000';
     }
-    return `http://$${hostname}:5000`;
+    return `http://${hostname}:5000`;
 };
 
 /** Returns the WebSocket base URL, e.g. wss://maansarathi-backend.onrender.com */
@@ -56,5 +56,5 @@ export const getWsBaseUrl = (): string => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'ws://localhost:5000';
     }
-    return `ws://$${hostname}:5000`;
+    return `ws://${hostname}:5000`;
 };
