@@ -85,7 +85,36 @@ const isAllowedFrontendOrigin = (origin: string): boolean => {
   }
 };
 
+const getOAuthOriginFromState = (req: Request): string | null => {
+  const rawState = typeof req.query.state === 'string' ? req.query.state : '';
+  if (!rawState) return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8')) as {
+      platform?: string;
+      frontendOrigin?: string;
+    };
+
+    if (decoded.platform !== 'web') {
+      return null;
+    }
+
+    if (typeof decoded.frontendOrigin === 'string' && isAllowedFrontendOrigin(decoded.frontendOrigin)) {
+      return decoded.frontendOrigin.replace(/\/+$/, '');
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
 const getOAuthFrontendBaseUrl = (req: Request): string => {
+  const stateOrigin = getOAuthOriginFromState(req);
+  if (stateOrigin) {
+    return stateOrigin;
+  }
+
   const sessionOrigin = (req.session as any)?.oauthWebOrigin;
   if (typeof sessionOrigin === 'string' && isAllowedFrontendOrigin(sessionOrigin)) {
     return sessionOrigin.replace(/\/+$/, '');
