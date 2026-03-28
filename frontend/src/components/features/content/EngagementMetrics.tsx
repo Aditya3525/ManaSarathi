@@ -1,11 +1,11 @@
 import { Activity, BarChart3, Clock, Smile, Star, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { engagementApi, UserEngagementRecord } from '../../../services/api';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Skeleton } from '../../ui/skeleton';
+import { engagementApi, UserEngagementRecord } from '../../../services/api';
 
 interface EngagementStat {
   id: string;

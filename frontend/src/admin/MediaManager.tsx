@@ -40,10 +40,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { adminFetch } from './adminApi';
 import { getApiBaseUrl, getServerBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
-
-import { adminFetch } from './adminApi';
 
 interface MediaFile {
   id: string;
@@ -93,7 +92,7 @@ export const MediaManager: React.FC = () => {
       const files = Array.isArray(payload.data) ? payload.data : [];
       setMediaFiles(files);
 
-      const folders = Array.from(new Set<string>(
+      const folders = Array.from(new Set(
         files
           .map((file: MediaFile) => file.folder)
           .filter((folder: string | null | undefined): folder is string => Boolean(folder))

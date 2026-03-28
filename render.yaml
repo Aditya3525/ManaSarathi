@@ -1,5 +1,21 @@
 services:
   - type: web
+    name: maansarathi-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://maansarathi-backend.onrender.com/api
+
+  - type: web
     name: maansarathi-backend
     runtime: node
     region: oregon
@@ -24,7 +40,7 @@ services:
       - key: PORT
         value: 10000
       - key: FRONTEND_URL
-        value: https://maansarathi.vercel.app
+        value: https://maansarathi-frontend.onrender.com
       - key: AI_PROVIDER_PRIORITY
         value: huggingface,gemini,openai,anthropic
       - key: AI_ENABLE_FALLBACK

@@ -5,8 +5,8 @@ const API_BASE_URL = getApiBaseUrl();
 
 // Types
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
-export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
-export type TicketCategory = 'TECHNICAL' | 'BILLING' | 'FEATURE_REQUEST' | 'CRISIS' | 'GENERAL';
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TicketCategory = 'TECHNICAL' | 'ACCOUNT' | 'BILLING' | 'GENERAL' | 'CRISIS' | 'FEEDBACK';
 export type FAQCategory = 'GENERAL' | 'TECHNICAL' | 'PRIVACY' | 'BILLING' | 'ASSESSMENTS' | 'CHATBOT' | 'SAFETY';
 export type ResourceType = 'HOTLINE' | 'CHAT' | 'TEXT' | 'WEBSITE' | 'APP';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
@@ -22,6 +22,8 @@ export interface CrisisResource {
   description: string;
   available24x7: boolean;
   languages: string[];
+  availability?: string | null;
+  tags?: string | null;
   isActive: boolean;
 }
 
@@ -67,15 +69,16 @@ export interface Therapist {
 export interface SupportTicket {
   id: string;
   subject: string;
-  message: string;
+  message?: string;
   category: TicketCategory;
   priority: TicketPriority;
   status: TicketStatus;
-  attachmentUrl: string | null;
-  adminResponse: string | null;
-  respondedAt: string | null;
+  response?: string | null;
+  adminResponse?: string | null;
+  respondedBy?: string | null;
+  respondedAt?: string | null;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface SafetyPlan {
@@ -89,6 +92,142 @@ export interface SafetyPlan {
   createdAt: string;
   updatedAt: string;
 }
+
+type BackendResourceType = 'HOTLINE' | 'TEXT_LINE' | 'CHAT_SERVICE' | 'EMERGENCY' | 'SUPPORT_GROUP' | 'WEBSITE';
+
+const mapBackendResourceType = (type: string): ResourceType => {
+  switch (type as BackendResourceType) {
+    case 'TEXT_LINE':
+      return 'TEXT';
+    case 'CHAT_SERVICE':
+      return 'CHAT';
+    case 'WEBSITE':
+      return 'WEBSITE';
+    case 'SUPPORT_GROUP':
+      return 'APP';
+    case 'EMERGENCY':
+    case 'HOTLINE':
+    default:
+      return 'HOTLINE';
+  }
+};
+
+const parseLanguages = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const parseJsonArray = <T>(value: unknown): T[] => {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const mapSafetyPlanFromBackend = (raw: any): SafetyPlan => {
+  const contacts = parseJsonArray<any>(raw?.contactsJson);
+
+  const supportContacts = contacts
+    .filter((contact) => !contact?.role || contact?.relationship)
+    .map((contact) => ({
+      name: String(contact?.name ?? '').trim(),
+      phone: String(contact?.phone ?? '').trim(),
+      relationship: String(contact?.relationship ?? '').trim()
+    }))
+    .filter((contact) => contact.name || contact.phone || contact.relationship);
+
+  const professionalContactsFromJson = contacts
+    .filter((contact) => !!contact?.role)
+    .map((contact) => ({
+      name: String(contact?.name ?? '').trim(),
+      phone: String(contact?.phone ?? '').trim(),
+      role: String(contact?.role ?? '').trim()
+    }))
+    .filter((contact) => contact.name || contact.phone || contact.role);
+
+  const professionalContacts: Array<{ name: string; phone: string; role: string }> = [
+    ...professionalContactsFromJson,
+    ...(raw?.therapistName || raw?.therapistPhone
+      ? [{ name: raw.therapistName ?? '', phone: raw.therapistPhone ?? '', role: 'Therapist' }]
+      : []),
+    ...(raw?.psychiatristName || raw?.psychiatristPhone
+      ? [{ name: raw.psychiatristName ?? '', phone: raw.psychiatristPhone ?? '', role: 'Psychiatrist' }]
+      : [])
+  ];
+
+  return {
+    id: raw?.id ?? 'safety-plan',
+    warningSigns: parseJsonArray<string>(raw?.warningSignsJson),
+    copingStrategies: parseJsonArray<string>(raw?.copingStrategiesJson),
+    supportContacts,
+    professionalContacts,
+    environmentSafety: parseJsonArray<string>(raw?.safeEnvironmentJson),
+    reasonsToLive: parseJsonArray<string>(raw?.reasonsToLiveJson),
+    createdAt: raw?.createdAt ?? new Date().toISOString(),
+    updatedAt: raw?.updatedAt ?? new Date().toISOString()
+  };
+};
+
+const mapSafetyPlanToBackend = (planData: {
+  warningSigns: string[];
+  copingStrategies: string[];
+  supportContacts: Array<{ name: string; phone: string; relationship: string }>;
+  professionalContacts: Array<{ name: string; phone: string; role: string }>;
+  environmentSafety: string[];
+  reasonsToLive: string[];
+}) => {
+  const therapistContact = planData.professionalContacts.find((contact) =>
+    /therapist/i.test(contact.role)
+  );
+  const psychiatristContact = planData.professionalContacts.find((contact) =>
+    /psychiatrist/i.test(contact.role)
+  );
+
+  const normalizedContacts = [
+    ...planData.supportContacts.map((contact) => ({
+      name: contact.name,
+      phone: contact.phone,
+      relationship: contact.relationship
+    })),
+    ...planData.professionalContacts.map((contact) => ({
+      name: contact.name,
+      phone: contact.phone,
+      role: contact.role
+    }))
+  ];
+
+  return {
+    warningSignsJson: JSON.stringify(planData.warningSigns ?? []),
+    copingStrategiesJson: JSON.stringify(planData.copingStrategies ?? []),
+    contactsJson: JSON.stringify(normalizedContacts),
+    therapistName: therapistContact?.name || undefined,
+    therapistPhone: therapistContact?.phone || undefined,
+    psychiatristName: psychiatristContact?.name || undefined,
+    psychiatristPhone: psychiatristContact?.phone || undefined,
+    safeEnvironmentJson: JSON.stringify(planData.environmentSafety ?? []),
+    reasonsToLiveJson: JSON.stringify(planData.reasonsToLive ?? [])
+  };
+};
 
 export interface TherapistBookingTherapist {
   name: string;
@@ -130,7 +269,26 @@ export const crisisResourcesApi = {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch crisis resources');
     const data = await response.json();
-    return data.data.resources;
+    const resources = Array.isArray(data?.data?.resources) ? data.data.resources : [];
+
+    return resources.map((resource: any) => ({
+      id: resource.id,
+      name: resource.name,
+      type: mapBackendResourceType(resource.type),
+      country: resource.country ?? country ?? 'US',
+      phone: resource.phone ?? resource.phoneNumber ?? null,
+      sms: resource.sms ?? resource.textNumber ?? null,
+      website: resource.website ?? null,
+      description: resource.description ?? '',
+      available24x7:
+        typeof resource.availability === 'string'
+          ? /24\s*\/\s*7/i.test(resource.availability)
+          : Boolean(resource.available24x7),
+      languages: parseLanguages(resource.languages ?? resource.language),
+      availability: resource.availability ?? null,
+      tags: resource.tags ?? null,
+      isActive: resource.isActive ?? true
+    }));
   }
 };
 
@@ -176,7 +334,7 @@ export const therapistApi = {
   }): Promise<Therapist[]> => {
     const params = new URLSearchParams();
     if (filters?.specialty) params.append('specialty', filters.specialty);
-    if (filters?.location) params.append('location', filters.location);
+    if (filters?.location) params.append('city', filters.location);
     if (filters?.acceptsInsurance !== undefined) {
       params.append('acceptsInsurance', filters.acceptsInsurance.toString());
     }
@@ -267,9 +425,19 @@ export const supportTicketsApi = {
       },
       body: JSON.stringify(ticketData)
     });
-    if (!response.ok) throw new Error('Failed to create support ticket');
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new Error(errorPayload?.error || 'Failed to create support ticket');
+    }
     const data = await response.json();
-    return data.data.ticket;
+    const ticket = data?.data?.ticket;
+    return {
+      ...ticket,
+      response: ticket?.response ?? null,
+      adminResponse: ticket?.response ?? null,
+      respondedBy: ticket?.respondedBy ?? null,
+      respondedAt: ticket?.respondedAt ?? null
+    };
   },
 
   getMyTickets: async (status?: TicketStatus): Promise<SupportTicket[]> => {
@@ -285,7 +453,12 @@ export const supportTicketsApi = {
     });
     if (!response.ok) throw new Error('Failed to fetch support tickets');
     const data = await response.json();
-    return data.data.tickets;
+    const tickets = Array.isArray(data?.data?.tickets) ? data.data.tickets : [];
+    return tickets.map((ticket: any) => ({
+      ...ticket,
+      response: ticket.response ?? null,
+      adminResponse: ticket.response ?? null
+    }));
   },
 
   getById: async (id: string): Promise<SupportTicket> => {
@@ -297,7 +470,12 @@ export const supportTicketsApi = {
     });
     if (!response.ok) throw new Error('Failed to fetch support ticket');
     const data = await response.json();
-    return data.data.ticket;
+    const ticket = data?.data?.ticket;
+    return {
+      ...ticket,
+      response: ticket?.response ?? null,
+      adminResponse: ticket?.response ?? null
+    };
   },
 
   acknowledge: async (id: string): Promise<void> => {
@@ -325,7 +503,7 @@ export const safetyPlanApi = {
       if (response.status === 404) return null;
       if (!response.ok) throw new Error('Failed to fetch safety plan');
       const data = await response.json();
-      return data.data.safetyPlan;
+      return mapSafetyPlanFromBackend(data?.data?.safetyPlan);
     } catch (error) {
       console.error('Error fetching safety plan:', error);
       return null;
@@ -341,17 +519,18 @@ export const safetyPlanApi = {
     reasonsToLive: string[];
   }): Promise<SafetyPlan> => {
     const token = getAuthToken();
+    const payload = mapSafetyPlanToBackend(planData);
     const response = await fetch(`${API_BASE_URL}/crisis/safety-plan`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(planData)
+      body: JSON.stringify(payload)
     });
     if (!response.ok) throw new Error('Failed to save safety plan');
     const data = await response.json();
-    return data.data.safetyPlan;
+    return mapSafetyPlanFromBackend(data?.data?.safetyPlan);
   },
 
   delete: async (): Promise<void> => {

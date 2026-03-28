@@ -781,12 +781,13 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                       <select
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
                         value={ticketCategory}
-                        onChange={(e) => setTicketCategory(e.target.value as any)}
+                        onChange={(e) => setTicketCategory(e.target.value as TicketCategory)}
                       >
                         <option value="GENERAL">General Inquiry</option>
                         <option value="TECHNICAL">Technical Issue</option>
+                        <option value="ACCOUNT">Account Problem</option>
                         <option value="BILLING">Billing Question</option>
-                        <option value="FEATURE_REQUEST">Feature Request</option>
+                        <option value="FEEDBACK">Feedback / Feature Idea</option>
                         <option value="CRISIS">Crisis Support</option>
                       </select>
                     </div>

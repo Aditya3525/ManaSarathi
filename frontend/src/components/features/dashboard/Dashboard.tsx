@@ -1,5 +1,5 @@
 import { Award, BookOpen, Brain, Calendar, ChevronRight, Heart, MessageCircle, Moon, MoreVertical, Play, Sparkles, Sun, Target, TrendingUp } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
@@ -58,6 +58,7 @@ interface DashboardProps {
 export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = false, onTourDismiss, onTourComplete }: DashboardProps) {
   const [todayMood, setTodayMood] = useState<string>('');
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  const moodCheckRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
   const { checkIsUserAdmin } = useAdminAuth();
@@ -115,22 +116,6 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
   const streakInfo = getStreakInfo();
 
-  // Loading state
-  if (isLoading) {
-    return <DashboardLoadingSkeleton />;
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <ErrorMessage
-        title="Failed to load dashboard"
-        message="We couldn't load your dashboard data. Please check your connection and try again."
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
   // Mood selection handler with API call
   const handleMoodSelect = async (mood: string) => {
     setTodayMood(mood);
@@ -169,6 +154,8 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     }
     return 0;
   };
+
+  const profileCompletion = getProfileCompletion();
 
   // Format score to whole number (no decimals)
   const formatScore = (score: number | null | undefined): string => {
@@ -232,6 +219,68 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     });
   };
 
+  const recommendedAction = useMemo(() => {
+    if (!todayMood) {
+      return {
+        title: 'Log today\'s mood',
+        description: 'A quick check-in helps personalize your practices and insights.',
+        cta: 'Check in now',
+        onAction: () => moodCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      };
+    }
+
+    if (weeklyProgress && weeklyProgress.practices.completed < weeklyProgress.practices.goal) {
+      const remaining = weeklyProgress.practices.goal - weeklyProgress.practices.completed;
+      return {
+        title: 'Complete today\'s practice',
+        description: `${remaining} practice${remaining === 1 ? '' : 's'} left to hit your weekly goal.`,
+        cta: 'Start a practice',
+        onAction: () => onNavigate('practices')
+      };
+    }
+
+    if (profileCompletion < 100) {
+      return {
+        title: 'Finish your profile setup',
+        description: `You are ${profileCompletion}% complete. Add a few details for better recommendations.`,
+        cta: 'Complete profile',
+        onAction: () => onNavigate('profile')
+      };
+    }
+
+    if (!assessmentScores) {
+      return {
+        title: 'Take your first assessment',
+        description: 'Unlock tailored guidance based on your current wellbeing baseline.',
+        cta: 'Start assessment',
+        onAction: () => onNavigate('assessments')
+      };
+    }
+
+    return {
+      title: 'Reflect with your AI coach',
+      description: 'Turn today\'s momentum into a focused plan with guided conversation.',
+      cta: 'Open AI chat',
+      onAction: () => onNavigate('chatbot')
+    };
+  }, [todayMood, weeklyProgress, profileCompletion, assessmentScores, onNavigate]);
+
+  // Loading state
+  if (isLoading) {
+    return <DashboardLoadingSkeleton />;
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <ErrorMessage
+        title="Failed to load dashboard"
+        message="We couldn't load your dashboard data. Please check your connection and try again."
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
   return (
     <>
       <DashboardTourPrompt
@@ -293,9 +342,9 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         <DropdownMenuItem onClick={() => onNavigate('profile')}>
                           Profile
                         </DropdownMenuItem>
-                        {getProfileCompletion() < 100 && (
+                        {profileCompletion < 100 && (
                           <DropdownMenuItem onClick={() => onNavigate('profile')}>
-                            Complete profile ({getProfileCompletion()}%)
+                            Complete profile ({profileCompletion}%)
                           </DropdownMenuItem>
                         )}
                         {isUserAdmin && (
@@ -329,9 +378,9 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       visibility={visibility}
                       onVisibilityChange={updateVisibility}
                     />
-                    {getProfileCompletion() < 100 && (
+                    {profileCompletion < 100 && (
                       <div className="text-right">
-                        <p className="text-sm font-medium">Profile {getProfileCompletion()}% complete</p>
+                        <p className="text-sm font-medium">Profile {profileCompletion}% complete</p>
                         <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => onNavigate('profile')}>
                           Complete setup →
                         </Button>
@@ -369,29 +418,43 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
             {/* Quick Mood Check - Horizontal scroll on mobile */}
             {isVisible('mood-check') && (
-              <Card>
-                <CardContent className="p-3 md:p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Heart className="h-5 w-5 text-primary flex-shrink-0" />
-                    <span className="font-medium text-sm md:text-base">Quick mood check</span>
-                  </div>
-                  <div className={device.isMobile ? "flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 snap-x snap-mandatory" : "flex gap-2 flex-wrap"}>
-                    {moodOptions.map(({ mood, emoji }) => (
-                      <Button
-                        key={mood}
-                        variant="outline"
-                        size="sm"
-                        className={`${todayMood === mood ? 'border-primary bg-primary/10' : ''} ${device.isMobile ? 'flex-shrink-0 snap-start min-h-[44px]' : ''} touch-manipulation`}
-                        onClick={() => handleMoodSelect(mood)}
-                        disabled={saveMood.isPending}
-                      >
-                        <span className="mr-2">{emoji}</span>
-                        {mood}
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <div ref={moodCheckRef}>
+                <Card>
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Heart className="h-5 w-5 text-primary flex-shrink-0" />
+                      <span className="font-medium text-sm md:text-base">Quick mood check</span>
+                    </div>
+                    <div className={device.isMobile ? "flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 snap-x snap-mandatory" : "flex gap-2 flex-wrap"}>
+                      {moodOptions.map(({ mood, emoji, color }) => {
+                        const isSelected = todayMood === mood;
+                        return (
+                          <Button
+                            key={mood}
+                            variant="outline"
+                            size="sm"
+                            className={`${isSelected ? `${color} border-transparent shadow-sm` : ''} ${device.isMobile ? 'flex-shrink-0 snap-start min-h-[44px]' : ''} touch-manipulation`}
+                            onClick={() => handleMoodSelect(mood)}
+                            disabled={saveMood.isPending}
+                            aria-pressed={isSelected}
+                            aria-label={`Set mood to ${mood}`}
+                          >
+                            <span className="mr-2">{emoji}</span>
+                            {mood}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+                      {saveMood.isPending
+                        ? 'Saving your check-in...'
+                        : todayMood
+                          ? `Mood saved as ${todayMood}. Recommendations will adapt for today.`
+                          : 'Choose a mood to personalize your dashboard.'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </div>
         </div>
@@ -505,6 +568,23 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-accent/10">
+              <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6 md:p-5">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">Recommended next step</p>
+                  <h2 className="text-base font-semibold text-foreground md:text-lg">{recommendedAction.title}</h2>
+                  <p className="text-sm text-muted-foreground">{recommendedAction.description}</p>
+                </div>
+                <Button
+                  className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                  onClick={recommendedAction.onAction}
+                >
+                  {recommendedAction.cta}
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
 

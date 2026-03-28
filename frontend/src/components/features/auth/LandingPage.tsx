@@ -1,9 +1,5 @@
 import {
   ArrowRight,
-  BarChart3,
-  CalendarCheck,
-  ChevronLeft,
-  ChevronRight,
   Heart,
   Brain,
   Users,
@@ -19,17 +15,14 @@ import {
   Sun,
   AlertTriangle,
   Menu,
-  Smile,
-  Star,
   X
 } from 'lucide-react';
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 
 import { getServerBaseUrl } from '../../../config/apiConfig';
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
-import { ImageWithFallback } from '../../common/ImageWithFallback';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -163,6 +156,76 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
     ],
     []
   );
+
+  const featureHighlights = useMemo(
+    () => [
+      {
+        icon: MessageCircle,
+        title: 'AI Therapist Chat',
+        description: '24/7 conversational support with empathetic, clinically informed AI guidance.',
+        ctaLabel: 'Start a guided chat'
+      },
+      {
+        icon: TrendingUp,
+        title: 'Progress Tracking',
+        description: 'Monitor your wellbeing journey with trendlines, streaks, and progress reflections.',
+        ctaLabel: 'Track your progress'
+      },
+      {
+        icon: Heart,
+        title: 'Mindful Practices',
+        description: 'Guided meditation, yoga, and breathing sessions curated for your current energy.',
+        ctaLabel: 'Explore practices'
+      },
+      {
+        icon: Users,
+        title: 'Expert Content',
+        description: 'A curated library of therapeutic videos and articles authored with clinicians.',
+        ctaLabel: 'Discover expert guides'
+      }
+    ],
+    []
+  );
+
+  const scrollToFeature = useCallback((index: number) => {
+    const container = featuresContainerRef.current;
+    const child = container?.children[index] as HTMLElement | undefined;
+
+    if (!container || !child) return;
+
+    container.scrollTo({
+      left: child.offsetLeft - container.offsetLeft,
+      behavior: 'smooth'
+    });
+    setActiveFeaturesIndex(index);
+  }, []);
+
+  const handleFeatureLearnMore = (featureTitle: string) => {
+    analytics.trackButtonClick(`feature_${featureTitle.toLowerCase().replace(/\s+/g, '_')}`, 'landing_page');
+    openModal('start');
+  };
+
+  useEffect(() => {
+    const container = featuresContainerRef.current;
+    if (!container || !device.isMobile) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Array.from(container.children).indexOf(entry.target);
+            if (index !== -1) {
+              setActiveFeaturesIndex(index);
+            }
+          }
+        });
+      },
+      { root: container, threshold: 0.6 }
+    );
+
+    Array.from(container.children).forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+  }, [device.isMobile]);
 
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,7 +413,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             </div>
 
             {/* Mobile: Vertical List with Connector Line */}
-            <ol className="relative space-y-8 md:hidden" role="list">
+            <ol className="relative space-y-8 md:hidden">
               {/* Connector Line */}
               <div
                 className="absolute left-6 top-10 bottom-10 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-primary/20"
@@ -473,208 +536,107 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 role="region"
                 aria-label="Features carousel"
               >
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      24/7 conversational support with empathetic, clinically informed AI guidance.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      Guided meditation, yoga, and breathing sessions curated for your current energy.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      A curated library of therapeutic videos and articles authored with clinicians.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
+                {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }, index) => (
+                  <Card
+                    key={title}
+                    className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary"
+                    role="group"
+                    aria-roledescription="slide"
+                    aria-label={`Feature ${index + 1} of ${featureHighlights.length}: ${title}`}
+                  >
+                    <CardContent className="space-y-3 p-6">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                        <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                      </div>
+                      <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                      <p className="text-base leading-relaxed text-foreground/70">{description}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleFeatureLearnMore(title)}
+                        className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                      >
+                        {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
 
               {/* Progress Indicators */}
-              <div className="mt-6 flex justify-center gap-2" role="tablist" aria-label="Features pagination">
-                {[0, 1, 2, 3].map((index) => (
-                  <div
-                    key={index}
-                    role="tab"
-                    aria-selected={activeFeaturesIndex === index}
-                    className={`h-2 rounded-full transition-all duration-300 ${activeFeaturesIndex === index
-                      ? 'w-8 bg-primary'
-                      : 'w-2 bg-muted-foreground/30'
-                      }`}
-                    aria-label={`Feature ${index + 1} of 4`}
-                  />
-                ))}
+              <div className="mt-6 space-y-3">
+                <p className="text-center text-xs font-medium text-muted-foreground">
+                  Feature {activeFeaturesIndex + 1} of {featureHighlights.length}
+                </p>
+                <div className="flex justify-center gap-2" role="tablist" aria-label="Features pagination">
+                  {featureHighlights.map((feature, index) => (
+                    <button
+                      key={feature.title}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeFeaturesIndex === index}
+                      aria-label={`View ${feature.title}`}
+                      onClick={() => scrollToFeature(index)}
+                      className={`h-2 rounded-full transition-all duration-300 ${activeFeaturesIndex === index
+                        ? 'w-8 bg-primary'
+                        : 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                        }`}
+                    />
+                  ))}
+                </div>
+                <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  Showing feature {activeFeaturesIndex + 1}: {featureHighlights[activeFeaturesIndex]?.title}
+                </div>
               </div>
             </div>
 
             {/* Tablet: 2x2 Grid */}
             <div className="hidden gap-6 md:grid md:grid-cols-2 lg:hidden">
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                  <p className="text-base text-foreground/70">
-                    24/7 conversational support with empathetic, clinically informed AI guidance.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                  <p className="text-base text-foreground/70">
-                    Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                  <p className="text-base text-foreground/70">
-                    Guided meditation, yoga, and breathing sessions curated for your current energy.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                  <p className="text-base text-foreground/70">
-                    A curated library of therapeutic videos and articles authored with clinicians.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
+              {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }) => (
+                <Card
+                  key={title}
+                  className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2"
+                >
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                    <p className="text-base text-foreground/70">{description}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleFeatureLearnMore(title)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             {/* Desktop: 4-column Grid */}
             <div className="hidden gap-6 lg:grid lg:grid-cols-4">
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                  <p className="text-base text-foreground/70">
-                    24/7 conversational support with empathetic, clinically informed AI guidance.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                  <p className="text-base text-foreground/70">
-                    Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                  <p className="text-base text-foreground/70">
-                    Guided meditation, yoga, and breathing sessions curated for your current energy.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                  <p className="text-base text-foreground/70">
-                    A curated library of therapeutic videos and articles authored with clinicians.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
+              {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }) => (
+                <Card
+                  key={title}
+                  className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2"
+                >
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                    <p className="text-base text-foreground/70">{description}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleFeatureLearnMore(title)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </section>

@@ -23,7 +23,7 @@ export function useAssessmentTemplates() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to fetch assessment templates');
       }
-      return response.data;
+      return response.data?.templates ?? [];
     },
     staleTime: 15 * 60 * 1000, // Templates rarely change, cache for 15 minutes
   });
@@ -205,7 +205,7 @@ export function usePrefetchAssessmentTemplates() {
       queryKey: queryKeys.assessmentTemplates,
       queryFn: async () => {
         const response = await assessmentsApi.getAssessmentTemplates();
-        return response.data;
+        return response.data?.templates ?? [];
       },
     });
   };

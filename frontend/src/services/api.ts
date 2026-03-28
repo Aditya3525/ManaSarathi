@@ -93,44 +93,30 @@ export interface AssessmentHistoryEntry {
   categoryBreakdown?: Record<string, { raw: number; normalized: number; interpretation: string }>;
 }
 
-export interface AssessmentTemplate {
-  assessmentType: string;
-  definitionId: string;
-  title: string;
-  description: string;
-  estimatedTime: string | null;
-  scoring: AssessmentTemplateScoring;
-  questions: AssessmentTemplateQuestion[];
+export interface AssessmentTemplateInterpretationBand {
+  max: number;
+  label: string;
 }
 
-export interface AssessmentAvailableItem {
+export interface AssessmentTemplateScoringDomain {
   id: string;
-  title: string;
-  description: string;
-  type: string;
-  category: string;
-  timeEstimate: string;
-  questions: number;
-  tags: string;
-  difficulty?: string;
+  label: string;
+  items: string[];
+  minScore: number;
+  maxScore: number;
+  interpretationBands?: AssessmentTemplateInterpretationBand[];
 }
 
 export interface AssessmentTemplateScoring {
   minScore: number;
   maxScore: number;
+  interpretationBands: AssessmentTemplateInterpretationBand[];
   reverseScored?: string[];
-  interpretationBands?: Array<{ max: number; label: string }>;
-  domains?: Array<{
-    id: string;
-    label: string;
-    minScore?: number;
-    maxScore?: number;
-    items: string[];
-    interpretationBands?: Array<{ max: number; label: string }>;
-  }>;
+  domains?: AssessmentTemplateScoringDomain[];
+  higherIsBetter?: boolean;
 }
 
-export interface AssessmentTemplateQuestionOption {
+export interface AssessmentTemplateOption {
   id: string;
   value: number;
   text: string;
@@ -142,19 +128,46 @@ export interface AssessmentTemplateQuestion {
   text: string;
   responseType: string;
   uiType: string;
-  reverseScored: boolean;
-  domain: string | null;
-  options: AssessmentTemplateQuestionOption[];
+  reverseScored?: boolean;
+  domain?: string | null;
+  options: AssessmentTemplateOption[];
+}
+
+export interface AssessmentTemplate {
+  assessmentType: string;
+  definitionId: string;
+  title: string;
+  description: string;
+  estimatedTime: string | null;
+  scoring: AssessmentTemplateScoring;
+  questions: AssessmentTemplateQuestion[];
+}
+
+export interface AvailableAssessment {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  category: string;
+  timeEstimate: string;
+  questions: number;
+  tags: string;
 }
 
 export interface AssessmentSessionSummary {
   id: string;
-  status: 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   selectedTypes: string[];
   completedTypes: string[];
   pendingTypes: string[];
-  createdAt: string;
-  updatedAt: string;
+  startedAt: string;
+  completedAt: string | null;
+  completedAssessments: Array<{
+    id: string;
+    assessmentType: string;
+    score: number;
+    completedAt: string;
+  }>;
 }
 
 // ─── Mood ─────────────────────────────────────────────────────────────────────
@@ -171,25 +184,28 @@ export interface MoodEntry {
 export interface PlanModuleWithState {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   type: string;
-  duration: string;
-  difficulty: string;
-  approach: string;
-  content?: string;
+  duration?: number | null;
+  difficulty?: string | null;
+  approach?: string | null;
   order: number;
-  userState?: {
-    id: string;
-    userId: string;
-    moduleId: string;
-    completed: boolean;
-    progress: number;
-    scheduledFor?: string | null;
-    completedAt?: string | null;
-    notes?: string | null;
-    createdAt: string;
-    updatedAt: string;
-  } | null;
+  createdAt?: string;
+  updatedAt?: string;
+  userState: UserPlanModuleState | null;
+}
+
+export interface UserPlanModuleState {
+  id: string;
+  userId: string;
+  moduleId: string;
+  completed: boolean;
+  progress: number;
+  scheduledFor?: string | null;
+  completedAt?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────────
@@ -198,8 +214,8 @@ export interface ProgressEntry {
   id: string;
   metric: string;
   value: number;
-  date: string;
   notes?: string | null;
+  date: string;
 }
 
 // ─── Conversations ────────────────────────────────────────────────────────────
@@ -207,21 +223,23 @@ export interface ProgressEntry {
 export interface Conversation {
   id: string;
   title: string | null;
-  lastMessage?: string;
-  lastMessageAt: string;
-  messageCount: number;
   createdAt: string;
-  updatedAt: string;
+  lastMessageAt: string;
   isArchived: boolean;
+  messageCount?: number;
+  lastMessage?: string;
+  updatedAt?: string;
+  userId?: string;
 }
 
 export interface ConversationMessage {
   id: string;
-  conversationId: string;
-  type: 'user' | 'bot' | 'system';
+  conversationId?: string;
+  userId?: string;
   role?: 'user' | 'assistant' | 'system';
+  type?: 'user' | 'bot' | 'system' | string;
   content: string;
-  metadata?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | string | null;
   createdAt: string;
 }
 
@@ -233,27 +251,26 @@ export interface ConversationWithMessages extends Conversation {
 
 export interface ExerciseRecommendationsResponse {
   exercises: Array<{
-    id: string;
-    name: string;
+    title: string;
     description: string;
     type: string;
-    duration: string;
-    difficulty: 'easy' | 'medium' | 'advanced';
-    matchReason: string;
-    benefit: string;
+    duration?: string;
+    instructions?: string[];
   }>;
-  priority: 'high' | 'medium' | 'low';
-  contextualNote: string;
+  rationale?: string;
 }
 
-export interface ChatMessageResponsePayload {
-  message: ConversationMessage;
+export interface ChatSendMessageResponse {
+  message: ConversationMessage | { content: string; [key: string]: unknown } | string;
   conversationId: string;
   conversationTitle?: string | null;
   smartReplies?: string[];
-  recommendations?: unknown[];
+  recommendations?: Array<Record<string, unknown>>;
   recommendationsMeta?: Record<string, unknown>;
+  ai_metadata?: Record<string, unknown>;
   fallback?: Record<string, unknown> | null;
+  crisis?: boolean;
+  context?: unknown;
 }
 
 export interface UserEngagementRecord {
@@ -300,19 +317,24 @@ async function request<T>(
     });
 
     const resolveAcceptHeader = (inputHeaders: HeadersInit | undefined): string => {
-      if (!inputHeaders) return '';
+      if (!inputHeaders) {
+        return '';
+      }
+
       if (inputHeaders instanceof Headers) {
         return inputHeaders.get('Accept') ?? '';
       }
+
       if (Array.isArray(inputHeaders)) {
-        const match = inputHeaders.find(([name]) => name.toLowerCase() === 'accept');
-        return match?.[1] ?? '';
+        const acceptPair = inputHeaders.find(([name]) => name.toLowerCase() === 'accept');
+        return acceptPair?.[1] ?? '';
       }
-      return inputHeaders.Accept ?? inputHeaders.accept ?? '';
+
+      return inputHeaders.accept ?? inputHeaders.Accept ?? '';
     };
 
     // For blob responses (export endpoints) we handle them separately
-    if (resolveAcceptHeader(options.headers)?.includes('blob')) {
+    if (resolveAcceptHeader(options.headers).includes('blob')) {
       if (!response.ok) {
         return { success: false, error: `Request failed with status ${response.status}` };
       }
@@ -368,7 +390,7 @@ export const assessmentsApi = {
     request<AssessmentHistoryEntry[]>('/assessments'),
 
   getAvailableAssessments: () =>
-    request<AssessmentAvailableItem[]>('/assessments/available'),
+    request<AvailableAssessment[]>('/assessments/available'),
 
   getAssessmentTemplates: (types?: string[]) => {
     const params = types?.length ? `?types=${types.join(',')}` : '';
@@ -432,7 +454,7 @@ export const assessmentsApi = {
     }),
 
   getActiveAssessmentSession: () =>
-    request<{ session: AssessmentSessionSummary | null }>('/assessments/sessions/active'),
+    request<{ session: AssessmentSessionSummary } | null>('/assessments/sessions/active'),
 
   getAssessmentSessionById: (sessionId: string) =>
     request<{ session: AssessmentSessionSummary }>(`/assessments/sessions/${sessionId}`),
@@ -448,7 +470,7 @@ export const assessmentsApi = {
 
 export const chatApi = {
   sendMessage: (content: string, conversationId?: string) =>
-    request<ChatMessageResponsePayload>(
+    request<ChatSendMessageResponse>(
       '/chat/message',
       { method: 'POST', body: JSON.stringify({ content, conversationId }) }
     ),
@@ -460,7 +482,12 @@ export const chatApi = {
     request<string[]>('/chat/starters'),
 
   getProactiveCheckIn: () =>
-    request<{ shouldCheckIn: boolean; message: string; reason: string; priority: 'high' | 'medium' | 'low' }>('/chat/check-in'),
+    request<{
+      shouldCheckIn: boolean;
+      message: string;
+      reason: string;
+      priority: 'high' | 'medium' | 'low';
+    }>('/chat/check-in'),
 
   getMoodBasedGreeting: () =>
     request<{ greeting: string }>('/chat/greeting'),
@@ -561,16 +588,28 @@ export const plansApi = {
     request<PlanModuleWithState[]>('/plans/personalized'),
 
   getUserPlan: (userId: string) =>
-    request<{ modules: PlanModuleWithState[] }>(`/plans/${userId}`),
+    request<{
+      modules: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        duration: number;
+        difficulty: string;
+        approach: string[];
+      }>;
+      approach?: string | null;
+      generatedAt?: string;
+    }>(`/plans/${userId}`),
 
   updateModuleProgress: (moduleId: string, progress: number) =>
-    request<PlanModuleWithState>(`/plans/modules/${moduleId}/progress`, {
+    request<UserPlanModuleState>(`/plans/modules/${moduleId}/progress`, {
       method: 'PUT',
       body: JSON.stringify({ progress }),
     }),
 
   completeModule: (moduleId: string) =>
-    request<PlanModuleWithState>(`/plans/modules/${moduleId}/complete`, { method: 'POST' }),
+    request<UserPlanModuleState>(`/plans/modules/${moduleId}/complete`, { method: 'POST' }),
 };
 
 // ─── progressApi ──────────────────────────────────────────────────────────────
