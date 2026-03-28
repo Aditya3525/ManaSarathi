@@ -1,9 +1,10 @@
 import { LucideIcon } from 'lucide-react';
 import React from 'react';
 
+import { cn } from '../../lib/utils';
+
 import { Button } from './button';
 import { Card, CardContent } from './card';
-import { cn } from '../../lib/utils';
 
 export interface EmptyStateProps {
   icon?: LucideIcon;

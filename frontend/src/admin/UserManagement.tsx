@@ -18,8 +18,6 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,7 +65,10 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
+
+import { adminFetch } from './adminApi';
 import { AdminSectionCard } from './AdminSectionCard';
 
 interface UserData {

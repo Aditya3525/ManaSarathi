@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   User,
@@ -19,12 +20,10 @@ import {
   FileDown,
   CheckCircle2
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useDevice } from '../../../hooks/use-device';
-import { LanguageSelector } from '../LanguageSelector';
 import { authApi, usersApi, privacyApi } from '../../../services/api';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
@@ -45,6 +44,7 @@ import {
 } from '../../ui/sheet';
 import { Switch } from '../../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { LanguageSelector } from '../LanguageSelector';
 
 interface ProfileUser {
   id: string;

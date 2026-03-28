@@ -574,7 +574,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
         }
 
         if (moodRes.success && moodRes.data) {
-          setMoodEntries(moodRes.data.moodEntries ?? []);
+          setMoodEntries(moodRes.data ?? []);
         } else {
           setMoodEntries([]);
           if (moodRes.error) {

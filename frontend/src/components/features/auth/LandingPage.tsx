@@ -29,6 +29,7 @@ import { getServerBaseUrl } from '../../../config/apiConfig';
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
+import { ImageWithFallback } from '../../common/ImageWithFallback';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -42,7 +43,6 @@ import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { HeroSection } from './HeroSection';
 import { MetricsSection } from './MetricsSection';
 import { TestimonialsSection } from './TestimonialsSection';
-import { ImageWithFallback } from '../../common/ImageWithFallback';
 
 interface LandingPageProps {
   onSignUp: (userData: { name: string; email: string; password: string }) => void;
@@ -82,7 +82,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   // Sticky header on scroll + scroll depth tracking
   useEffect(() => {
-    let scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
+    const scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
 
     const handleScroll = () => {
       setIsHeaderSticky(window.scrollY > 100);
@@ -190,8 +190,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   const handleGoogleAuth = () => {
     analytics.trackButtonClick('google_oauth', 'landing_page');
-    // Redirect to Google OAuth endpoint - use smart URL detection
-    window.location.href = `${getServerBaseUrl()}/api/auth/google`;
+    const frontendOrigin = encodeURIComponent(window.location.origin);
+    window.location.href = `${getServerBaseUrl()}/api/auth/google?frontend_origin=${frontendOrigin}`;
   };
 
   const handleToggleDarkMode = () => {

@@ -30,29 +30,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../components/ui/dialog';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Skeleton } from '../components/ui/skeleton';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getApiBaseUrl } from '../config/apiConfig';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { adminApi, type ApiResponse } from '../services/api';
-import { adminFetch } from './adminApi';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { ActivityLog } from './ActivityLog';
+import { adminFetch } from './adminApi';
 import { AdminSectionCard } from './AdminSectionCard';
 import { AdminShell } from './AdminShell';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
-import { AdvancedAnalyticsDashboard } from './components/AdvancedAnalyticsDashboard';
-import { SystemDiagnostics } from './SystemDiagnostics';
 import { AssessmentBuilder } from './AssessmentBuilder';
 import { AssessmentList, Assessment } from './AssessmentList';
+import { AdvancedAnalyticsDashboard } from './components/AdvancedAnalyticsDashboard';
 import { ContentForm, ContentRecord } from './ContentForm';
 import { ContentList, ContentItem } from './ContentList';
+import { CrisisResourceManagement } from './CrisisResourceManagement';
+import { FAQManagement } from './FAQManagement';
 import { PracticeForm, PracticeRecord } from './PracticeForm';
 import { PracticesList, Practice } from './PracticesList';
+import { SupportTicketManagement } from './SupportTicketManagement';
+import { SystemDiagnostics } from './SystemDiagnostics';
 import { TherapistManagement } from './TherapistManagement';
 import { UserManagement } from './UserManagement';
-import { FAQManagement } from './FAQManagement';
-import { CrisisResourceManagement } from './CrisisResourceManagement';
-import { SupportTicketManagement } from './SupportTicketManagement';
 
 type ToastPush = (toast: { title: string; description?: string; type: 'success' | 'error' | 'warning' | 'info'; duration?: number }) => void;
 
@@ -85,6 +85,7 @@ const mapPractice = (rec: PracticeRecord): Practice => {
   return {
     id: rec.id,
     title: rec.title,
+    category: rec.type,
     types: rec.type,
     type: rec.type,
     duration: rec.duration,

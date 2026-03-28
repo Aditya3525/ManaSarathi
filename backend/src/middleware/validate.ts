@@ -7,7 +7,6 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { AnyZodObject, ZodError } from 'zod';
-import { ValidationError } from '../shared/errors/AppError';
 
 /**
  * Validate request against Zod schema
@@ -25,7 +24,7 @@ export const validate = (schema: AnyZodObject) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        // Convert Zod errors to our ValidationError format
+        // Return a deterministic validation payload directly from middleware.
         const errors: Record<string, string[]> = {};
         
         error.errors.forEach((err) => {
@@ -36,7 +35,12 @@ export const validate = (schema: AnyZodObject) => {
           errors[path].push(err.message);
         });
         
-        next(new ValidationError(errors));
+        res.status(422).json({
+          success: false,
+          error: 'Validation failed',
+          errors,
+        });
+        return;
       } else {
         next(error);
       }
@@ -74,7 +78,12 @@ export const sanitize = (schema: AnyZodObject) => {
           errors[path].push(err.message);
         });
         
-        next(new ValidationError(errors));
+        res.status(422).json({
+          success: false,
+          error: 'Validation failed',
+          errors,
+        });
+        return;
       } else {
         next(error);
       }

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
 import { Bell, X, CheckCircle, MessageCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+
+import { chatApi } from '../../../services/api';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
-import { chatApi } from '../../../services/api';
 
 interface ProactiveCheckInNotificationProps {
   user: { id: string } | null;

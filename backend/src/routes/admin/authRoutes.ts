@@ -20,25 +20,16 @@ export const createAdminAuthRoutes = ({ prisma, jwtSecret, adminEmails }: AuthRo
         return res.status(400).json({ error: 'Email and password are required' });
       }
 
-      const normalizedEmail = String(email).toLowerCase();
-      if (!adminEmails.includes(normalizedEmail)) {
+      if (!adminEmails.includes(String(email).toLowerCase())) {
         return res.status(401).json({ error: 'Invalid admin credentials' });
       }
 
-      const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-      if (!user) {
+      const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } });
+      if (!user || !user.password) {
         return res.status(401).json({ error: 'Invalid admin credentials' });
       }
 
-      // Support a default initial admin password for fresh/demo accounts in non-production tests
-      const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'admin123';
-      let isValidPassword = false;
-      if (user.password) {
-        isValidPassword = await bcrypt.compare(password, user.password);
-      } else {
-        isValidPassword = password === initialAdminPassword;
-      }
-
+      const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
         return res.status(401).json({ error: 'Invalid admin credentials' });
       }

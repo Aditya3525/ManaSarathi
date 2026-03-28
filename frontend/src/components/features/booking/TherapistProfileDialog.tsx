@@ -1,12 +1,3 @@
-import React, { useState } from 'react';
-import { Button } from '../../ui/button';
-import { Badge } from '../../ui/badge';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '../../ui/dialog';
 import {
     User,
     Star,
@@ -20,7 +11,18 @@ import {
     BookOpen,
     CheckCircle2,
 } from 'lucide-react';
+import React, { useState } from 'react';
+
 import { type Therapist } from '../../../services/helpSafetyApi';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '../../ui/dialog';
+
 import { ConsultationBookingDialog } from './ConsultationBookingDialog';
 import './booking.css';
 

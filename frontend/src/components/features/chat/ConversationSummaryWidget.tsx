@@ -1,7 +1,8 @@
-import React from 'react';
 import { Brain, TrendingUp, MessageSquare, CheckCircle2, Heart } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import React from 'react';
+
 import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 
 interface ConversationSummaryWidgetProps {
   summary: {

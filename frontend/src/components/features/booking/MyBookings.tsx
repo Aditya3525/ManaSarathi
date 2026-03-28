@@ -1,18 +1,4 @@
-import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../../ui/button';
-import { Card, CardContent } from '../../ui/card';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '../../ui/alert-dialog';
 import {
     Calendar,
     Clock,
@@ -26,8 +12,25 @@ import {
     MessageSquare,
     RefreshCw,
 } from 'lucide-react';
-import { therapistApi, type TherapistBooking } from '../../../services/helpSafetyApi';
+import React from 'react';
+
 import { useToast } from '../../../contexts/ToastContext';
+import { therapistApi, type TherapistBooking } from '../../../services/helpSafetyApi';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '../../ui/alert-dialog';
+import { Button } from '../../ui/button';
+import { Card, CardContent } from '../../ui/card';
+
+
 import './booking.css';
 
 function getStatusClass(status: string): string {

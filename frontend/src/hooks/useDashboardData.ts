@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 import { useAuthStore } from '../stores/authStore';
 
-import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 

@@ -100,8 +100,19 @@ export function useSubmitAssessment() {
   return useMutation({
     mutationFn: async (data: {
       assessmentType: string;
-      responses: Record<string, number>;
+      responses: Record<string, number | string>;
+      score: number;
+      rawScore?: number;
+      maxScore?: number;
       sessionId?: string;
+      responseDetails?: Array<{
+        questionId: string;
+        questionText: string;
+        answerLabel: string;
+        answerValue: string | number | null;
+        answerScore?: number;
+      }>;
+      categoryBreakdown?: Record<string, { raw: number; normalized: number; interpretation?: string }>;
     }) => {
       const response = await assessmentsApi.submitAssessment(data);
       if (!response.success) {

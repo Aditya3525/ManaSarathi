@@ -21,9 +21,9 @@ import { useConversationMessages } from '../../../hooks/useConversations';
 import { chatApi, conversationsApi } from '../../../services/api';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { Input } from '../../ui/input';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../../ui/sheet';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 
 import { ConversationHistorySidebar } from './ConversationHistorySidebar';
 import { EmptyState } from './EmptyState';
@@ -289,10 +289,8 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           typeof messagePayload.message === 'object' && messagePayload.message !== null
             ? messagePayload.message.content
             : undefined;
-        const fallbackContent =
-          typeof messagePayload.response === 'string' ? messagePayload.response : undefined;
         const resolvedContent =
-          structuredContent ?? fallbackContent ?? 'I apologize, but I encountered an issue generating a response.';
+          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
 
         // Use smart replies from backend if available
         const smartReplies = messagePayload.smartReplies || [];
@@ -385,10 +383,8 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           typeof messagePayload.message === 'object' && messagePayload.message !== null
             ? messagePayload.message.content
             : undefined;
-        const fallbackContent =
-          typeof messagePayload.response === 'string' ? messagePayload.response : undefined;
         const resolvedContent =
-          structuredContent ?? fallbackContent ?? 'I apologize, but I encountered an issue generating a response.';
+          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
 
         const smartReplies = messagePayload.smartReplies || [];
 

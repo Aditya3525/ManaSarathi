@@ -1,11 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getServerBaseUrl, getApiBaseUrl } from './config/apiConfig';
 
 import { AdminDashboard } from './admin/AdminDashboard';
-import { TherapistLoginPage } from './therapist/TherapistLoginPage';
-import { TherapistDashboard } from './therapist/TherapistDashboard';
 import { AssessmentList, AssessmentFlow, CombinedAssessmentFlow, InsightsResults, OverallAssessmentInvite, OverallAssessmentSelection, OVERALL_ASSESSMENT_OPTION_IDS } from './components/features/assessment';
 import { AssessmentCompletionPayload } from './components/features/assessment/AssessmentFlow';
 import { AdminLoginPage, LandingPage, OAuthCallback, PasswordSetup, UserLoginPage } from './components/features/auth';
@@ -17,8 +14,9 @@ import { OnboardingFlow } from './components/features/onboarding';
 import { PersonalizedPlan } from './components/features/plans';
 import { Progress, Profile } from './components/features/profile';
 import { HelpSafety } from './components/layout';
-import { ToastContainer } from './components/ui/ToastContainer';
 import { PWAInstallPrompt } from './components/ui/pwa-install-prompt';
+import { ToastContainer } from './components/ui/ToastContainer';
+import { getServerBaseUrl, getApiBaseUrl } from './config/apiConfig';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -27,6 +25,8 @@ import { queryClient } from './lib/queryClient';
 import { assessmentsApi, AssessmentInsights, AssessmentSessionSummary } from './services/api';
 import { getCurrentUser, loginUser, registerUser, signOut, StoredUser, completeOnboarding, setupUserPassword } from './services/auth';
 import { useAuthStore } from './stores/authStore';
+import { TherapistDashboard } from './therapist/TherapistDashboard';
+import { TherapistLoginPage } from './therapist/TherapistLoginPage';
 
 type Page =
   | 'landing'
@@ -429,7 +429,7 @@ function AppInner() {
 
   const startGoogleOAuth = useCallback(() => {
     const frontendOrigin = encodeURIComponent(window.location.origin);
-    window.location.assign(`${getServerBaseUrl()}/api/auth/google?frontend_origin=${frontendOrigin}`);
+    window.location.assign(`${getServerBaseUrl()}/api/auth/google?platform=web&frontend_origin=${frontendOrigin}`);
   }, []);
 
   const startAssessment = (assessmentId: string, session?: AssessmentSessionSummary | null) => {
