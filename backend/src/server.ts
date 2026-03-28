@@ -94,6 +94,7 @@ app.use(cors({
     ? [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       process.env.MOBILE_URL || 'http://localhost:8081',
+      'https://maansarathi-frontend.onrender.com',
       // Allow Expo Go and mobile device access
       /^https?:\/\/192\.168\.\d+\.\d+/,
       /^https?:\/\/10\.\d+\.\d+\.\d+/,

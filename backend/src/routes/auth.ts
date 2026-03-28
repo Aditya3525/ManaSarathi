@@ -53,7 +53,11 @@ const isAllowedFrontendOrigin = (origin: string): boolean => {
       return false;
     }
 
-    return hostname.endsWith('.vercel.app') || hostname === 'maansarathi.app';
+    return (
+      hostname.endsWith('.vercel.app') ||
+      hostname === 'maansarathi.app' ||
+      hostname === 'maansarathi-frontend.onrender.com'
+    );
   } catch {
     return false;
   }
