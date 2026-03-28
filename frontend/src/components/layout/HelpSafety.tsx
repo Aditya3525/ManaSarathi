@@ -1,14 +1,4 @@
-import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Badge } from '../ui/badge';
-import { Label } from '../ui/label';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
   ArrowLeft,
   Phone,
@@ -34,6 +24,10 @@ import {
   User,
   CalendarCheck
 } from 'lucide-react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useToast } from '../../contexts/ToastContext';
 import {
   crisisResourcesApi,
   faqApi,
@@ -46,10 +40,17 @@ import {
   type TicketCategory,
   type TherapistBooking
 } from '../../services/helpSafetyApi';
-import { useToast } from '../../contexts/ToastContext';
 import { ConsultationBookingDialog } from '../features/booking/ConsultationBookingDialog';
 import { MyBookings } from '../features/booking/MyBookings';
 import { TherapistProfileDialog } from '../features/booking/TherapistProfileDialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Textarea } from '../ui/textarea';
 
 interface HelpSafetyProps {
   onNavigate: (page: string) => void;

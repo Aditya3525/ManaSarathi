@@ -10,7 +10,6 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import pinoHttp from 'pino-http';
-import { PrismaClient } from '@prisma/client';
 import passport from './config/passport';
 
 import authRoutes from './routes/auth';
@@ -36,9 +35,11 @@ import therapistRoutes from './routes/therapists';
 import therapistPortalRoutes from './routes/therapistPortal';
 import helpSafetyAdminRoutes from './routes/admin/helpSafetyAdmin';
 import privacyRoutes from './routes/privacy';
+import prisma from './config/database';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { systemHealthMiddleware, startHealthMonitoring } from './middleware/systemHealthMiddleware';
+import { getSessionSecret } from './config/auth';
 import { logger, refreshLogLevelFromEnv } from './utils/logger';
 import { llmService } from './services/llmProvider';
 
@@ -48,7 +49,6 @@ refreshLogLevelFromEnv();
 
 const app = express();
 const PORT = typeof process.env.PORT === 'string' ? parseInt(process.env.PORT, 10) : 5000;
-const readinessPrisma = new PrismaClient();
 // When deployed behind a proxy, trust it so secure cookies and IP work correctly
 app.set('trust proxy', 1);
 
@@ -117,7 +117,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Session middleware (required for passport)
 app.use(session({
-  secret: process.env.JWT_SECRET || 'fallback-secret',
+  secret: getSessionSecret(),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -166,7 +166,7 @@ app.get('/api/health/ready', async (req, res) => {
 
   let databaseHealthy = true;
   try {
-    await readinessPrisma.$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT 1`;
   } catch (error: any) {
     databaseHealthy = false;
     checks.database = {

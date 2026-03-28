@@ -1,9 +1,3 @@
-import React, { useState } from 'react';
-import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Badge } from '../../ui/badge';
-import { Progress } from '../../ui/progress';
-import { Calendar } from '../../ui/calendar';
 import { 
   ArrowLeft,
   Target,
@@ -17,6 +11,13 @@ import {
   Star,
   Users
 } from 'lucide-react';
+import React, { useState } from 'react';
+
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import { Calendar } from '../../ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Progress } from '../../ui/progress';
 
 interface PersonalizedPlanProps {
   user: any;

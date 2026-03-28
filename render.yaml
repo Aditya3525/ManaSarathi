@@ -17,10 +17,14 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_INITIAL_PASSWORD
+        generateValue: true
       - key: PORT
         value: 10000
       - key: FRONTEND_URL
-        sync: false
+        value: https://maansarathi.vercel.app
       - key: AI_PROVIDER_PRIORITY
         value: huggingface,gemini,openai,anthropic
       - key: AI_ENABLE_FALLBACK

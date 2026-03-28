@@ -831,7 +831,12 @@ type UserProfileInput = Pick<
 >;
 
 async function upsertAdmin(email: string, profile: UserProfileInput) {
-  const password = await bcrypt.hash('admin123', 10);
+  const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!initialAdminPassword) {
+    throw new Error('ADMIN_INITIAL_PASSWORD is required to seed admin users');
+  }
+
+  const password = await bcrypt.hash(initialAdminPassword, 10);
   const normalizedEmail = email.toLowerCase();
   const data = {
     ...profile,

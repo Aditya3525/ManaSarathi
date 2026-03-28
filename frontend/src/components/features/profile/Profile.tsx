@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   User,
@@ -19,12 +20,10 @@ import {
   FileDown,
   CheckCircle2
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useDevice } from '../../../hooks/use-device';
-import { LanguageSelector } from '../LanguageSelector';
 import { authApi, usersApi, privacyApi } from '../../../services/api';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
@@ -45,6 +44,7 @@ import {
 } from '../../ui/sheet';
 import { Switch } from '../../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { LanguageSelector } from '../LanguageSelector';
 
 interface ProfileUser {
   id: string;
@@ -75,7 +75,6 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showDeviceRemoveConfirm, setShowDeviceRemoveConfirm] = useState<string | null>(null);
   const [securityQuestionError, setSecurityQuestionError] = useState<string | null>(null);
   const [securityQuestionSuccess, setSecurityQuestionSuccess] = useState<string | null>(null);
   const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
@@ -351,7 +350,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const resp = await privacyApi.deleteAccount();
+      const resp = await privacyApi.deleteAccount('DELETE');
       if (!resp.success) throw new Error(resp.error || 'Deletion failed');
       setShowDeleteConfirm(false);
       // Log out and redirect
@@ -1037,15 +1036,18 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => setShowDeviceRemoveConfirm(connectedDevice.name)}
+                            disabled
                             className={device.isMobile ? "min-h-[40px]" : ""}
                           >
-                            Remove
+                            Unavailable
                           </Button>
                         )}
                       </div>
                     </div>
                   ))}
+                  <p className="text-xs text-muted-foreground">
+                    Device session revocation is temporarily unavailable in this build.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1904,47 +1906,6 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </Button>
             </div>
           </div>
-        )}
-
-        {/* Device Removal Confirmation Sheet (Mobile) */}
-        {device.isMobile && showDeviceRemoveConfirm && (
-          <Sheet open={!!showDeviceRemoveConfirm} onOpenChange={() => setShowDeviceRemoveConfirm(null)}>
-            <SheetContent side="bottom" className="h-auto max-h-[85vh]">
-              <SheetHeader>
-                <SheetTitle>Remove Device</SheetTitle>
-                <SheetDescription>
-                  Are you sure you want to remove this device from your account?
-                </SheetDescription>
-              </SheetHeader>
-              <div className="py-6 space-y-4">
-                <div className="rounded-lg bg-muted p-4">
-                  <p className="font-medium">{showDeviceRemoveConfirm}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    This device will be signed out and will need to sign in again to access your account.
-                  </p>
-                </div>
-              </div>
-              <SheetFooter className="flex-col sm:flex-row gap-2">
-                <Button 
-                  variant="destructive" 
-                  className="w-full min-h-[48px]"
-                  onClick={() => {
-                    console.log('Device removed:', showDeviceRemoveConfirm);
-                    setShowDeviceRemoveConfirm(null);
-                  }}
-                >
-                  Remove Device
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full min-h-[48px]"
-                  onClick={() => setShowDeviceRemoveConfirm(null)}
-                >
-                  Cancel
-                </Button>
-              </SheetFooter>
-            </SheetContent>
-          </Sheet>
         )}
 
         {/* Delete Confirmation (Desktop Modal / Mobile Bottom Sheet) */}

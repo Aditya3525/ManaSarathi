@@ -1,17 +1,4 @@
-import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../../ui/button';
-import { Textarea } from '../../ui/textarea';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter
-} from '../../ui/dialog';
 import {
     Video,
     Phone,
@@ -26,9 +13,25 @@ import {
     Star,
     CheckCircle2
 } from 'lucide-react';
-import { Badge } from '../../ui/badge';
-import { therapistApi, type Therapist } from '../../../services/helpSafetyApi';
+import React, { useState } from 'react';
+
 import { useToast } from '../../../contexts/ToastContext';
+import { therapistApi, type Therapist } from '../../../services/helpSafetyApi';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter
+} from '../../ui/dialog';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
+import { Textarea } from '../../ui/textarea';
+
+
 import './booking.css';
 
 interface ConsultationBookingDialogProps {

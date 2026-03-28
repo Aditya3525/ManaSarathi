@@ -342,10 +342,8 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           typeof messagePayload.message === 'object' && messagePayload.message !== null
             ? messagePayload.message.content
             : undefined;
-        const fallbackContent =
-          typeof messagePayload.response === 'string' ? messagePayload.response : undefined;
         const resolvedContent =
-          structuredContent ?? fallbackContent ?? 'I apologize, but I encountered an issue generating a response.';
+          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
 
         const smartReplies = messagePayload.smartReplies || [];
 

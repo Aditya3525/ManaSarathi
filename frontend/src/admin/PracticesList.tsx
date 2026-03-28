@@ -14,27 +14,28 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
+import { adminFetch } from './adminApi';
 import { BulkActionToolbar } from './BulkActionToolbar';
 import { PracticePreviewModal } from './PracticePreviewModal';
 
 export interface Practice {
   id: string;
   title: string;
+  category: string;
   type: 'meditation' | 'breathing' | 'yoga' | 'sleep';
   types?: string;
   duration: number;
   level?: 'Beginner' | 'Intermediate' | 'Advanced';
-  difficulty?: string;
+  difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
   approach: 'Western' | 'Eastern' | 'Hybrid' | 'All';
   format?: 'Audio' | 'Video' | 'Audio/Video';
   description?: string;
@@ -120,11 +121,12 @@ const mapRawPractice = (raw: RawPractice): Practice => {
   return {
     id: raw.id,
     title: raw.title ?? 'Untitled Practice',
+    category: raw.type ?? raw.types ?? 'General',
     type: normalizePracticeType(raw.type ?? raw.types),
     types: raw.types ?? raw.type ?? 'meditation',
     duration: Number.isFinite(durationValue) && typeof durationValue === 'number' ? durationValue : 5,
     level: normalizePracticeLevel(raw.level ?? raw.difficulty),
-    difficulty: raw.difficulty,
+    difficulty: normalizePracticeLevel(raw.level ?? raw.difficulty),
     approach: normalizePracticeApproach(raw.approach),
     format: (raw.format as Practice['format']) ?? undefined,
     description: raw.description ?? undefined,

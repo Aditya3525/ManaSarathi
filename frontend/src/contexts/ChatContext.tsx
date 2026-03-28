@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+
 import { getApiBaseUrl } from '../config/apiConfig';
 
 interface Message {
@@ -54,7 +55,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: messageText }),
+        body: JSON.stringify({ content: messageText }),
       });
 
       if (!response.ok) {
@@ -66,7 +67,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       // Add AI response
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response,
+        text: data?.data?.message?.content ?? 'Sorry, I encountered an error. Please try again.',
         sender: 'ai',
         timestamp: new Date()
       };

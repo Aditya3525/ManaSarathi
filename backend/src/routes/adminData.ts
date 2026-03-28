@@ -1,7 +1,23 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@example.com,admin@mentalwellbeing.ai')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+// Protect all admin-data routes with authentication and admin allowlist checks.
+router.use(authenticate as any);
+router.use((req: any, res: Response, next) => {
+  const email = String(req.user?.email || '').toLowerCase();
+  if (!email || !ADMIN_EMAILS.includes(email)) {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  next();
+});
 
 /**
  * DELETE /api/admin/users/:email

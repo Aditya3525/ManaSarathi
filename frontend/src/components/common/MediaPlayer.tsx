@@ -16,9 +16,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-import { cn } from '../ui/utils';
 import { Button } from '../ui/button';
-import { Slider } from '../ui/slider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel
 } from '../ui/dropdown-menu';
+import { Slider } from '../ui/slider';
+import { cn } from '../ui/utils';
 
 interface MediaPlayerProps {
   audioUrl?: string | null;

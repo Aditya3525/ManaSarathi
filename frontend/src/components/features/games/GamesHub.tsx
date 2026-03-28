@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
 import { Brain, Heart, Sparkles, Target, Wind, Smile, Trophy, ArrowLeft } from 'lucide-react';
-import { Card } from '../../ui/card';
+import React, { useState } from 'react';
+
 import { Button } from '../../ui/button';
-import { BreathingRhythmGame } from './BreathingRhythmGame';
-import { MemoryMatchGame } from './MemoryMatchGame';
-import { MoodColorMatcher } from './MoodColorMatcher';
-import { GratitudePuzzleGame } from './GratitudePuzzleGame';
+import { Card } from '../../ui/card';
+
 import { AnxietyBubblePopGame } from './AnxietyBubblePopGame';
+import { BreathingRhythmGame } from './BreathingRhythmGame';
+import { GratitudePuzzleGame } from './GratitudePuzzleGame';
+import { MemoryMatchGame } from './MemoryMatchGame';
 import { MindfulPatternGame } from './MindfulPatternGame';
+import { MoodColorMatcher } from './MoodColorMatcher';
 
 type GameType = 'breathing' | 'memory' | 'mood' | 'gratitude' | 'anxiety' | 'pattern' | null;
 

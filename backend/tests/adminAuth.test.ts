@@ -1,15 +1,26 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import request from 'supertest';
-import app from '../src/server';
+import type { Express } from 'express';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+const prisma = hasDatabaseUrl ? new PrismaClient() : null;
+let app: Express;
 
-describe('Admin auth session flow', () => {
+const maybeDescribe = hasDatabaseUrl ? describe : describe.skip;
+
+maybeDescribe('Admin auth session flow', () => {
   const adminEmail = 'admin@mentalwellbeing.ai';
   let createdUserId: string | null = null;
 
   beforeAll(async () => {
+    if (!prisma) {
+      return;
+    }
+
+    const module = await import('../src/server');
+    app = module.default;
+
     // Ensure admin user exists with no password (so default demo password works)
     const user = await prisma.user.upsert({
       where: { email: adminEmail },
@@ -26,7 +37,9 @@ describe('Admin auth session flow', () => {
 
   afterAll(async () => {
     // Leave user in DB for other tests; just disconnect prisma
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   });
 
   it('logs in and then returns session details', async () => {

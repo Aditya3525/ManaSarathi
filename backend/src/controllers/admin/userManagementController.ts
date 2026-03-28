@@ -1,9 +1,25 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { logActivity } from './activityLogController';
+import prisma from '../../config/database';
 
-const prisma = new PrismaClient();
+const parseBoundedInt = (value: unknown, fallback: number, min: number, max: number): number => {
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+};
+
+const USER_SORT_FIELDS = new Set([
+  'createdAt',
+  'updatedAt',
+  'email',
+  'name',
+  'firstName',
+  'lastName',
+  'isPremium',
+  'isOnboarded',
+  'approach'
+]);
 
 interface UserFilter {
   search?: string;
@@ -33,8 +49,8 @@ export const getUsers = async (req: Request, res: Response) => {
       sortOrder = 'desc'
     } = req.query;
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
+    const pageNum = parseBoundedInt(page, 1, 1, 100000);
+    const limitNum = parseBoundedInt(limit, 20, 1, 200);
     const skip = (pageNum - 1) * limitNum;
 
     // Build where clause
@@ -72,8 +88,10 @@ export const getUsers = async (req: Request, res: Response) => {
     }
 
     // Build order by
+    const sortField = USER_SORT_FIELDS.has(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const sortDirection: 'asc' | 'desc' = sortOrder === 'asc' ? 'asc' : 'desc';
     const orderBy: any = {};
-    orderBy[sortBy as string] = sortOrder;
+    orderBy[sortField] = sortDirection;
 
     // Fetch users with pagination
     const [users, totalCount] = await Promise.all([
@@ -278,7 +296,7 @@ export const getUserActivity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { limit = '50' } = req.query;
-    const limitNum = parseInt(limit as string);
+    const limitNum = parseBoundedInt(limit, 50, 1, 200);
 
     // Fetch various activities
     const [assessments, moodEntries, conversations] = await Promise.all([

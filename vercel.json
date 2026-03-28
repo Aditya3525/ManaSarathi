@@ -1,9 +1,9 @@
 {
   "name": "maansarathi",
   "framework": "vite",
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "echo skip",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace frontend",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
     {
       "source": "/(.*)",

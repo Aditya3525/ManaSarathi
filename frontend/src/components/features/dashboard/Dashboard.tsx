@@ -528,10 +528,28 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       <div className="flex items-center gap-3 text-xs md:text-sm text-muted-foreground flex-wrap">
                         {practiceType && <span className="font-medium">{practiceType}</span>}
                         {practiceDuration && <span>{practiceDuration} min</span>}
-                        {practiceTags && practiceTags.slice(0, device.isSmallPhone ? 1 : 2).map(tag => <span key={tag}>• {tag}</span>)}
-                        {device.isSmallPhone && practiceTags && practiceTags.length > 1 && (
-                          <span>+{practiceTags.length - 1}</span>
-                        )}
+                        {(() => {
+                          const normalizedTags = Array.isArray(practiceTags)
+                            ? practiceTags
+                            : typeof practiceTags === 'string' && practiceTags.trim().length > 0
+                              ? [practiceTags]
+                              : [];
+
+                          return normalizedTags
+                            .slice(0, device.isSmallPhone ? 1 : 2)
+                            .map((tag) => <span key={tag}>• {tag}</span>);
+                        })()}
+                        {(() => {
+                          const normalizedTags = Array.isArray(practiceTags)
+                            ? practiceTags
+                            : typeof practiceTags === 'string' && practiceTags.trim().length > 0
+                              ? [practiceTags]
+                              : [];
+
+                          return device.isSmallPhone && normalizedTags.length > 1 ? (
+                            <span>+{normalizedTags.length - 1}</span>
+                          ) : null;
+                        })()}
                       </div>
                       {recommendedPractice?.reason && (
                         <p className="text-xs text-primary/80 italic mt-2">

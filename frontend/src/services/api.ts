@@ -94,6 +94,16 @@ export interface AssessmentHistoryEntry {
 }
 
 export interface AssessmentTemplate {
+  assessmentType: string;
+  definitionId: string;
+  title: string;
+  description: string;
+  estimatedTime: string | null;
+  scoring: AssessmentTemplateScoring;
+  questions: AssessmentTemplateQuestion[];
+}
+
+export interface AssessmentAvailableItem {
   id: string;
   title: string;
   description: string;
@@ -103,6 +113,38 @@ export interface AssessmentTemplate {
   questions: number;
   tags: string;
   difficulty?: string;
+}
+
+export interface AssessmentTemplateScoring {
+  minScore: number;
+  maxScore: number;
+  reverseScored?: string[];
+  interpretationBands?: Array<{ max: number; label: string }>;
+  domains?: Array<{
+    id: string;
+    label: string;
+    minScore?: number;
+    maxScore?: number;
+    items: string[];
+    interpretationBands?: Array<{ max: number; label: string }>;
+  }>;
+}
+
+export interface AssessmentTemplateQuestionOption {
+  id: string;
+  value: number;
+  text: string;
+  order: number;
+}
+
+export interface AssessmentTemplateQuestion {
+  id: string;
+  text: string;
+  responseType: string;
+  uiType: string;
+  reverseScored: boolean;
+  domain: string | null;
+  options: AssessmentTemplateQuestionOption[];
 }
 
 export interface AssessmentSessionSummary {
@@ -129,42 +171,57 @@ export interface MoodEntry {
 export interface PlanModuleWithState {
   id: string;
   title: string;
-  description: string | null;
+  description: string;
   type: string;
-  duration?: string | null;
+  duration: string;
+  difficulty: string;
+  approach: string;
+  content?: string;
   order: number;
-  isCompleted: boolean;
-  completedAt?: string | null;
-  progress?: number;
+  userState?: {
+    id: string;
+    userId: string;
+    moduleId: string;
+    completed: boolean;
+    progress: number;
+    scheduledFor?: string | null;
+    completedAt?: string | null;
+    notes?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────────
 
 export interface ProgressEntry {
   id: string;
-  metricName: string;
+  metric: string;
   value: number;
-  unit?: string | null;
+  date: string;
   notes?: string | null;
-  recordedAt: string;
 }
 
 // ─── Conversations ────────────────────────────────────────────────────────────
 
 export interface Conversation {
   id: string;
-  title: string;
+  title: string | null;
+  lastMessage?: string;
+  lastMessageAt: string;
+  messageCount: number;
   createdAt: string;
   updatedAt: string;
   isArchived: boolean;
-  messageCount?: number;
 }
 
 export interface ConversationMessage {
   id: string;
   conversationId: string;
-  role: 'user' | 'assistant' | 'system';
+  type: 'user' | 'bot' | 'system';
+  role?: 'user' | 'assistant' | 'system';
   content: string;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -176,13 +233,46 @@ export interface ConversationWithMessages extends Conversation {
 
 export interface ExerciseRecommendationsResponse {
   exercises: Array<{
-    title: string;
+    id: string;
+    name: string;
     description: string;
     type: string;
-    duration?: string;
-    instructions?: string[];
+    duration: string;
+    difficulty: 'easy' | 'medium' | 'advanced';
+    matchReason: string;
+    benefit: string;
   }>;
-  rationale?: string;
+  priority: 'high' | 'medium' | 'low';
+  contextualNote: string;
+}
+
+export interface ChatMessageResponsePayload {
+  message: ConversationMessage;
+  conversationId: string;
+  conversationTitle?: string | null;
+  smartReplies?: string[];
+  recommendations?: unknown[];
+  recommendationsMeta?: Record<string, unknown>;
+  fallback?: Record<string, unknown> | null;
+}
+
+export interface UserEngagementRecord {
+  id: string;
+  contentId: string;
+  completed: boolean;
+  rating: number | null;
+  timeSpent: number | null;
+  moodBefore: string | null;
+  moodAfter: string | null;
+  effectiveness: number | null;
+  createdAt: string;
+  updatedAt: string;
+  content?: {
+    id: string;
+    title: string;
+    type?: string;
+    thumbnailUrl?: string | null;
+  };
 }
 
 // ─── HTTP Helper ──────────────────────────────────────────────────────────────
@@ -209,8 +299,20 @@ async function request<T>(
       headers,
     });
 
+    const resolveAcceptHeader = (inputHeaders: HeadersInit | undefined): string => {
+      if (!inputHeaders) return '';
+      if (inputHeaders instanceof Headers) {
+        return inputHeaders.get('Accept') ?? '';
+      }
+      if (Array.isArray(inputHeaders)) {
+        const match = inputHeaders.find(([name]) => name.toLowerCase() === 'accept');
+        return match?.[1] ?? '';
+      }
+      return inputHeaders.Accept ?? inputHeaders.accept ?? '';
+    };
+
     // For blob responses (export endpoints) we handle them separately
-    if (options.headers && (options.headers as any)['Accept']?.includes('blob')) {
+    if (resolveAcceptHeader(options.headers)?.includes('blob')) {
       if (!response.ok) {
         return { success: false, error: `Request failed with status ${response.status}` };
       }
@@ -266,11 +368,11 @@ export const assessmentsApi = {
     request<AssessmentHistoryEntry[]>('/assessments'),
 
   getAvailableAssessments: () =>
-    request<AssessmentTemplate[]>('/assessments/available'),
+    request<AssessmentAvailableItem[]>('/assessments/available'),
 
   getAssessmentTemplates: (types?: string[]) => {
     const params = types?.length ? `?types=${types.join(',')}` : '';
-    return request<AssessmentTemplate[]>(`/assessments/templates${params}`);
+    return request<{ templates: AssessmentTemplate[] }>(`/assessments/templates${params}`);
   },
 
   submitAssessment: (payload: {
@@ -346,19 +448,19 @@ export const assessmentsApi = {
 
 export const chatApi = {
   sendMessage: (content: string, conversationId?: string) =>
-    request<{ message: ConversationMessage; response: ConversationMessage; exerciseRecommendations?: ExerciseRecommendationsResponse }>(
+    request<ChatMessageResponsePayload>(
       '/chat/message',
-      { method: 'POST', body: JSON.stringify({ message: content, conversationId }) }
+      { method: 'POST', body: JSON.stringify({ content, conversationId }) }
     ),
 
   getChatHistory: () =>
     request<ConversationMessage[]>('/chat/history'),
 
   getConversationStarters: () =>
-    request<{ starters: string[] }>('/chat/starters'),
+    request<string[]>('/chat/starters'),
 
   getProactiveCheckIn: () =>
-    request<{ message: string | null; shouldShow: boolean }>('/chat/check-in'),
+    request<{ shouldCheckIn: boolean; message: string; reason: string; priority: 'high' | 'medium' | 'low' }>('/chat/check-in'),
 
   getMoodBasedGreeting: () =>
     request<{ greeting: string }>('/chat/greeting'),
@@ -445,11 +547,18 @@ export const moodApi = {
     request<Record<string, unknown>>('/mood/stats'),
 };
 
+// ─── engagementApi ───────────────────────────────────────────────────────────
+
+export const engagementApi = {
+  getMyEngagements: () =>
+    request<UserEngagementRecord[]>('/content/engagements/me'),
+};
+
 // ─── plansApi ─────────────────────────────────────────────────────────────────
 
 export const plansApi = {
   getPersonalizedPlan: () =>
-    request<{ modules: PlanModuleWithState[]; planId?: string }>('/plans/personalized'),
+    request<PlanModuleWithState[]>('/plans/personalized'),
 
   getUserPlan: (userId: string) =>
     request<{ modules: PlanModuleWithState[] }>(`/plans/${userId}`),
@@ -470,7 +579,7 @@ export const progressApi = {
   trackProgress: (metric: string, value: number, notes?: string) =>
     request<ProgressEntry>('/progress', {
       method: 'POST',
-      body: JSON.stringify({ metricName: metric, value, notes }),
+      body: JSON.stringify({ metric, value, notes }),
     }),
 
   getProgressHistory: () =>
@@ -537,10 +646,10 @@ export const privacyApi = {
     }),
 
   exportData: async (
-    format: 'pdf' | 'json' | 'csv',
+    format: 'pdf' | 'json' | 'text',
     sections?: string[]
   ): Promise<void> => {
-    const blob = await requestBlob('/privacy/export', {
+    const blob = await requestBlob('/privacy/export-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ format, sections }),
@@ -554,8 +663,11 @@ export const privacyApi = {
     URL.revokeObjectURL(url);
   },
 
-  deleteAccount: () =>
-    request<void>('/privacy/delete-account', { method: 'DELETE' }),
+  deleteAccount: (confirmation: 'DELETE' = 'DELETE') =>
+    request<void>('/privacy/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ confirmation }),
+    }),
 };
 
 // ─── adminApi ─────────────────────────────────────────────────────────────────
@@ -563,6 +675,9 @@ export const privacyApi = {
 export const adminApi = {
   listAssessments: () =>
     request<unknown[]>('/admin/assessments'),
+
+  getAssessmentCategories: () =>
+    request<string[]>('/admin/assessments/categories'),
 
   getAssessment: (id: string) =>
     request<unknown>(`/admin/assessments/${id}`),

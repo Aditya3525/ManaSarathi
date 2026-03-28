@@ -81,13 +81,16 @@ LOG_LEVEL=info
 - `POST /api/auth/login` - Login user  
 - `GET /api/auth/me` - Get current user (requires token)
 
-### Future Endpoints (In Development)
+### Core Endpoints
 - `/api/users/*` - User management
 - `/api/assessments/*` - Wellbeing assessments
 - `/api/plans/*` - Personalized wellness plans
 - `/api/chat/*` - AI chatbot conversations
 - `/api/progress/*` - Progress tracking
 - `/api/content/*` - Content library
+- `/api/privacy/*` - Privacy settings, data export, account deletion
+- `/api/support/*` - Support ticket creation and tracking
+- `/api/therapist-portal/*` - Therapist login, profile, bookings, and stats
 
 ## Database Schema
 
@@ -112,7 +115,7 @@ The database includes tables for:
 
 ## Health Check
 
-Once running, check: `GET http://localhost:5000/health`
+Once running, check: `GET http://localhost:5000/api/health`
 
 ## Next Steps
 

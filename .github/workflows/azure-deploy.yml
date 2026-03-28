@@ -2,9 +2,9 @@ name: Deploy to Microsoft Azure
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, my-feature ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, my-feature ]
 
 env:
   NODE_VERSION: '18'
@@ -45,17 +45,17 @@ jobs:
     - name: Run frontend tests
       run: |
         cd frontend
-        npm run test -- --watchAll=false || true
+        npm run test
 
     - name: Run backend tests
       run: |
         cd backend
-        npm run test || true
+        npm run test
 
   deploy-frontend:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/my-feature'
     
     steps:
     - name: Checkout
@@ -89,7 +89,7 @@ jobs:
   deploy-backend:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/my-feature'
     
     steps:
     - name: Checkout
@@ -126,7 +126,7 @@ jobs:
   database-migration:
     needs: deploy-backend
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/my-feature'
     
     steps:
     - name: Checkout
@@ -152,7 +152,7 @@ jobs:
   notify-deployment:
     needs: [deploy-frontend, deploy-backend, database-migration]
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/my-feature')
     
     steps:
     - name: Deployment notification

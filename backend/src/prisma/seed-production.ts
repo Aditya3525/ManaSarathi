@@ -241,8 +241,14 @@ async function seedAdminUser() {
     console.log(`  ✅ Admin user already exists (${adminEmail}) — skipping`);
     return;
   }
+
+  const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!initialAdminPassword) {
+    throw new Error('ADMIN_INITIAL_PASSWORD is required for first-time production admin creation');
+  }
+
   console.log(`  🌱 Creating admin user (${adminEmail})...`);
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const hashedPassword = await bcrypt.hash(initialAdminPassword, 10);
   await prisma.user.create({
     data: {
       email: adminEmail,
@@ -251,7 +257,7 @@ async function seedAdminUser() {
       isOnboarded: true,
     }
   });
-  console.log(`  ✅ Admin user created (${adminEmail}). Default password: admin123 — CHANGE IT IMMEDIATELY.`);
+  console.log(`  ✅ Admin user created (${adminEmail}).`);
 }
 
 async function main() {

@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
-import { cn } from '../../ui/utils';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import {
@@ -27,6 +26,7 @@ import {
 import { ScrollArea } from '../../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Slider } from '../../ui/slider';
+import { cn } from '../../ui/utils';
 
 import type { LibraryItem } from './types';
 

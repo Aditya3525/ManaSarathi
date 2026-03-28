@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
+import { asyncHandler } from '../middleware/errorHandler';
 import {
   createSupportTicket,
   getUserTickets,
@@ -13,9 +14,9 @@ const router = express.Router();
 router.use(authenticate);
 
 // Support ticket routes
-router.post('/tickets', createSupportTicket);
-router.get('/tickets', getUserTickets);
-router.get('/tickets/:id', getTicketById);
-router.put('/tickets/:id/acknowledge', acknowledgeTicket);
+router.post('/tickets', asyncHandler(createSupportTicket as any));
+router.get('/tickets', asyncHandler(getUserTickets as any));
+router.get('/tickets/:id', asyncHandler(getTicketById as any));
+router.put('/tickets/:id/acknowledge', asyncHandler(acknowledgeTicket as any));
 
 export default router;

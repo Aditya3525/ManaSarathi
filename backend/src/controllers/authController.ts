@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Joi from 'joi';
 import { prisma } from '../config/database';
+import { getJwtSecret } from '../config/auth';
 import { 
   AppError,
   NotFoundError, 
@@ -124,8 +125,7 @@ const getOAuthFrontendBaseUrl = (req: Request): string => {
 
 // Generate JWT token
 const generateToken = (userId: string): string => {
-  // Use provided secret or safe fallback for development to prevent silent flow break
-  const secret = process.env.JWT_SECRET || 'dev-fallback-secret';
+  const secret = getJwtSecret();
   return jwt.sign(
     { id: userId },
     secret as jwt.Secret,
@@ -357,7 +357,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     const userRecord = await prisma.user.findUnique({
       where: { id: decoded.id }
     });
