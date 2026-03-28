@@ -42,10 +42,16 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         let googleUserData = null;
         if (userDataParam) {
           try {
-            googleUserData = JSON.parse(decodeURIComponent(userDataParam));
+            googleUserData = JSON.parse(userDataParam);
             console.log('Google User Data:', googleUserData);
           } catch (parseError) {
-            console.error('Error parsing user data:', parseError);
+            try {
+              // Backward compatibility for legacy callbacks that sent double-encoded payloads.
+              googleUserData = JSON.parse(decodeURIComponent(userDataParam));
+              console.log('Google User Data (legacy decode):', googleUserData);
+            } catch (legacyParseError) {
+              console.error('Error parsing user data:', legacyParseError);
+            }
           }
         }
 

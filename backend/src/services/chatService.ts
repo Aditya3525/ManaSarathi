@@ -531,7 +531,7 @@ export class ChatService {
     const aiSummary = insight?.aiSummary ?? parsedSummary?.insights?.aiSummary ?? undefined;
 
     // Parse assessment responses for detailed context
-    const detailedAssessments = user.assessments.map((assessment: typeof user.assessments[number]) => {
+    const detailedAssessments = (user.assessments ?? []).map((assessment: typeof user.assessments[number]) => {
       let responses: Record<string, unknown> | null = null;
       try {
         responses = JSON.parse(assessment.responses);
@@ -549,7 +549,7 @@ export class ChatService {
       };
     });
 
-    const moodTrend = this.analyzeMoodTrend(user.moodEntries);
+    const moodTrend = this.analyzeMoodTrend(user.moodEntries ?? []);
     const { age, ageGroup } = this.calculateAgeInfo(user.birthday || undefined);
 
     // Privacy enforcement: if the user has NOT given data consent,
@@ -567,9 +567,9 @@ export class ChatService {
       approach: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
       approachEngine: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
       recentAssessments: privacyRestricted ? [] : detailedAssessments,
-      currentMood: privacyRestricted ? undefined : user.moodEntries[0]?.mood,
+      currentMood: privacyRestricted ? undefined : (user.moodEntries ?? [])[0]?.mood,
       moodTrend: privacyRestricted ? undefined : moodTrend,
-      hasCompletedAssessments: privacyRestricted ? false : user.assessments.length > 0,
+      hasCompletedAssessments: privacyRestricted ? false : (user.assessments ?? []).length > 0,
       preferences: {
         emergencyContact: user.emergencyContact,
         dataConsent: user.dataConsent,
@@ -588,7 +588,7 @@ export class ChatService {
             )
           }
           : undefined,
-      activeGoals: activeGoals.map(g => ({
+      activeGoals: (activeGoals ?? []).map(g => ({
         goalType: g.goalType,
         title: g.title,
         progress: g.progress,

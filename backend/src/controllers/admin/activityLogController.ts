@@ -1,7 +1,20 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../config/database';
 
-const prisma = new PrismaClient();
+const parseBoundedInt = (value: unknown, fallback: number, min: number, max: number): number => {
+  const parsed = Number.parseInt(String(value), 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+};
+
+const parseDetailsJson = (raw: string | null): unknown => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
 
 // Helper function to log admin activity
 export async function logActivity(
@@ -45,8 +58,8 @@ export async function getActivityLogs(req: Request, res: Response) {
       endDate,
     } = req.query;
 
-    const pageNum = parseInt(page as string, 10);
-    const limitNum = parseInt(limit as string, 10);
+    const pageNum = parseBoundedInt(page, 1, 1, 100000);
+    const limitNum = parseBoundedInt(limit, 50, 1, 200);
     const skip = (pageNum - 1) * limitNum;
 
     // Build filter conditions
@@ -91,7 +104,7 @@ export async function getActivityLogs(req: Request, res: Response) {
     // Parse details JSON for each log
     const logsWithParsedDetails = logs.map(log => ({
       ...log,
-      details: log.details ? JSON.parse(log.details) : null,
+      details: parseDetailsJson(log.details),
     }));
 
     res.json({
@@ -281,7 +294,7 @@ export async function exportActivityLogs(req: Request, res: Response) {
       'Timestamp,Admin,Action,Entity Type,Entity ID,Entity Name,Details\n';
     const csvRows = logs
       .map(log => {
-        const details = log.details ? JSON.parse(log.details) : {};
+        const details = parseDetailsJson(log.details) || {};
         return [
           log.createdAt.toISOString(),
           log.adminEmail,

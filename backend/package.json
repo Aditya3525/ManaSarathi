@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "nodemon src/server.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck",
+    "format": "prettier \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\" -w",
     "start": "node dist/server.js",
     "migrate": "npx prisma migrate dev",
     "migrate:deploy": "npx prisma migrate deploy",
@@ -17,8 +20,8 @@
     "seed:production": "ts-node src/prisma/seed-production.ts",
     "test": "cross-env NODE_ENV=test vitest run",
     "test:watch": "cross-env NODE_ENV=test vitest",
-    "test:ai": "node test-ai-providers.js",
-    "test:gemini": "node test-gemini.js"
+    "test:ai": "cross-env NODE_ENV=test vitest run tests/llmFallback.test.ts",
+    "test:gemini": "cross-env NODE_ENV=test vitest run tests/healthReady.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.61.0",
@@ -75,6 +78,7 @@
     "cross-env": "^7.0.3",
     "nodemon": "^3.0.1",
     "prisma": "^6.16.2",
+    "prettier": "^3.2.5",
     "supertest": "^6.3.4",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2",

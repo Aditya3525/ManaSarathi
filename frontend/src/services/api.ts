@@ -185,6 +185,25 @@ export interface ExerciseRecommendationsResponse {
   rationale?: string;
 }
 
+export interface UserEngagementRecord {
+  id: string;
+  contentId: string;
+  completed: boolean;
+  rating: number | null;
+  timeSpent: number | null;
+  moodBefore: string | null;
+  moodAfter: string | null;
+  effectiveness: number | null;
+  createdAt: string;
+  updatedAt: string;
+  content?: {
+    id: string;
+    title: string;
+    type?: string;
+    thumbnailUrl?: string | null;
+  };
+}
+
 // ─── HTTP Helper ──────────────────────────────────────────────────────────────
 
 const getToken = (): string | null => localStorage.getItem('token');
@@ -445,6 +464,13 @@ export const moodApi = {
     request<Record<string, unknown>>('/mood/stats'),
 };
 
+// ─── engagementApi ───────────────────────────────────────────────────────────
+
+export const engagementApi = {
+  getMyEngagements: () =>
+    request<UserEngagementRecord[]>('/content/engagements/me'),
+};
+
 // ─── plansApi ─────────────────────────────────────────────────────────────────
 
 export const plansApi = {
@@ -537,10 +563,10 @@ export const privacyApi = {
     }),
 
   exportData: async (
-    format: 'pdf' | 'json' | 'csv',
+    format: 'pdf' | 'json' | 'text',
     sections?: string[]
   ): Promise<void> => {
-    const blob = await requestBlob('/privacy/export', {
+    const blob = await requestBlob('/privacy/export-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ format, sections }),
@@ -554,8 +580,11 @@ export const privacyApi = {
     URL.revokeObjectURL(url);
   },
 
-  deleteAccount: () =>
-    request<void>('/privacy/delete-account', { method: 'DELETE' }),
+  deleteAccount: (confirmation: 'DELETE' = 'DELETE') =>
+    request<void>('/privacy/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ confirmation }),
+    }),
 };
 
 // ─── adminApi ─────────────────────────────────────────────────────────────────
@@ -563,6 +592,9 @@ export const privacyApi = {
 export const adminApi = {
   listAssessments: () =>
     request<unknown[]>('/admin/assessments'),
+
+  getAssessmentCategories: () =>
+    request<string[]>('/admin/assessments/categories'),
 
   getAssessment: (id: string) =>
     request<unknown>(`/admin/assessments/${id}`),

@@ -1,6 +1,6 @@
 # MaanSarathi - AI-Powered Mental Wellbeing Platform
 
-An intelligent mental wellbeing companion combining guided onboarding, personalized care plans, AI-powered chat support with crisis awareness, and a comprehensive content library. Built as a TypeScript monorepo with React/Vite frontend and Express/Prisma backend, featuring multi-LLM integration (Gemini, OpenAI, Anthropic, Hugging Face, Ollama).
+An intelligent mental wellbeing companion combining guided onboarding, personalized care plans, AI-powered chat support with crisis awareness, and a comprehensive content library. Built as a TypeScript monorepo with React/Vite frontend, Express/Prisma backend, and Expo React Native mobile app, featuring multi-LLM integration (Gemini, OpenAI, Anthropic, Hugging Face, Ollama).
 
 ## 🌟 Key Features
 
@@ -21,7 +21,8 @@ An intelligent mental wellbeing companion combining guided onboarding, personali
 |-------|-----------|---------|
 | **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, Radix UI | Modern responsive UI with accessibility-first component library |
 | **Backend** | Express, TypeScript, Prisma ORM | RESTful API with database abstraction and type safety |
-| **Database** | Prisma + SQLite (dev) / PostgreSQL (production) | Strongly-typed database layer with migrations |
+| **Mobile** | Expo, React Native, TypeScript, NativeWind | Cross-platform mobile client for user wellbeing workflows |
+| **Database** | Prisma + PostgreSQL | Strongly-typed database layer with migrations |
 | **AI Integration** | Gemini, OpenAI, Anthropic, Hugging Face, Ollama | Multi-provider LLM support with automatic failover |
 | **Auth** | JWT + Google OAuth 2.0 + Passport.js | Secure authentication with multiple strategies |
 
@@ -49,6 +50,12 @@ MaanSarathi/
 │   │   ├── schema.prisma            # Database schema with 40+ indexes
 │   │   └── migrations/              # Database migrations
 │   └── tests/                        # Backend test suites
+├── mobile/                            # Expo React Native app
+│   ├── app/                          # App routes/screens
+│   ├── components/                   # Shared mobile UI components
+│   ├── services/                     # Mobile API integrations
+│   └── stores/                       # Client state management
+├── shared/                            # Shared config/constants used across apps
 └── package.json                      # Root workspace configuration
 ```
 
@@ -56,7 +63,7 @@ MaanSarathi/
 
 ### Prerequisites
 - Node.js 18+ and npm 8+
-- Optional: PostgreSQL/MySQL for production (SQLite for local development)
+- PostgreSQL database (local or hosted)
 - AI provider keys (Gemini, OpenAI, etc.) for live chat features
 
 ### Installation & Setup
@@ -70,14 +77,15 @@ npm run setup
 # Frontend: create .env.local with VITE_API_URL and VITE_GOOGLE_CLIENT_ID
 
 # 3. Seed demo data (optional)
-cd backend && npm run seed
+npm run seed --workspace backend
 
 # 4. Start development server
-cd .. && npm run dev
+npm run dev
 ```
 
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000
+- **Backend API**: http://localhost:5000/api
+- **Health Check**: http://localhost:5000/api/health
 - **Database Admin**: `npm run db:studio`
 
 ### Environment Variables
@@ -87,9 +95,12 @@ cd .. && npm run dev
 NODE_ENV=development
 PORT=5000
 FRONTEND_URL=http://localhost:3000
-DATABASE_URL=file:./dev.db
+DATABASE_URL=postgresql://postgres:password@localhost:5432/mental_wellbeing_db
 JWT_SECRET=your_jwt_secret_here
 SESSION_SECRET=your_session_secret_here
+JWT_EXPIRE=7d
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 
 # AI Providers (at least one required)
 GEMINI_API_KEY_1=your_key
@@ -112,15 +123,6 @@ ADMIN_EMAILS=admin@example.com
 VITE_API_URL=http://localhost:5000/api
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
 ```
-JWT_EXPIRE=7d
-
-# Rate limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-
-# OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
 
 ## 🎯 Core Features Explained
 
@@ -237,9 +239,9 @@ npm run test:watch           # Watch mode
   - `railway.json` – Railway deployment
   - `Procfile` – Heroku/buildpack compatibility
   - `web.config` – IIS/Azure compatibility
-- Database: Migrate from SQLite to PostgreSQL/MySQL
-  - Update `DATABASE_URL` in environment
-  - Migrations run automatically on deployment
+- Database: Use PostgreSQL in all environments
+  - Set `DATABASE_URL` in environment
+  - Run migrations during deployment
 
 ### Production Checklist
 - [ ] Set all required environment variables
@@ -282,6 +284,11 @@ npm run test:watch           # Watch mode
 - Optimistic updates for better UX
 - Custom hooks: `useAssessments`, `useMood`, `useChat`, `useConversations`
 
+**Admin Backend Modularization** ✅
+- Split monolithic admin routing into focused modules (auth, analytics, users, bulk ops, activity logs, media, practices/content, therapist management)
+- Reused shared admin middleware and centralized auth secret usage
+- Improved maintainability without changing endpoint behavior
+
 ### Performance Metrics
 - Query performance: 50-70% improvement with database indexes
 - Bundle size: Optimized frontend build with Vite
@@ -307,7 +314,6 @@ npm run test:watch           # Watch mode
 - Extended conversation personalization and learning
 - Advanced goal tracking and monitoring UI
 - Comprehensive test coverage (unit, integration, e2e)
-- Mobile app (React Native)
 - Push notifications for proactive check-ins
 - Premium subscription features (Stripe)
 - Community and group therapy features
@@ -356,7 +362,7 @@ npm run format
 **Content**
 - `GET /api/content/practices` – List published practices
 - `GET /api/content/:id` – Get practice details
-- `POST /api/admin/content/upload` – Upload media (admin)
+- `POST /api/admin/upload/:type` – Upload media file (admin)
 - `PUT /api/admin/content/:id` – Edit content (admin)
 
 **Profile & Progress**
@@ -367,7 +373,7 @@ npm run format
 
 ## 🔒 Security Considerations
 
-- **JWT tokens**: Signed with secure secret, stored in httpOnly cookies
+- **JWT/session auth**: Signed JWTs for API auth and session-cookie support for admin flows
 - **Password hashing**: bcrypt with salt rounds 10+
 - **Input validation**: Zod schemas on all endpoints
 - **Admin routes**: Protected by session middleware and role checks

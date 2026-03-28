@@ -3,8 +3,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { BookingStatus } from '@prisma/client';
 import prisma from '../config/database';
+import { getJwtSecret } from '../config/auth';
 
 const router = express.Router();
+const JWT_SECRET = getJwtSecret();
 
 // ─── Helper: extract therapist JWT from Authorization header (or session fallback) ───
 function extractTherapistToken(req: any): string | null {
@@ -25,7 +27,7 @@ export const requireTherapist = async (req: any, res: any, next: any) => {
             return res.status(401).json({ error: 'Therapist authentication required' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
 
         const therapist = await prisma.therapist.findFirst({
             where: { userId: decoded.userId },
@@ -88,7 +90,7 @@ router.post('/login', async (req, res) => {
         // Generate JWT
         const token = jwt.sign(
             { userId: user.id, therapistId: therapist.id, email: user.email },
-            process.env.JWT_SECRET || 'fallback-secret',
+            JWT_SECRET,
             { expiresIn: '24h' }
         );
 
@@ -127,7 +129,7 @@ router.get('/session', async (req, res) => {
             return res.status(401).json({ error: 'No therapist session' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
 
         const therapist = await prisma.therapist.findFirst({
             where: { userId: decoded.userId },
@@ -137,7 +139,7 @@ router.get('/session', async (req, res) => {
             }
         });
 
-        if (!therapist) {
+        if (!therapist || !therapist.isActive) {
             return res.status(401).json({ error: 'Invalid therapist session' });
         }
 

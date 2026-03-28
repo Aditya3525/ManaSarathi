@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - develop
+      - my-feature
 
 jobs:
   build-and-test:

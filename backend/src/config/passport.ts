@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-
-const prisma = new PrismaClient();
+import prisma from './database';
 
 interface User {
   id: string;
@@ -30,7 +28,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         name: profile.name
       });
 
-    const email = profile.emails?.[0]?.value || '';
+    const email = (profile.emails?.[0]?.value || '').trim().toLowerCase();
     const name = profile.displayName || profile.name?.givenName + ' ' + profile.name?.familyName || '';
     const firstName = profile.name?.givenName || '';
     const lastName = profile.name?.familyName || '';
