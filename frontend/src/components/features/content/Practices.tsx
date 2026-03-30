@@ -56,8 +56,8 @@ interface Practice {
   description: string;
   type: 'meditation' | 'breathing' | 'yoga' | 'sleep';
   duration: number; // in minutes
-  difficulty: 'Beginner' | 'Moderate' | 'Advanced';
-  approach: 'Western' | 'Eastern' | 'Hybrid';
+  difficulty: 'Beginner' | 'Intermediate' | 'Moderate' | 'Advanced';
+  approach: 'Western' | 'Eastern' | 'Hybrid' | 'All';
   format: 'Audio' | 'Video' | 'Audio/Video';
   instructor: string;
   image: string;
@@ -118,8 +118,19 @@ export function Practices({ onNavigate }: PracticesProps) {
           description: p.description || '',
           type: (['meditation','breathing','yoga','sleep'].includes(p.type) ? p.type : 'meditation') as Practice['type'],
           duration: p.duration,
-          difficulty: (['Beginner','Moderate','Advanced'].includes(p.difficulty) ? p.difficulty : 'Beginner') as Practice['difficulty'],
-          approach: (['Western','Eastern','Hybrid'].includes(p.approach) ? p.approach : 'Western') as Practice['approach'],
+          difficulty: (() => {
+            const normalized = String(p.difficulty || '').toLowerCase();
+            if (normalized === 'advanced') return 'Advanced';
+            if (normalized === 'moderate' || normalized === 'intermediate') return 'Intermediate';
+            return 'Beginner';
+          })() as Practice['difficulty'],
+          approach: (() => {
+            const normalized = String(p.approach || '').toLowerCase();
+            if (normalized === 'eastern') return 'Eastern';
+            if (normalized === 'hybrid') return 'Hybrid';
+            if (normalized === 'all') return 'All';
+            return 'Western';
+          })() as Practice['approach'],
           format: (['Audio','Video','Audio/Video'].includes(p.format) ? p.format : 'Audio') as Practice['format'],
           instructor: 'Guide',
           image: p.thumbnailUrl || '/placeholder-practice.jpg',
@@ -170,7 +181,7 @@ export function Practices({ onNavigate }: PracticesProps) {
   const difficulties = [
     { id: 'all', label: 'All Levels', icon: Layers },
     { id: 'Beginner', label: 'Beginner', icon: Layers },
-    { id: 'Moderate', label: 'Moderate', icon: Layers },
+    { id: 'Intermediate', label: 'Intermediate', icon: Layers },
     { id: 'Advanced', label: 'Advanced', icon: Layers }
   ];
 
@@ -181,7 +192,10 @@ export function Practices({ onNavigate }: PracticesProps) {
       (selectedDuration === 'medium' && practice.duration > 10 && practice.duration <= 20) ||
       (selectedDuration === 'long' && practice.duration > 20);
     const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(practice.format) || (practice.format === 'Audio/Video' && (selectedFormats.includes('Audio') || selectedFormats.includes('Video')));
-    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes(practice.approach);
+    const matchesApproach =
+      selectedApproaches.length === 0 ||
+      selectedApproaches.includes(practice.approach) ||
+      practice.approach === 'All';
     const matchesDifficulty = selectedDifficulties.length === 0 || selectedDifficulties.includes(practice.difficulty);
     const matchesSearch = searchQuery.trim() === '' || 
       practice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

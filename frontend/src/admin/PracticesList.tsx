@@ -8,7 +8,6 @@ import {
   Eye,
   Waves,
   Heart,
-  Scan,
   Filter,
   Clock
 } from 'lucide-react';
@@ -364,12 +363,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'Meditation': return <Brain className="h-4 w-4" />;
-      case 'Breathing': return <Wind className="h-4 w-4" />;
-      case 'Visualization': return <Eye className="h-4 w-4" />;
-      case 'Progressive Relaxation': return <Waves className="h-4 w-4" />;
-      case 'Mindfulness': return <Heart className="h-4 w-4" />;
-      case 'Body Scan': return <Scan className="h-4 w-4" />;
+      case 'meditation': return <Brain className="h-4 w-4" />;
+      case 'breathing': return <Wind className="h-4 w-4" />;
+      case 'yoga': return <Heart className="h-4 w-4" />;
+      case 'sleep': return <Waves className="h-4 w-4" />;
       default: return <Brain className="h-4 w-4" />;
     }
   };
@@ -385,10 +382,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
   const getApproachColor = (approach: string) => {
     switch (approach) {
-      case 'cbt': return 'bg-blue-100 text-blue-800';
-      case 'mindfulness': return 'bg-green-100 text-green-800';
-      case 'dbt': return 'bg-purple-100 text-purple-800';
-      case 'act': return 'bg-orange-100 text-orange-800';
+      case 'Western': return 'bg-blue-100 text-blue-800';
+      case 'Eastern': return 'bg-green-100 text-green-800';
+      case 'Hybrid': return 'bg-purple-100 text-purple-800';
+      case 'All': return 'bg-slate-100 text-slate-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -461,12 +458,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Meditation">Meditation</SelectItem>
-                <SelectItem value="Breathing">Breathing</SelectItem>
-                <SelectItem value="Visualization">Visualization</SelectItem>
-                <SelectItem value="Progressive Relaxation">Progressive Relaxation</SelectItem>
-                <SelectItem value="Mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="Body Scan">Body Scan</SelectItem>
+                <SelectItem value="meditation">Meditation</SelectItem>
+                <SelectItem value="breathing">Breathing</SelectItem>
+                <SelectItem value="yoga">Yoga</SelectItem>
+                <SelectItem value="sleep">Sleep</SelectItem>
               </SelectContent>
             </Select>
 
@@ -488,11 +483,9 @@ export const PracticesList: React.FC<PracticesListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Approaches</SelectItem>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="cbt">CBT</SelectItem>
-                <SelectItem value="mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="dbt">DBT</SelectItem>
-                <SelectItem value="act">ACT</SelectItem>
+                <SelectItem value="Western">Western</SelectItem>
+                <SelectItem value="Eastern">Eastern</SelectItem>
+                <SelectItem value="Hybrid">Hybrid</SelectItem>
               </SelectContent>
             </Select>
 

@@ -141,7 +141,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
       try {
         const [practicesResp, contentResp] = await Promise.all([
           fetch(`${getApiBaseUrl()}/practices`),
-          fetch(`${getApiBaseUrl()}/public/content`)
+          fetch(`${getApiBaseUrl()}/public-content`)
         ]);
 
         type RawPractice = {

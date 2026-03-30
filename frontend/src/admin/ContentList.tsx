@@ -301,10 +301,10 @@ export const ContentList: React.FC<ContentListProps> = ({
 
   const getApproachColor = (approach: string) => {
     switch (approach) {
-      case 'cbt': return 'bg-blue-100 text-blue-800';
-      case 'mindfulness': return 'bg-green-100 text-green-800';
-      case 'dbt': return 'bg-purple-100 text-purple-800';
-      case 'act': return 'bg-orange-100 text-orange-800';
+      case 'western': return 'bg-blue-100 text-blue-800';
+      case 'eastern': return 'bg-green-100 text-green-800';
+      case 'hybrid': return 'bg-purple-100 text-purple-800';
+      case 'all': return 'bg-slate-100 text-slate-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -379,9 +379,8 @@ export const ContentList: React.FC<ContentListProps> = ({
                 <SelectItem value="article">Article</SelectItem>
                 <SelectItem value="video">Video</SelectItem>
                 <SelectItem value="audio">Audio</SelectItem>
-                <SelectItem value="exercise">Exercise</SelectItem>
-                <SelectItem value="meditation">Meditation</SelectItem>
-                <SelectItem value="reflection">Reflection</SelectItem>
+                <SelectItem value="playlist">Playlist</SelectItem>
+                <SelectItem value="story">Story</SelectItem>
               </SelectContent>
             </Select>
 
@@ -391,11 +390,9 @@ export const ContentList: React.FC<ContentListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Approaches</SelectItem>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="cbt">CBT</SelectItem>
-                <SelectItem value="mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="dbt">DBT</SelectItem>
-                <SelectItem value="act">ACT</SelectItem>
+                <SelectItem value="western">Western</SelectItem>
+                <SelectItem value="eastern">Eastern</SelectItem>
+                <SelectItem value="hybrid">Hybrid</SelectItem>
               </SelectContent>
             </Select>
 
