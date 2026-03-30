@@ -294,13 +294,23 @@ export interface UserEngagementRecord {
 
 // ─── HTTP Helper ──────────────────────────────────────────────────────────────
 
-const getToken = (): string | null => localStorage.getItem('token');
+const getTokenForPath = (path: string): string | null => {
+  const userToken = localStorage.getItem('token');
+  const adminToken = localStorage.getItem('adminToken');
+
+  // Admin endpoints should use admin session token; fall back to user token only if needed.
+  if (path.startsWith('/admin')) {
+    return adminToken || userToken;
+  }
+
+  return userToken;
+};
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const token = getToken();
+  const token = getTokenForPath(path);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -362,7 +372,7 @@ async function request<T>(
 }
 
 async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
-  const token = getToken();
+  const token = getTokenForPath(path);
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
