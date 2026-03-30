@@ -3,8 +3,8 @@
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'MaanSarathi-v1.0.3';
-const API_CACHE_NAME = 'MaanSarathi-api-v1.0.3';
+const CACHE_NAME = 'MaanSarathi-v1.0.4';
+const API_CACHE_NAME = 'MaanSarathi-api-v1.0.4';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -64,6 +64,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Ignore unsupported schemes (e.g., chrome-extension://) to avoid Cache API runtime errors.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   // API requests - Network First, fallback to cache
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
@@ -89,6 +94,10 @@ self.addEventListener('fetch', (event) => {
  * Good for static assets that don't change often
  */
 async function cacheFirstStrategy(request, cacheName) {
+  if (!isCacheableRequest(request)) {
+    return fetch(request);
+  }
+
   try {
     const cachedResponse = await caches.match(request);
     
@@ -124,6 +133,10 @@ async function cacheFirstStrategy(request, cacheName) {
  * Good for API requests where fresh data is important
  */
 async function networkFirstStrategy(request, cacheName) {
+  if (!isCacheableRequest(request)) {
+    return fetch(request);
+  }
+
   try {
     console.log('[ServiceWorker] Fetching API from network:', request.url);
     const networkResponse = await fetch(request);
@@ -147,6 +160,15 @@ async function networkFirstStrategy(request, cacheName) {
 
     console.error('[ServiceWorker] No cached response available:', error);
     throw error;
+  }
+}
+
+function isCacheableRequest(request) {
+  try {
+    const url = new URL(request.url);
+    return request.method === 'GET' && (url.protocol === 'http:' || url.protocol === 'https:');
+  } catch {
+    return false;
   }
 }
 
