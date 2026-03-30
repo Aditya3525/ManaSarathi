@@ -207,6 +207,7 @@ app.use('/api/privacy', privacyRoutes);  // Privacy settings, data export, accou
 app.use('/api/admin-data', adminDataRoutes); // For database CRUD operations
 app.use('/api/practices', publicPracticesRoutes);
 app.use('/api/public-content', publicContentRoutes);
+app.use('/api/public/content', publicContentRoutes); // Backward-compatible alias
 app.use('/api/dashboard', dashboardRoutes);
 // Enhanced engagement & recommendation endpoints
 app.use('/api/content', engagementRoutes); // For /api/content/:id/engage and /api/content/:id/engagement

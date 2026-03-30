@@ -304,7 +304,7 @@ export const ContentList: React.FC<ContentListProps> = ({
       case 'western': return 'bg-blue-100 text-blue-800';
       case 'eastern': return 'bg-green-100 text-green-800';
       case 'hybrid': return 'bg-purple-100 text-purple-800';
-      case 'all': return 'bg-slate-100 text-slate-800';
+      case 'all': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -379,8 +379,9 @@ export const ContentList: React.FC<ContentListProps> = ({
                 <SelectItem value="article">Article</SelectItem>
                 <SelectItem value="video">Video</SelectItem>
                 <SelectItem value="audio">Audio</SelectItem>
-                <SelectItem value="playlist">Playlist</SelectItem>
-                <SelectItem value="story">Story</SelectItem>
+                <SelectItem value="exercise">Exercise</SelectItem>
+                <SelectItem value="meditation">Meditation</SelectItem>
+                <SelectItem value="reflection">Reflection</SelectItem>
               </SelectContent>
             </Select>
 

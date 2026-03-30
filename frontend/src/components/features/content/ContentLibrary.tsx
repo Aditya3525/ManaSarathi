@@ -141,7 +141,14 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
       try {
         const [practicesResp, contentResp] = await Promise.all([
           fetch(`${getApiBaseUrl()}/practices`),
-          fetch(`${getApiBaseUrl()}/public-content`)
+          (async () => {
+            const primary = await fetch(`${getApiBaseUrl()}/public-content`);
+            if (primary.ok || primary.status !== 404) {
+              return primary;
+            }
+            // Backward-compatible fallback for older deployments.
+            return fetch(`${getApiBaseUrl()}/public/content`);
+          })()
         ]);
 
         type RawPractice = {

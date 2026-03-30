@@ -65,7 +65,7 @@ const contentValidationSchema = Joi.object({
   ).optional(),
   isPublished: Joi.boolean().optional(),
   contentType: Joi.string().allow(null).optional(),
-  intensityLevel: Joi.string().valid('low', 'medium', 'high').allow(null).optional(),
+  intensityLevel: Joi.string().valid('low', 'medium', 'high', 'BEGINNER', 'INTERMEDIATE', 'ADVANCED').allow(null).optional(),
   focusAreas: Joi.array().items(Joi.string().max(100)).max(10).optional(),
   immediateRelief: Joi.boolean().optional(),
   crisisEligible: Joi.boolean().optional(),
@@ -84,7 +84,8 @@ const practiceValidationSchema = Joi.object({
   youtubeUrl: Joi.string().max(50).allow('', null).optional(),
   thumbnailUrl: Joi.string().uri().allow('', null).optional(),
   duration: Joi.number().integer().min(0).required(),
-  difficulty: Joi.string().required(),
+  difficulty: Joi.string().allow('', null).optional(),
+  level: Joi.string().allow('', null).optional(),
   tags: Joi.alternatives().try(
     Joi.string(),
     Joi.array().items(Joi.string())
@@ -101,7 +102,7 @@ const practiceValidationSchema = Joi.object({
     'CBT_TECHNIQUE', 'GROUNDING_EXERCISE', 'SELF_REFLECTION',
     'MOVEMENT', 'SLEEP_HYGIENE'
   ).allow(null).optional(),
-  intensityLevel: Joi.string().valid('low', 'medium', 'high').allow(null).optional(),
+  intensityLevel: Joi.string().valid('low', 'medium', 'high', 'BEGINNER', 'INTERMEDIATE', 'ADVANCED').allow(null).optional(),
   focusAreas: Joi.array().items(Joi.string().max(100)).max(10).optional(),
   immediateRelief: Joi.boolean().optional(),
   crisisEligible: Joi.boolean().optional(),

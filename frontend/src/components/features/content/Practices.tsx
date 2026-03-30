@@ -56,7 +56,7 @@ interface Practice {
   description: string;
   type: 'meditation' | 'breathing' | 'yoga' | 'sleep';
   duration: number; // in minutes
-  difficulty: 'Beginner' | 'Intermediate' | 'Moderate' | 'Advanced';
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   approach: 'Western' | 'Eastern' | 'Hybrid' | 'All';
   format: 'Audio' | 'Video' | 'Audio/Video';
   instructor: string;
@@ -118,19 +118,10 @@ export function Practices({ onNavigate }: PracticesProps) {
           description: p.description || '',
           type: (['meditation','breathing','yoga','sleep'].includes(p.type) ? p.type : 'meditation') as Practice['type'],
           duration: p.duration,
-          difficulty: (() => {
-            const normalized = String(p.difficulty || '').toLowerCase();
-            if (normalized === 'advanced') return 'Advanced';
-            if (normalized === 'moderate' || normalized === 'intermediate') return 'Intermediate';
-            return 'Beginner';
-          })() as Practice['difficulty'],
-          approach: (() => {
-            const normalized = String(p.approach || '').toLowerCase();
-            if (normalized === 'eastern') return 'Eastern';
-            if (normalized === 'hybrid') return 'Hybrid';
-            if (normalized === 'all') return 'All';
-            return 'Western';
-          })() as Practice['approach'],
+          difficulty: (['Beginner','Intermediate','Moderate','Advanced'].includes(p.difficulty)
+            ? (p.difficulty === 'Moderate' ? 'Intermediate' : p.difficulty)
+            : 'Beginner') as Practice['difficulty'],
+          approach: (['Western','Eastern','Hybrid','All'].includes(p.approach) ? p.approach : 'All') as Practice['approach'],
           format: (['Audio','Video','Audio/Video'].includes(p.format) ? p.format : 'Audio') as Practice['format'],
           instructor: 'Guide',
           image: p.thumbnailUrl || '/placeholder-practice.jpg',
@@ -192,10 +183,7 @@ export function Practices({ onNavigate }: PracticesProps) {
       (selectedDuration === 'medium' && practice.duration > 10 && practice.duration <= 20) ||
       (selectedDuration === 'long' && practice.duration > 20);
     const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(practice.format) || (practice.format === 'Audio/Video' && (selectedFormats.includes('Audio') || selectedFormats.includes('Video')));
-    const matchesApproach =
-      selectedApproaches.length === 0 ||
-      selectedApproaches.includes(practice.approach) ||
-      practice.approach === 'All';
+    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes(practice.approach);
     const matchesDifficulty = selectedDifficulties.length === 0 || selectedDifficulties.includes(practice.difficulty);
     const matchesSearch = searchQuery.trim() === '' || 
       practice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -340,7 +328,6 @@ export function Practices({ onNavigate }: PracticesProps) {
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'Beginner': return 'bg-green-100 text-green-800';
-      case 'Moderate':
       case 'Intermediate': return 'bg-yellow-100 text-yellow-800';
       case 'Advanced': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';

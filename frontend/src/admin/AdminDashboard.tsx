@@ -82,20 +82,16 @@ const normalizeTags = (raw?: string[] | string | null): string[] => {
 };
 
 const mapPractice = (rec: PracticeRecord): Practice => {
-  const normalizedLevel = normalizePracticeLevel(
-    (rec as unknown as { level?: string; difficulty?: string }).level ??
-    (rec as unknown as { level?: string; difficulty?: string }).difficulty
-  );
-
+  const levelOrDifficulty = rec.level ?? rec.difficulty;
   return {
     id: rec.id,
     title: rec.title,
-    category: (rec as unknown as { category?: string }).category || rec.type,
+    category: rec.type,
     types: rec.type,
     type: rec.type,
     duration: rec.duration,
-    level: normalizedLevel,
-    difficulty: normalizedLevel,
+    level: normalizePracticeLevel(levelOrDifficulty),
+    difficulty: normalizePracticeLevel(levelOrDifficulty),
     approach: rec.approach,
     format: rec.format,
     description: rec.description,
@@ -279,7 +275,6 @@ export const AdminDashboard: React.FC = () => {
   const [activeModal, setActiveModal] = useState<'form' | 'add-practice' | 'add-content' | null>(null);
   const [assessmentCount, setAssessmentCount] = useState<number | null>(null);
   const [isLoadingAssessments, setIsLoadingAssessments] = useState(false);
-  const [selectedPracticeType, setSelectedPracticeType] = useState<PracticeRecord['type'] | null>(null);
 
   const openAssessmentBuilder = useCallback(() => {
     setTab('assessments');
@@ -302,7 +297,6 @@ export const AdminDashboard: React.FC = () => {
     setEditingPractice(null);
     setEditingContent(null);
     setSelectedContentType(null);
-    setSelectedPracticeType(null);
   }, []);
 
   useEffect(() => {
@@ -316,7 +310,6 @@ export const AdminDashboard: React.FC = () => {
       openAssessmentBuilder();
     } else {
       setSelectedContentType(null);
-      setSelectedPracticeType(null);
       setEditingPractice(null);
       setEditingContent(null);
       setActiveModal(tab === 'content' ? 'add-content' : 'add-practice');
@@ -327,12 +320,6 @@ export const AdminDashboard: React.FC = () => {
     (type?: string) => {
       setEditingPractice(null);
       setEditingContent(null);
-      if (tab === 'practices') {
-        const normalizedType = type && ['meditation', 'breathing', 'yoga', 'sleep'].includes(type)
-          ? (type as PracticeRecord['type'])
-          : null;
-        setSelectedPracticeType(normalizedType);
-      }
       if (tab === 'content') {
         setSelectedContentType(type ?? null);
       }
@@ -860,7 +847,6 @@ export const AdminDashboard: React.FC = () => {
                 {tab === 'practices' ? (
                   <PracticeForm
                     existing={editingPractice ?? undefined}
-                    selectedType={selectedPracticeType}
                     onSaved={handlePracticeSaved}
                     onClose={closeForm}
                   />
@@ -1040,15 +1026,15 @@ export const AdminDashboard: React.FC = () => {
             <Button
               className="w-full justify-start h-auto p-3 sm:p-4"
               variant="outline"
-              onClick={() => openAddForm('yoga')}
+              onClick={() => openAddForm('mindfulness')}
             >
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
                   <Heart className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                 </div>
                 <div className="text-left">
-                  <div className="font-medium text-sm sm:text-base">Yoga</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Movement and mind-body practices</div>
+                  <div className="font-medium text-sm sm:text-base">Mindfulness</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Mindfulness and awareness practices</div>
                 </div>
               </div>
             </Button>
@@ -1056,15 +1042,15 @@ export const AdminDashboard: React.FC = () => {
             <Button
               className="w-full justify-start h-auto p-3 sm:p-4"
               variant="outline"
-              onClick={() => openAddForm('sleep')}
+              onClick={() => openAddForm('cbt')}
             >
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="p-1.5 sm:p-2 bg-orange-100 rounded-lg">
                   <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
                 </div>
                 <div className="text-left">
-                  <div className="font-medium text-sm sm:text-base">Sleep</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Bedtime and relaxation routines</div>
+                  <div className="font-medium text-sm sm:text-base">CBT Exercise</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Cognitive behavioral therapy techniques</div>
                 </div>
               </div>
             </Button>

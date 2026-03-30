@@ -17,6 +17,29 @@ export const createPracticeContentRoutes = ({
 }: RoutesOptions): express.Router => {
   const router = express.Router();
 
+  const normalizeIntensityLevel = (value?: string | null): 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null => {
+    if (!value || !String(value).trim()) {
+      return null;
+    }
+
+    const normalized = String(value).trim().toLowerCase();
+    if (normalized === 'beginner' || normalized === 'low') return 'BEGINNER';
+    if (normalized === 'intermediate' || normalized === 'medium' || normalized === 'moderate') return 'INTERMEDIATE';
+    if (normalized === 'advanced' || normalized === 'high') return 'ADVANCED';
+    return null;
+  };
+
+  const normalizeDifficulty = (value?: string | null): string | null => {
+    if (!value || !String(value).trim()) {
+      return null;
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (normalized === 'beginner' || normalized === 'low') return 'Beginner';
+    if (normalized === 'intermediate' || normalized === 'moderate' || normalized === 'medium') return 'Intermediate';
+    if (normalized === 'advanced' || normalized === 'high') return 'Advanced';
+    return String(value).trim();
+  };
+
   // Get all practices (admin only)
   router.get('/practices', requireAdmin, async (req, res) => {
     try {
@@ -52,6 +75,7 @@ export const createPracticeContentRoutes = ({
         type,
         duration,
         difficulty,
+        level,
         approach,
         format,
         description,
@@ -78,6 +102,11 @@ export const createPracticeContentRoutes = ({
         immediateRelief,
         crisisEligible
       } = value;
+
+      const resolvedDifficulty = normalizeDifficulty(difficulty || level);
+      if (!resolvedDifficulty) {
+        return res.status(400).json({ success: false, error: 'Difficulty/level is required' });
+      }
 
       // Disallow legacy combined format
       if (format === 'Audio/Video') {
@@ -116,7 +145,7 @@ export const createPracticeContentRoutes = ({
           title: String(title).trim(),
           type: String(type),
           duration: duration,
-          difficulty: String(difficulty),
+          difficulty: resolvedDifficulty,
           approach: String(approach),
           format: String(format),
           description: description ? String(description) : null,
@@ -131,7 +160,7 @@ export const createPracticeContentRoutes = ({
           precautions: precautions || null,
           // New enhanced fields
           category: category || null,
-          intensityLevel: intensityLevel || null,
+          intensityLevel: normalizeIntensityLevel(intensityLevel),
           requiredEquipment: requiredEquipment ? JSON.stringify(requiredEquipment) : null,
           environment: environment ? JSON.stringify(environment) : null,
           timeOfDay: timeOfDay ? JSON.stringify(timeOfDay) : null,
@@ -183,7 +212,12 @@ export const createPracticeContentRoutes = ({
       if (value.title !== undefined) updateData.title = String(value.title).trim();
       if (value.type !== undefined) updateData.type = String(value.type);
       if (value.duration !== undefined) updateData.duration = value.duration;
-      if (value.difficulty !== undefined) updateData.difficulty = String(value.difficulty);
+      if (value.difficulty !== undefined || value.level !== undefined) {
+        const normalizedDifficulty = normalizeDifficulty(value.difficulty || value.level);
+        if (normalizedDifficulty) {
+          updateData.difficulty = normalizedDifficulty;
+        }
+      }
       if (value.approach !== undefined) updateData.approach = String(value.approach);
       if (value.format !== undefined) updateData.format = String(value.format);
       if (value.description !== undefined) updateData.description = value.description;
@@ -205,7 +239,9 @@ export const createPracticeContentRoutes = ({
 
       // Enhanced fields
       if (value.category !== undefined) updateData.category = value.category;
-      if (value.intensityLevel !== undefined) updateData.intensityLevel = value.intensityLevel;
+      if (value.intensityLevel !== undefined) {
+        updateData.intensityLevel = normalizeIntensityLevel(value.intensityLevel);
+      }
       if (value.requiredEquipment !== undefined) {
         updateData.requiredEquipment = value.requiredEquipment ? JSON.stringify(value.requiredEquipment) : null;
       }
@@ -347,6 +383,8 @@ export const createPracticeContentRoutes = ({
         transcript
       } = value;
 
+      const normalizedIntensityLevel = normalizeIntensityLevel(intensityLevel);
+
       // Thumbnail handling
       let finalThumb = value.thumbnailUrl;
       if ((!finalThumb || !String(finalThumb).trim()) && youtubeUrl && String(youtubeUrl).trim().length <= 20) {
@@ -389,7 +427,7 @@ export const createPracticeContentRoutes = ({
           isPublished: !!isPublished,
           // New enhanced fields
           contentType: contentType || null,
-          intensityLevel: intensityLevel || null,
+          intensityLevel: normalizedIntensityLevel,
           focusAreas: focusAreas ? JSON.stringify(focusAreas) : null,
           immediateRelief: immediateRelief || false,
           crisisEligible: crisisEligible || false,
@@ -458,7 +496,9 @@ export const createPracticeContentRoutes = ({
 
       // Enhanced fields
       if (value.contentType !== undefined) updateData.contentType = value.contentType;
-      if (value.intensityLevel !== undefined) updateData.intensityLevel = value.intensityLevel;
+      if (value.intensityLevel !== undefined) {
+        updateData.intensityLevel = normalizeIntensityLevel(value.intensityLevel);
+      }
       if (value.focusAreas !== undefined) {
         updateData.focusAreas = value.focusAreas ? JSON.stringify(value.focusAreas) : null;
       }

@@ -46,12 +46,11 @@ export interface PracticeRecord {
 
 interface PracticeFormProps {
   existing?: PracticeRecord;
-  selectedType?: PracticeRecord['type'] | null;
   onSaved: (practice: PracticeRecord) => void;
   onClose: () => void;
 }
 
-export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, selectedType, onSaved, onClose }) => {
+export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, onClose }) => {
   const { push } = useNotificationStore();
   const [loading, setLoading] = useState(false);
   const [uploaded, setUploaded] = useState({ audio: false, video: false, thumbnail: false });
@@ -101,17 +100,8 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, selectedTy
       }
       setFormData({ ...existing, tags: normalizedTags || [] });
       setYoutubeInput(existing.youtubeUrl || '');
-      return;
     }
-
-    if (selectedType) {
-      setFormData((prev) => ({
-        ...prev,
-        type: selectedType,
-        format: selectedType === 'sleep' ? 'Audio' : prev.format || 'Audio'
-      }));
-    }
-  }, [existing, selectedType]);
+  }, [existing]);
 
   const handleInputChange = (field: keyof PracticeRecord, value: string | number | boolean | string[]) => {
     // If type changes to sleep, enforce Audio format
@@ -333,44 +323,57 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, selectedTy
 
       const url = existing ? `${getApiBaseUrl()}/admin/practices/${existing.id}` : `${getApiBaseUrl()}/admin/practices`;
       const method = existing ? 'PUT' : 'POST';
-
-      // Build a strict payload that matches backend Joi schema to avoid unknown key validation failures.
-      const toNonEmptyStringArray = (input: unknown): string[] | undefined => {
-        if (!Array.isArray(input)) return undefined;
-        const normalized = input
-          .map((item) => String(item).trim())
-          .filter((item) => item.length > 0);
-        return normalized.length > 0 ? normalized : undefined;
+      
+      const finalPayload: any = {
+        title: updated.title ?? formData.title,
+        type: updated.type ?? formData.type,
+        duration: updated.duration ?? formData.duration,
+        difficulty: formData.level ?? updated.difficulty ?? formData.difficulty,
+        approach: updated.approach ?? formData.approach,
+        format: updated.format ?? formData.format,
+        description: updated.description ?? formData.description,
+        audioUrl: updated.audioUrl ?? formData.audioUrl,
+        videoUrl: updated.videoUrl ?? formData.videoUrl,
+        youtubeUrl: updated.youtubeUrl ?? formData.youtubeUrl,
+        thumbnailUrl: updated.thumbnailUrl ?? formData.thumbnailUrl,
+        tags: Array.isArray(formData.tags) ? formData.tags.join(',') : formData.tags,
+        isPublished: updated.isPublished ?? formData.isPublished,
+        category: updated.category ?? formData.category,
+        intensityLevel: updated.intensityLevel ?? formData.intensityLevel,
+        requiredEquipment: updated.requiredEquipment ?? formData.requiredEquipment,
+        environment: updated.environment ?? formData.environment,
+        timeOfDay: updated.timeOfDay ?? formData.timeOfDay,
+        sensoryEngagement: updated.sensoryEngagement ?? formData.sensoryEngagement,
+        steps: updated.steps ?? formData.steps,
+        contraindications: updated.contraindications ?? formData.contraindications,
+        focusAreas: updated.focusAreas ?? formData.focusAreas,
+        immediateRelief: updated.immediateRelief ?? formData.immediateRelief,
+        crisisEligible: updated.crisisEligible ?? formData.crisisEligible,
       };
 
-      const difficulty = formData.level || 'Beginner';
-      const tags = toNonEmptyStringArray(formData.tags) || [];
-      const finalPayload = {
-        title: String(formData.title || '').trim(),
-        type: String(formData.type || 'meditation'),
-        duration: Number(updated.duration ?? formData.duration ?? 0),
-        difficulty,
-        approach: String(formData.approach || 'All'),
-        format: String(formData.format || 'Audio'),
-        description: String(formData.description || '').trim(),
-        audioUrl: typeof updated.audioUrl === 'string' ? updated.audioUrl : formData.audioUrl || '',
-        videoUrl: typeof updated.videoUrl === 'string' ? updated.videoUrl : formData.videoUrl || '',
-        youtubeUrl: typeof updated.youtubeUrl === 'string' ? updated.youtubeUrl : formData.youtubeUrl || '',
-        thumbnailUrl: typeof updated.thumbnailUrl === 'string' ? updated.thumbnailUrl : formData.thumbnailUrl || '',
-        tags,
-        isPublished: !!formData.isPublished,
-        category: formData.category || null,
-        intensityLevel: formData.intensityLevel || null,
-        requiredEquipment: toNonEmptyStringArray(formData.requiredEquipment),
-        environment: toNonEmptyStringArray(formData.environment),
-        timeOfDay: toNonEmptyStringArray(formData.timeOfDay),
-        sensoryEngagement: toNonEmptyStringArray(formData.sensoryEngagement),
-        steps: Array.isArray(formData.steps) && formData.steps.length > 0 ? formData.steps : undefined,
-        contraindications: toNonEmptyStringArray(formData.contraindications),
-        focusAreas: toNonEmptyStringArray(formData.focusAreas),
-        immediateRelief: !!formData.immediateRelief,
-        crisisEligible: !!formData.crisisEligible,
-      };
+      // Clean up empty strings to null for optional enum fields
+      if (finalPayload.category === '') finalPayload.category = null;
+      if (finalPayload.intensityLevel === '') finalPayload.intensityLevel = null;
+      
+      // Clean up empty arrays
+      if (Array.isArray(finalPayload.requiredEquipment) && finalPayload.requiredEquipment.length === 0) {
+        delete finalPayload.requiredEquipment;
+      }
+      if (Array.isArray(finalPayload.environment) && finalPayload.environment.length === 0) {
+        delete finalPayload.environment;
+      }
+      if (Array.isArray(finalPayload.timeOfDay) && finalPayload.timeOfDay.length === 0) {
+        delete finalPayload.timeOfDay;
+      }
+      if (Array.isArray(finalPayload.sensoryEngagement) && finalPayload.sensoryEngagement.length === 0) {
+        delete finalPayload.sensoryEngagement;
+      }
+      if (Array.isArray(finalPayload.steps) && finalPayload.steps.length === 0) {
+        delete finalPayload.steps;
+      }
+      if (Array.isArray(finalPayload.contraindications) && finalPayload.contraindications.length === 0) {
+        delete finalPayload.contraindications;
+      }
 
       console.log('Sending practice payload:', JSON.stringify(finalPayload, null, 2));
 
@@ -392,7 +395,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, selectedTy
       }
 
       const savedPractice = await response.json();
-      const record = savedPractice?.success ? savedPractice.data : savedPractice;
+      const record = savedPractice.success ? savedPractice.data : savedPractice;
       onSaved(record);
       push({ 
         type: 'success', 
@@ -428,7 +431,7 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, selectedTy
         <div className="space-y-2">
           <Label htmlFor="type">Type</Label>
           <Select
-            value={formData.type || 'meditation'}
+            value={formData.type || 'Meditation'}
             onValueChange={(value) => handleInputChange('type', value)}
           >
             <SelectTrigger>
