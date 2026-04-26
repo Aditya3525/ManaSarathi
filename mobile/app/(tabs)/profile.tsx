@@ -79,11 +79,11 @@ export default function ProfileScreen() {
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://maansarathi.app/privacy');
+    Linking.openURL('https://manasarthi.app/privacy');
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://maansarathi.app/terms');
+    Linking.openURL('https://manasarthi.app/terms');
   };
 
   const handleHelpCenter = () => {
@@ -92,8 +92,8 @@ export default function ProfileScreen() {
 
   const handleAbout = () => {
     Alert.alert(
-      t('app.name', 'MaanSarathi'),
-      `${t('app.tagline', 'Your Mental Wellness Companion')}\n\nVersion: ${APP_VERSION}\n${t('profile.approach', 'Approach')}: ${user?.approach || 'hybrid'}\n\n${t('profile.aboutDescription', 'MaanSarathi combines western psychology and eastern wellness traditions to help you on your mental health journey.')}`,
+      t('app.name', 'ManaSarathi'),
+      `${t('app.tagline', 'Your Mental Wellness Companion')}\n\nVersion: ${APP_VERSION}\n${t('profile.approach', 'Approach')}: ${user?.approach || 'hybrid'}\n\n${t('profile.aboutDescription', 'ManaSarathi combines western psychology and eastern wellness traditions to help you on your mental health journey.')}`,
       [{ text: t('common.ok', 'OK') }]
     );
   };
@@ -337,7 +337,7 @@ export default function ProfileScreen() {
         {/* App Info */}
         <View className="mt-8 items-center">
           <Text variant="caption" className="text-gray-500 mb-1">
-            {t('app.name', 'MaanSarathi')} v{APP_VERSION}
+            {t('app.name', 'ManaSarathi')} v{APP_VERSION}
           </Text>
           <Text variant="caption" className="text-gray-400">
             {t('app.tagline', 'Your Mental Wellness Companion')}

@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Heart,
   Users,
-  Clock,
   Search,
   Send,
   MapPin,
@@ -21,10 +20,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   Calendar,
-  User,
   CalendarCheck
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToast } from '../../contexts/ToastContext';
@@ -33,13 +31,15 @@ import {
   faqApi,
   therapistApi,
   supportTicketsApi,
-  type CrisisResource,
-  type FAQ,
   type Therapist,
   type FAQCategory,
-  type TicketCategory,
-  type TherapistBooking
+  type TicketCategory
 } from '../../services/helpSafetyApi';
+import {
+  clearAssessmentShareContext,
+  readAssessmentShareContext,
+  type AssessmentShareContext,
+} from '../../utils/assessmentSharingContext';
 import { ConsultationBookingDialog } from '../features/booking/ConsultationBookingDialog';
 import { MyBookings } from '../features/booking/MyBookings';
 import { TherapistProfileDialog } from '../features/booking/TherapistProfileDialog';
@@ -59,7 +59,7 @@ interface HelpSafetyProps {
 
 export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
   const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'crisis' | 'faq' | 'therapists' | 'support'>('crisis');
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketMessage, setTicketMessage] = useState('');
@@ -75,6 +75,16 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
   const [bookingTherapist, setBookingTherapist] = useState<Therapist | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [therapistSubTab, setTherapistSubTab] = useState<'find' | 'bookings'>('find');
+  const [assessmentShareContext, setAssessmentShareContext] = useState<AssessmentShareContext | null>(null);
+
+  useEffect(() => {
+    const context = readAssessmentShareContext();
+    if (context) {
+      setAssessmentShareContext(context);
+      setActiveTab('therapists');
+      setTherapistSubTab('find');
+    }
+  }, []);
 
   // Fetch crisis resources
   const { data: crisisResources = [], isLoading: loadingCrisis } = useQuery({
@@ -211,10 +221,10 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background page-enter">
       {/* Crisis Banner - Always Visible */}
-      <div className="bg-red-600 text-white p-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      <div className="bg-gradient-to-r from-red-700 via-rose-600 to-orange-500 text-white p-4 shadow-lg">
+        <div className="max-w-6xl mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-6 w-6" />
             <div>
@@ -222,14 +232,24 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
               <p className="text-sm">Call 988 (US) • Text HOME to 741741 • Call 911 for emergencies</p>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => window.open('tel:988')}
-            className="bg-white text-red-600 hover:bg-gray-100"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Call 988
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => window.location.replace('https://www.google.com')}
+              className="bg-white/20 text-white border border-white/40 hover:bg-white/30"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Quick Exit
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => window.open('tel:988')}
+              className="bg-white text-red-700 hover:bg-gray-100"
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Call 988
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -257,7 +277,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
       </div>
 
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
-        <Tabs defaultValue="crisis" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'crisis' | 'faq' | 'therapists' | 'support')} className="space-y-6">
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <TabsList className="inline-flex w-auto min-w-full justify-start gap-1 sm:grid sm:w-full sm:grid-cols-4">
               <TabsTrigger value="crisis" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Crisis Resources</TabsTrigger>
@@ -278,7 +298,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
-                  If you or someone you know is in immediate danger, please don't wait.
+                  If you or someone you know is in immediate danger, please don&apos;t wait.
                   Reach out for professional help right away.
                 </p>
 
@@ -540,18 +560,45 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
 
           {/* Therapist Directory Tab */}
           <TabsContent value="therapists" className="space-y-6">
+            {assessmentShareContext && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-4 flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-primary">Assessment context ready to share</p>
+                    <p className="text-sm text-muted-foreground">
+                      Booking can include your {assessmentShareContext.assessmentLabel} insight details for therapist analysis.
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      clearAssessmentShareContext();
+                      setAssessmentShareContext(null);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Sub-tab toggle: Find Therapist / My Bookings */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="therapist-sub-tabs">
                 <button
-                  className={`therapist-sub-tab ${therapistSubTab === 'find' ? 'active' : ''}`}
+                  className={`therapist-sub-tab booking-selectable ${therapistSubTab === 'find' ? 'active' : ''}`}
+                  aria-pressed={therapistSubTab === 'find'}
+                  data-selected={therapistSubTab === 'find' ? 'true' : 'false'}
                   onClick={() => setTherapistSubTab('find')}
                 >
                   <Users className="h-3.5 w-3.5 inline mr-1.5" />
                   Find Therapist
                 </button>
                 <button
-                  className={`therapist-sub-tab ${therapistSubTab === 'bookings' ? 'active' : ''}`}
+                  className={`therapist-sub-tab booking-selectable ${therapistSubTab === 'bookings' ? 'active' : ''}`}
+                  aria-pressed={therapistSubTab === 'bookings'}
+                  data-selected={therapistSubTab === 'bookings' ? 'true' : 'false'}
                   onClick={() => setTherapistSubTab('bookings')}
                 >
                   <CalendarCheck className="h-3.5 w-3.5 inline mr-1.5" />
@@ -747,7 +794,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                 <Card>
                   <CardContent className="p-6 text-center">
                     <p className="text-sm text-muted-foreground mb-4">
-                      Can't find what you're looking for? We can help you find additional therapists in your area.
+                      Can&apos;t find what you&apos;re looking for? We can help you find additional therapists in your area.
                     </p>
                     <Button variant="outline">
                       <Phone className="h-4 w-4 mr-2" />
@@ -777,8 +824,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
 
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Category</label>
+                      <Label htmlFor="support-category" className="text-sm font-medium">Category</Label>
                       <select
+                        id="support-category"
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
                         value={ticketCategory}
                         onChange={(e) => setTicketCategory(e.target.value as TicketCategory)}
@@ -793,8 +841,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Subject</label>
+                      <Label htmlFor="support-subject" className="text-sm font-medium">Subject</Label>
                       <Input
+                        id="support-subject"
                         type="text"
                         placeholder="Brief summary of your issue"
                         value={ticketSubject}
@@ -807,8 +856,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Your Message</label>
+                      <Label htmlFor="support-message" className="text-sm font-medium">Your Message</Label>
                       <Textarea
+                        id="support-message"
                         placeholder="Describe your question or issue in detail..."
                         value={ticketMessage}
                         onChange={(e) => setTicketMessage(e.target.value)}
@@ -896,6 +946,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
         therapist={profileTherapist}
         open={profileOpen}
         onOpenChange={setProfileOpen}
+        sharingContext={assessmentShareContext}
       />
 
       {/* Consultation Booking Dialog */}
@@ -903,6 +954,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
         therapist={bookingTherapist}
         open={bookingOpen}
         onOpenChange={setBookingOpen}
+        sharingContext={assessmentShareContext}
       />
     </div>
   );

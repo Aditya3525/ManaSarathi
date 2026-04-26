@@ -70,7 +70,7 @@ export default function ForgotPasswordScreen() {
         // No security question set — show helpful message
         Alert.alert(
           t('auth.noSecurityQuestion', 'No Security Question'),
-          t('auth.noSecurityQuestionDesc', 'No security question is set for this account. Please contact support at support@maansarathi.app for assistance.')
+          t('auth.noSecurityQuestionDesc', 'No security question is set for this account. Please contact support at support@manasarthi.app for assistance.')
         );
       }
     } catch (error: any) {

@@ -17,7 +17,7 @@ export default function AuthLayout() {
       <Stack.Screen 
         name="landing" 
         options={{ 
-          title: t('app.name', 'MaanSarathi'),
+          title: t('app.name', 'ManaSarathi'),
         }} 
       />
       <Stack.Screen 

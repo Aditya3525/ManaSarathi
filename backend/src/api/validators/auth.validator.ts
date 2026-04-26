@@ -3,6 +3,8 @@
  */
 
 import { z } from 'zod';
+import { validateRegistrationEmail } from '../../utils/emailValidation';
+import { STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_REGEX } from '../../shared/auth/passwordPolicy';
 
 /**
  * User Registration Schema
@@ -21,16 +23,26 @@ export const registerSchema = z.object({
       .string({
         required_error: 'Email is required',
       })
-      .email('Invalid email address')
+      .trim()
       .toLowerCase()
-      .trim(),
+      .email('Invalid email address')
+      .superRefine((value, context) => {
+        const validation = validateRegistrationEmail(value);
+        if (!validation.isValid) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: validation.message || 'Invalid email address',
+          });
+        }
+      }),
     
     password: z
       .string({
         required_error: 'Password is required',
       })
-      .min(6, 'Password must be at least 6 characters')
-      .max(100, 'Password must not exceed 100 characters'),
+      .min(8, 'Password must be at least 8 characters')
+      .max(100, 'Password must not exceed 100 characters')
+      .regex(STRONG_PASSWORD_REGEX, STRONG_PASSWORD_MESSAGE),
     
     firstName: z
       .string()
@@ -57,9 +69,9 @@ export const loginSchema = z.object({
       .string({
         required_error: 'Email is required',
       })
-      .email('Invalid email address')
+      .trim()
       .toLowerCase()
-      .trim(),
+      .email('Invalid email address'),
     
     password: z
       .string({
@@ -81,8 +93,8 @@ export const passwordSetupSchema = z.object({
       .min(8, 'Password must be at least 8 characters')
       .max(100, 'Password must not exceed 100 characters')
       .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+        STRONG_PASSWORD_REGEX,
+        STRONG_PASSWORD_MESSAGE
       ),
     
     securityQuestion: z
@@ -120,7 +132,10 @@ export const updateProfileSchema = z.object({
     
     birthday: z
       .string()
-      .datetime('Invalid date format')
+      .refine((value) => {
+        if (!value) return true;
+        return !Number.isNaN(new Date(value).getTime());
+      }, 'Invalid date format')
       .optional(),
     
     gender: z

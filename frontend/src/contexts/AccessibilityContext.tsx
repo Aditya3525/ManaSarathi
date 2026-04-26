@@ -9,6 +9,8 @@ import React, {
   type ReactNode
 } from 'react';
 
+import { useAuthStore } from '../stores/authStore';
+
 type FontFamilyOption =
   | 'system'
   | 'arial'
@@ -33,7 +35,7 @@ export type ColorPaletteOption =
   | 'lavender'
   | 'neutral';
 
-type BooleanAccessibilitySettingKey = 'largeText' | 'highContrast' | 'screenReader' | 'reducedMotion' | 'voiceGuidance' | 'darkMode';
+type BooleanAccessibilitySettingKey = 'largeText' | 'highContrast' | 'screenReader' | 'reducedMotion' | 'voiceGuidance' | 'darkMode' | 'simpleLanguage';
 
 export interface AccessibilitySettings {
   largeText: boolean;
@@ -42,6 +44,7 @@ export interface AccessibilitySettings {
   reducedMotion: boolean;
   voiceGuidance: boolean;
   darkMode: boolean;
+  simpleLanguage: boolean;
   fontFamily: FontFamilyOption;
   colorPalette: ColorPaletteOption;
 }
@@ -65,6 +68,14 @@ interface FeedbackOptions {
 
 const STORAGE_KEY = 'mw-accessibility-settings-v1';
 
+const resolveStorageKey = (userId?: string | null): string => {
+  if (!userId) {
+    return STORAGE_KEY;
+  }
+
+  return `${STORAGE_KEY}:${userId}`;
+};
+
 const defaultSettings: AccessibilitySettings = {
   largeText: false,
   highContrast: false,
@@ -72,6 +83,7 @@ const defaultSettings: AccessibilitySettings = {
   reducedMotion: false,
   voiceGuidance: false,
   darkMode: false,
+  simpleLanguage: false,
   fontFamily: 'system',
   colorPalette: 'default'
 };
@@ -84,7 +96,8 @@ const CLASS_MAP: Record<BooleanAccessibilitySettingKey, string | null> = {
   screenReader: 'a11y-screen-reader',
   reducedMotion: 'a11y-reduced-motion',
   voiceGuidance: null,
-  darkMode: null
+  darkMode: null,
+  simpleLanguage: null
 };
 
 const FONT_MAP: Record<FontFamilyOption, { stack: string | null; label: string }> = {
@@ -146,10 +159,10 @@ const FONT_MAP: Record<FontFamilyOption, { stack: string | null; label: string }
   }
 };
 
-const loadStoredSettings = (): AccessibilitySettings => {
+const loadStoredSettings = (storageKey: string): AccessibilitySettings => {
   if (typeof window === 'undefined') return defaultSettings;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return defaultSettings;
     const parsed = JSON.parse(raw) as Partial<AccessibilitySettings>;
     let fontFamily = parsed.fontFamily ?? defaultSettings.fontFamily;
@@ -170,8 +183,8 @@ const loadStoredSettings = (): AccessibilitySettings => {
   }
 };
 
-const getInitialSettings = (): AccessibilitySettings => {
-  const stored = loadStoredSettings();
+const getInitialSettings = (storageKey: string): AccessibilitySettings => {
+  const stored = loadStoredSettings(storageKey);
   if (stored.reducedMotion) return stored;
 
   if (typeof window !== 'undefined') {
@@ -189,7 +202,9 @@ interface AccessibilityProviderProps {
 }
 
 export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ children }) => {
-  const [settings, setSettings] = useState<AccessibilitySettings>(() => getInitialSettings());
+  const activeUserId = useAuthStore((state) => state.user?.id ?? null);
+  const storageKey = useMemo(() => resolveStorageKey(activeUserId), [activeUserId]);
+  const [settings, setSettings] = useState<AccessibilitySettings>(() => getInitialSettings(storageKey));
   const [liveMessage, setLiveMessage] = useState('');
   const liveMessageRef = useRef<HTMLDivElement | null>(null);
 
@@ -248,11 +263,15 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({ ch
   }, []);
 
   useEffect(() => {
+    setSettings(getInitialSettings(storageKey));
+  }, [storageKey]);
+
+  useEffect(() => {
     applySettingsToDom(settings);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      window.localStorage.setItem(storageKey, JSON.stringify(settings));
     }
-  }, [settings, applySettingsToDom]);
+  }, [settings, applySettingsToDom, storageKey]);
 
   useEffect(() => {
     if (!liveMessage || !liveMessageRef.current) return;

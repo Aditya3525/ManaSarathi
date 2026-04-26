@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import session from 'express-session';
-import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
@@ -20,6 +19,12 @@ import chatRoutes from './routes/chat';
 import conversationRoutes from './routes/conversations';
 import progressRoutes from './routes/progress';
 import moodRoutes from './routes/mood';
+import checkinRoutes from './routes/checkins';
+import journalRoutes from './routes/journal';
+import intentionRoutes from './routes/intentions';
+import gratitudeRoutes from './routes/gratitude';
+import sleepRoutes from './routes/sleep';
+import habitRoutes from './routes/habits';
 import contentRoutes from './routes/content';
 import adminRoutes from './routes/admin';
 import adminDataRoutes from './routes/adminData';
@@ -43,8 +48,6 @@ import { getSessionSecret } from './config/auth';
 import { logger, refreshLogLevelFromEnv } from './utils/logger';
 import { llmService } from './services/llmProvider';
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../.env') });
 refreshLogLevelFromEnv();
 
 const app = express();
@@ -63,6 +66,23 @@ const limiter = rateLimit({
 
 const httpLogger = pinoHttp({
   logger,
+  customLogLevel: (_req, res, err) => {
+    if (err || res.statusCode >= 500) {
+      return 'error';
+    }
+
+    if (res.statusCode >= 400) {
+      return 'warn';
+    }
+
+    // Successful requests can be extremely noisy during local development
+    // (frequent auth/session checks + ETag revalidation 304 responses).
+    if (process.env.NODE_ENV !== 'production') {
+      return 'debug';
+    }
+
+    return 'info';
+  },
   genReqId: (req: IncomingMessage, _res: ServerResponse) => {
     const headerId = req.headers['x-request-id'];
     if (typeof headerId === 'string' && headerId.trim().length > 0) {
@@ -94,7 +114,7 @@ app.use(cors({
     ? [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       process.env.MOBILE_URL || 'http://localhost:8081',
-      'https://maansarathi-frontend.onrender.com',
+      'https://manasarthi-frontend.onrender.com',
       // Allow Expo Go and mobile device access
       /^https?:\/\/192\.168\.\d+\.\d+/,
       /^https?:\/\/10\.\d+\.\d+\.\d+/,
@@ -102,8 +122,8 @@ app.use(cors({
       // Allow all Vercel preview and production deployments
       /\.vercel\.app$/,
       // Allow the production mobile app (native apps send no Origin)
-      'https://maansarathi.app',
-      'https://api.maansarathi.app',
+      'https://manasarthi.app',
+      'https://api.manasarthi.app',
     ].filter(Boolean) as (string | RegExp)[]
     : true, // Allow all origins in development
   credentials: true,
@@ -180,12 +200,20 @@ app.get('/api/health/ready', async (req, res) => {
   const providerStatus = await llmService.getProviderStatus();
   checks.providers = providerStatus;
   const providersHealthy = Object.values(providerStatus).some((status) => status.available);
+  const localAiFallbackEnabled =
+    process.env.NODE_ENV !== 'production' &&
+    !['false', '0', 'off'].includes((process.env.AI_LOCAL_FALLBACK_ENABLED ?? 'true').trim().toLowerCase());
 
-  const isReady = databaseHealthy && providersHealthy;
+  const aiHealthy = providersHealthy || localAiFallbackEnabled;
+  const isReady = databaseHealthy && aiHealthy;
   res.status(isReady ? 200 : 503).json({
     status: isReady ? 'ready' : 'degraded',
     requestId,
     checks,
+    meta: {
+      localAiFallbackEnabled,
+      mode: process.env.NODE_ENV || 'development'
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -200,6 +228,14 @@ app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/mood', moodRoutes);
+app.use('/api/checkins', checkinRoutes);
+app.use('/api/journal', journalRoutes);
+app.use('/api/intentions', intentionRoutes);
+app.use('/api/gratitude', gratitudeRoutes);
+app.use('/api/sleep', sleepRoutes);
+app.use('/api/habits', habitRoutes);
+// Mount engagement routes before generic content routes so /api/content/bookmarks is not shadowed by /api/content/:id.
+app.use('/api/content', engagementRoutes); // For /api/content/:id/engage, /api/content/bookmarks, /api/content/:id/bookmark
 app.use('/api/content', contentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/help-safety', helpSafetyAdminRoutes); // Help & Safety admin management
@@ -210,7 +246,6 @@ app.use('/api/public-content', publicContentRoutes);
 app.use('/api/public/content', publicContentRoutes); // Backward-compatible alias
 app.use('/api/dashboard', dashboardRoutes);
 // Enhanced engagement & recommendation endpoints
-app.use('/api/content', engagementRoutes); // For /api/content/:id/engage and /api/content/:id/engagement
 app.use('/api/recommendations', engagementRoutes); // For /api/recommendations/personalized
 app.use('/api/crisis', engagementRoutes); // For /api/crisis/check
 

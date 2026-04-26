@@ -82,7 +82,7 @@ let app: Express;
 beforeAll(async () => {
     const module = await import('../src/server');
     app = module.default;
-}, 20000);
+}, 60000);
 
 beforeEach(() => {
     findUniqueMock.mockClear();

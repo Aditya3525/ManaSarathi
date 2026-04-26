@@ -39,7 +39,7 @@ export function useLogMood() {
       mood: string;
       notes?: string;
     }) => {
-      const response = await moodApi.logMood(data.mood, data.notes);
+      const response = await moodApi.logMood({ mood: data.mood, notes: data.notes });
       if (!response.success) {
         throw new Error(response.error || 'Failed to log mood');
       }

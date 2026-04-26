@@ -8,7 +8,6 @@ import {
   Eye,
   Waves,
   Heart,
-  Scan,
   Filter,
   Clock
 } from 'lucide-react';
@@ -46,6 +45,7 @@ export interface Practice {
   // Tags come back from backend as comma-separated string; normalize to array
   tags?: string[];
   isPublished: boolean;
+  scheduledPublishAt?: string | null;
   createdAt: string;
 }
 
@@ -66,6 +66,7 @@ interface RawPractice {
   thumbnailUrl?: string;
   tags?: string[] | string | null;
   isPublished?: boolean;
+  scheduledPublishAt?: string | null;
   createdAt?: string;
 }
 
@@ -136,6 +137,7 @@ const mapRawPractice = (raw: RawPractice): Practice => {
     thumbnailUrl: raw.thumbnailUrl ?? undefined,
     tags: normalizeTags(raw.tags),
     isPublished: Boolean(raw.isPublished),
+    scheduledPublishAt: raw.scheduledPublishAt ?? null,
     createdAt: raw.createdAt ?? new Date().toISOString()
   };
 };

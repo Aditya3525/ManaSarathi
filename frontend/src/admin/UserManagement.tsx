@@ -16,7 +16,7 @@ import {
   ChevronRight,
   Download
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 import {
   AlertDialog,
@@ -117,6 +117,8 @@ export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const [filterPremium, setFilterPremium] = useState<string>('all');
   const [filterOnboarded, setFilterOnboarded] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -141,7 +143,7 @@ export const UserManagement: React.FC = () => {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: '20',
-        ...(searchQuery && { search: searchQuery }),
+        ...(debouncedQuery && { search: debouncedQuery }),
         ...(filterPremium !== 'all' && { isPremium: filterPremium }),
         ...(filterOnboarded !== 'all' && { isOnboarded: filterOnboarded })
       });
@@ -171,11 +173,30 @@ export const UserManagement: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, searchQuery, filterPremium, filterOnboarded, push]);
+  }, [currentPage, debouncedQuery, filterPremium, filterOnboarded, push]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(value);
+      setCurrentPage(1);
+    }, 300);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   const handleViewDetails = async (user: UserData) => {
     try {
@@ -354,10 +375,7 @@ export const UserManagement: React.FC = () => {
             <Input
               placeholder="Search by name or email..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pr-12"
             />
           </div>

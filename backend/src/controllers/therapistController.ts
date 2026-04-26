@@ -37,13 +37,120 @@ function convertTo24h(time12: string): string {
 }
 
 // Validation schema
+const bookingSharingContextSchema = z.object({
+  source: z.enum(['insights-share', 'insights-discuss', 'direct-booking']).optional(),
+  assessmentType: z.string().max(120).optional(),
+  assessmentLabel: z.string().max(120).optional(),
+  latestScore: z.number().min(0).max(100).optional(),
+  trend: z.string().max(120).optional(),
+  interpretation: z.string().max(2000).optional(),
+  recommendations: z.array(z.string().max(400)).max(8).optional(),
+  wellnessScore: z.number().min(0).max(100).optional(),
+  generatedAt: z.string().max(120).optional(),
+  includeData: z.object({
+    scoreSummary: z.boolean().optional(),
+    interpretation: z.boolean().optional(),
+    recommendations: z.boolean().optional(),
+    trend: z.boolean().optional()
+  }).optional()
+});
+
 const bookingSchema = z.object({
   therapistId: z.string(),
   preferredDate: z.string().optional(),
   preferredTime: z.string().optional(),
   message: z.string().max(1000).optional(),
-  userPhone: z.string().optional()
+  userPhone: z.string().optional(),
+  sharingContext: bookingSharingContextSchema.optional()
 });
+
+const MAX_BOOKING_MESSAGE_LENGTH = 4000;
+
+const trimForStorage = (value: string): string => {
+  if (value.length <= MAX_BOOKING_MESSAGE_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_BOOKING_MESSAGE_LENGTH - 20).trimEnd()}\n[message truncated]`;
+};
+
+const buildSharingContextMessage = (sharingContext?: z.infer<typeof bookingSharingContextSchema>): string | null => {
+  if (!sharingContext) {
+    return null;
+  }
+
+  const includeData = sharingContext.includeData ?? {};
+  const hasExplicitSelection =
+    includeData.scoreSummary !== undefined ||
+    includeData.interpretation !== undefined ||
+    includeData.recommendations !== undefined ||
+    includeData.trend !== undefined;
+
+  const shouldIncludeScores = hasExplicitSelection ? includeData.scoreSummary === true : true;
+  const shouldIncludeInterpretation = hasExplicitSelection ? includeData.interpretation === true : true;
+  const shouldIncludeRecommendations = hasExplicitSelection ? includeData.recommendations === true : true;
+  const shouldIncludeTrend = hasExplicitSelection ? includeData.trend === true : true;
+
+  const lines: string[] = [];
+  lines.push('Shared Assessment Context:');
+
+  if (sharingContext.assessmentLabel) {
+    lines.push(`- Assessment: ${sharingContext.assessmentLabel}`);
+  }
+
+  if (shouldIncludeScores) {
+    if (typeof sharingContext.latestScore === 'number') {
+      lines.push(`- Latest Score: ${Math.round(sharingContext.latestScore)}%`);
+    }
+    if (typeof sharingContext.wellnessScore === 'number') {
+      lines.push(`- Overall Wellness Score: ${Math.round(sharingContext.wellnessScore)}%`);
+    }
+  }
+
+  if (shouldIncludeTrend && sharingContext.trend) {
+    lines.push(`- Trend: ${sharingContext.trend}`);
+  }
+
+  if (shouldIncludeInterpretation && sharingContext.interpretation) {
+    lines.push(`- Interpretation: ${sharingContext.interpretation}`);
+  }
+
+  if (shouldIncludeRecommendations && sharingContext.recommendations && sharingContext.recommendations.length > 0) {
+    sharingContext.recommendations.slice(0, 3).forEach((recommendation, index) => {
+      lines.push(`- Recommendation ${index + 1}: ${recommendation}`);
+    });
+  }
+
+  if (lines.length <= 1) {
+    return null;
+  }
+
+  return lines.join('\n');
+};
+
+const composeBookingMessage = (
+  userMessage: string | undefined,
+  sharingContext?: z.infer<typeof bookingSharingContextSchema>
+): string | null => {
+  const parts: string[] = [];
+  const trimmedUserMessage = userMessage?.trim();
+  if (trimmedUserMessage) {
+    parts.push(trimmedUserMessage);
+  }
+
+  const sharingMessage = buildSharingContextMessage(sharingContext);
+  if (sharingMessage) {
+    if (parts.length > 0) {
+      parts.push('');
+    }
+    parts.push(sharingMessage);
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return trimForStorage(parts.join('\n'));
+};
 
 /**
  * Get all active therapists
@@ -284,7 +391,7 @@ export const requestBooking = async (req: any, res: Response) => {
     }
 
     const userId = req.user.id;
-    const { therapistId, preferredDate, preferredTime, message, userPhone } = validation.data;
+    const { therapistId, preferredDate, preferredTime, message, userPhone, sharingContext } = validation.data;
 
     // Validate date
     if (!preferredDate) {
@@ -365,13 +472,15 @@ export const requestBooking = async (req: any, res: Response) => {
       return;
     }
 
+    const bookingMessage = composeBookingMessage(message, sharingContext);
+
     const booking = await prisma.therapistBooking.create({
       data: {
         userId,
         therapistId,
         preferredDate: dateObj,
         preferredTime,
-        message: message || null,
+        message: bookingMessage,
         userEmail: user.email,
         userPhone: userPhone || null,
         status: 'PENDING'

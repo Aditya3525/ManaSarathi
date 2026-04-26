@@ -8,6 +8,8 @@ import { conversationMemoryService } from './conversationMemoryService';
 import { conversationService } from './conversationService';
 import { structuredExercisesService } from './structuredExercisesService';
 import { contextAwarenessService } from './contextAwarenessService';
+import { progressDetectionService, type ProgressSignal } from './progressDetectionService';
+import { crisisDetectionService } from './crisisDetectionService';
 
 const prisma = new PrismaClient();
 const chatLogger = logger.child({ module: 'ChatService' });
@@ -56,6 +58,31 @@ type CoachingDirectives = {
   easternPractices: string[];
   hybridBridge: string[];
   reminders: string[];
+};
+
+type PendingRepairContext = {
+  feedbackId: string;
+  createdAt: Date;
+  note: string | null;
+  dislikedMessagePreview: string;
+};
+
+type AssessmentPromptAction = {
+  actionRequired: 'trigger_gad2_assessment';
+  assessmentType: 'anxiety_gad2';
+  prompt: string;
+  ctaLabel: string;
+  daysSinceLastAssessment: number | null;
+};
+
+type ConversationMetadataState = {
+  deEscalationAttempt?: number;
+  lastDistressAt?: string;
+  lastAssessmentPromptAt?: string;
+};
+
+type GenerateResponseOptions = {
+  simpleLanguage?: boolean;
 };
 
 const POSITIVE_WORDS = [
@@ -125,13 +152,17 @@ const APPROACH_DESCRIPTIONS: Record<ApproachMode, string> = {
     'Hybrid guidance: blend CBT-style reflection with mindful, body-based practices so the user experiences both cognitive clarity and calm.'
 };
 
+const SOMATIC_SIGNAL_PATTERN = /(tense|body|chest|tight|breathe|breath|racing heart|stomach|ground(?:ed|ing)?|shaky|restless|heartbeat)/i;
+const COGNITIVE_LOOP_PATTERN = /(can't stop thinking|cant stop thinking|thoughts|in my head|what if|always|never|stupid|catastroph|overthink|ruminat|looping)/i;
+
 export class ChatService {
 
   async generateAIResponse(
     userId: string,
     userMessage: string,
     sessionId?: string,
-    conversationId?: string
+    conversationId?: string,
+    options: GenerateResponseOptions = {}
   ): Promise<{
     response: string;
     provider?: string;
@@ -150,10 +181,14 @@ export class ChatService {
       message: string;
       reason?: string;
     };
+    assessmentPrompt?: AssessmentPromptAction | null;
   }> {
     let approachMode: ApproachMode = 'hybrid';
     let sentimentSnapshot: SentimentSnapshot | null = null;
     let recommendationResult: RecommendationResult | null = null;
+    let progressSignals: ProgressSignal[] = [];
+    let pendingRepairContext: PendingRepairContext | null = null;
+    let assessmentPrompt: AssessmentPromptAction | null = null;
     let activeConversationId = conversationId;
     let newConversationCreated = false;
     let generatedTitle: string | undefined;
@@ -167,18 +202,60 @@ export class ChatService {
         chatLogger.info({ userId, conversationId: activeConversationId }, 'Created new conversation');
       }
 
-      // Check for crisis language first — use both keyword matching AND the
-      // computed crisisRisk score from enhanced sentiment analysis for higher recall.
+      // Check for crisis language first — keyword matching remains the primary
+      // safety net, with sentiment and AI-assisted scoring as additive signals.
       const keywordCrisis = this.detectCrisisLanguage(userMessage);
-      const enhancedCrisisSentiment = this.analyzeEnhancedSentiment(userMessage);
+      const enhancedCrisisSentiment = await this.analyzeSentimentFastPass(userMessage);
       const computedCrisisRisk = enhancedCrisisSentiment?.indicators?.crisisRisk ?? 0;
-      const isCrisis = keywordCrisis || computedCrisisRisk >= 0.5;
+
+      const shouldRunAiCrisisAssessment =
+        keywordCrisis ||
+        computedCrisisRisk >= 0.6 ||
+        (computedCrisisRisk >= 0.35
+          && enhancedCrisisSentiment.primary.confidence >= 0.8
+          && ['sadness', 'fear'].includes(enhancedCrisisSentiment.primary.emotion));
+
+      let aiCrisisScore = 0;
+      let aiCrisisReasoning = 'not-needed';
+      if (shouldRunAiCrisisAssessment) {
+        const aiCrisis = await crisisDetectionService.assessCrisisWithAI(userMessage);
+        aiCrisisScore = aiCrisis.score;
+        aiCrisisReasoning = aiCrisis.reasoning;
+      }
+
+      const isCrisis =
+        keywordCrisis ||
+        aiCrisisScore >= 8 ||
+        (aiCrisisScore >= 7 && computedCrisisRisk >= 0.65);
 
       if (isCrisis) {
-        chatLogger.warn({ userId, keywordCrisis, computedCrisisRisk }, 'Crisis language detected in chat message');
+        chatLogger.warn({ userId, keywordCrisis, computedCrisisRisk, aiCrisisScore, aiCrisisReasoning }, 'Crisis language detected in chat message');
+
+        const conversationMeta = activeConversationId
+          ? await this.getConversationMetadataState(activeConversationId, userId)
+          : {};
+        const previousAttempt = Math.max(0, Math.floor(conversationMeta.deEscalationAttempt ?? 0));
+        const nextAttempt = Math.min(previousAttempt + 1, 2);
+        const resourcesShared = nextAttempt >= 2;
 
         // Save user message with crisis flag
-        await this.saveChatMessage(userId, userMessage, 'user', { crisis: true }, activeConversationId);
+        await this.saveChatMessage(
+          userId,
+          userMessage,
+          'user',
+          {
+            crisis: true,
+            deEscalationAttempt: nextAttempt,
+            resourcesShared,
+            crisisSignals: {
+              keywordMatch: keywordCrisis,
+              sentimentRisk: computedCrisisRisk,
+              aiScore: aiCrisisScore,
+              aiReasoning: aiCrisisReasoning
+            }
+          },
+          activeConversationId
+        );
 
         // Fetch user region for localised crisis resources
         const crisisUser = await prisma.user.findUnique({
@@ -186,9 +263,73 @@ export class ChatService {
           select: { region: true }
         });
 
+        if (activeConversationId) {
+          await this.setConversationMetadataState(activeConversationId, {
+            ...conversationMeta,
+            deEscalationAttempt: nextAttempt,
+            lastDistressAt: new Date().toISOString(),
+          });
+        }
+
         // Save crisis response
-        const crisisResponse = this.getCrisisResponse(crisisUser?.region);
-        const botMessage = await this.saveChatMessage(userId, crisisResponse, 'system', { crisis: true }, activeConversationId);
+        const crisisResponse = resourcesShared
+          ? this.getEscalatedCrisisResponse(crisisUser?.region)
+          : this.getGroundingDeEscalationResponse();
+        const botMessage = await this.saveChatMessage(
+          userId,
+          crisisResponse,
+          'system',
+          {
+            crisis: true,
+            deEscalationAttempt: nextAttempt,
+            resourcesShared,
+          },
+          activeConversationId
+        );
+
+        // Persist crisis event for follow-up workflows and analytics.
+        try {
+          const confidence = Math.max(
+            keywordCrisis ? 0.95 : 0,
+            computedCrisisRisk,
+            aiCrisisScore / 10
+          );
+
+          const crisisLevel =
+            aiCrisisScore >= 9 || computedCrisisRisk >= 0.9
+              ? 'CRITICAL'
+              : aiCrisisScore >= 7 || computedCrisisRisk >= 0.7 || keywordCrisis
+                ? 'HIGH'
+                : 'MODERATE';
+
+          await prisma.crisisEvent.create({
+            data: {
+              userId,
+              conversationId: activeConversationId,
+              crisisLevel,
+              confidence,
+              indicators: JSON.stringify({
+                keywordMatch: keywordCrisis,
+                sentimentRisk: computedCrisisRisk,
+                aiScore: aiCrisisScore,
+                aiReasoning: aiCrisisReasoning
+              }),
+              actionTaken: JSON.stringify({
+                response: resourcesShared
+                  ? 'crisis-escalation-resources'
+                  : 'crisis-de-escalation-grounding',
+                deEscalationAttempt: nextAttempt,
+                resourcesShared,
+                localizedByRegion: Boolean(crisisUser?.region),
+                channel: 'chat'
+              }),
+              resolved: false,
+              detectedAt: new Date()
+            }
+          });
+        } catch (crisisEventError) {
+          chatLogger.warn({ userId, err: crisisEventError }, 'Failed to persist crisis event record');
+        }
 
         // Update conversation timestamp
         if (activeConversationId) {
@@ -205,17 +346,29 @@ export class ChatService {
           provider: 'crisis-system',
           model: 'intervention',
           botMessage,
-          context: 'crisis-intervention',
+          context: resourcesShared ? 'crisis-intervention' : 'crisis-de-escalation',
           conversationId: activeConversationId,
           conversationTitle: generatedTitle
         };
       }
 
+      if (activeConversationId) {
+        await this.resetDeEscalationState(activeConversationId, userId);
+      }
+
       // Get user context and latest wellbeing metrics
       const userContext = await this.getUserContext(userId);
+      if (options.simpleLanguage) {
+        userContext.simpleLanguage = true;
+      }
+      try {
+        progressSignals = await progressDetectionService.detectProgress(userId);
+      } catch (progressError) {
+        chatLogger.warn({ userId, err: progressError }, 'Failed to compute progress signals');
+      }
 
       approachMode = this.determineConversationApproach(userContext, userMessage);
-      sentimentSnapshot = this.estimateSentiment(userMessage);
+      sentimentSnapshot = this.estimateSentiment(userMessage, enhancedCrisisSentiment);
 
       // Get conversation memory context
       const memoryContext = await conversationMemoryService.getMemory(userId);
@@ -253,7 +406,8 @@ export class ChatService {
         });
 
         if (recommendedExercise) {
-          const exerciseResponse = structuredExercisesService.formatExerciseForChat(recommendedExercise);
+          const exercisePayload = structuredExercisesService.formatExerciseForChat(recommendedExercise);
+          const exerciseResponse = exercisePayload.content;
 
           // Save user message
           await this.saveChatMessage(userId, userMessage, 'user', {
@@ -265,7 +419,7 @@ export class ChatService {
           const botMessage = await this.saveChatMessage(userId, exerciseResponse, 'bot', {
             provider: 'structured-exercise',
             exerciseType: recommendedExercise.type,
-            exerciseId: recommendedExercise.id
+            ...exercisePayload.metadata
           }, activeConversationId);
 
           // Update conversation memory
@@ -293,8 +447,94 @@ export class ChatService {
         }
       }
 
-      // Get recent chat history for context
-      const chatHistory = await this.getChatHistory(userId, 8);
+      assessmentPrompt = await this.getAssessmentPromptAction({
+        userId,
+        conversationId: activeConversationId,
+        userMessage,
+        sentiment: sentimentSnapshot,
+      });
+
+      if (assessmentPrompt) {
+        const promptResponse = assessmentPrompt.prompt;
+
+        await this.saveChatMessage(
+          userId,
+          userMessage,
+          'user',
+          {
+            sentiment: sentimentSnapshot,
+            assessmentPromptTriggered: true,
+          },
+          activeConversationId
+        );
+
+        const botMessage = await this.saveChatMessage(
+          userId,
+          promptResponse,
+          'bot',
+          {
+            provider: 'assessment-prompt',
+            approach: approachMode,
+            sentiment: sentimentSnapshot,
+            actionRequired: assessmentPrompt.actionRequired,
+            assessmentPrompt,
+          },
+          activeConversationId
+        );
+
+        await Promise.all([
+          conversationMemoryService.updateMemory(userId, userMessage, 'user'),
+          conversationMemoryService.updateMemory(userId, promptResponse, 'bot'),
+        ]);
+
+        if (activeConversationId) {
+          await conversationService.updateLastMessageTime(activeConversationId);
+
+          if (newConversationCreated) {
+            generatedTitle = await conversationService.generateConversationTitle(activeConversationId);
+          }
+        }
+
+        return {
+          response: promptResponse,
+          provider: 'assessment-prompt',
+          model: 'system',
+          botMessage,
+          context: 'assessment-trigger',
+          conversationId: activeConversationId,
+          conversationTitle: generatedTitle,
+          assessmentPrompt,
+        };
+      }
+
+      const directives = this.buildCoachingDirectives(approachMode, userContext, sentimentSnapshot);
+
+      // Fetch independent context inputs in parallel to reduce pre-LLM latency.
+      const [chatHistory, resolvedRecommendationResult, feedbackSummary, resolvedPendingRepairContext] = await Promise.all([
+        this.getChatHistory(userId, 8),
+        recommendationService.getContentRecommendations({
+          userId,
+          userContext,
+          approach: approachMode,
+          sentiment: sentimentSnapshot,
+          wellnessScore: userContext.wellnessScore,
+          maxItems: 4
+        }).catch((recommendationError) => {
+          chatLogger.warn({ userId, err: recommendationError }, 'Recommendation query failed, using emergency recommendation set');
+          return this.buildEmergencyRecommendationSet(sentimentSnapshot);
+        }),
+        this.buildFeedbackSummary(userId).catch((feedbackError) => {
+          chatLogger.warn({ userId, err: feedbackError }, 'Feedback summary lookup failed');
+          return null;
+        }),
+        this.getPendingRepairContext(userId).catch((repairError) => {
+          chatLogger.warn({ userId, err: repairError }, 'Pending repair context lookup failed');
+          return null;
+        })
+      ]);
+
+      recommendationResult = resolvedRecommendationResult;
+      pendingRepairContext = resolvedPendingRepairContext;
 
       const historyMessages: AIMessage[] = chatHistory
         .reverse()
@@ -303,29 +543,17 @@ export class ChatService {
           content: msg.content
         }));
 
-      const directives = this.buildCoachingDirectives(approachMode, userContext, sentimentSnapshot);
-
-      recommendationResult = await recommendationService.getContentRecommendations({
-        userId,
-        userContext,
-        approach: approachMode,
-        sentiment: sentimentSnapshot,
-        wellnessScore: userContext.wellnessScore,
-        maxItems: 4
-      });
-
-      // Query recent feedback for adaptive context
-      const feedbackSummary = await this.buildFeedbackSummary(userId);
-
       const systemPrompt = this.buildSystemPrompt({
         approach: approachMode,
         userContext,
         sentiment: sentimentSnapshot,
         directives,
+        progressSignals,
         recommendations: recommendationResult.items,
         memoryContext,
         contextInsight,
-        feedbackSummary: feedbackSummary ?? undefined
+        feedbackSummary: feedbackSummary ?? undefined,
+        repairContext: pendingRepairContext ?? undefined
       });
 
       const promptMessages: AIMessage[] = [
@@ -365,19 +593,33 @@ export class ChatService {
         chatLogger.warn({ userId }, 'Falling back to default recommendations');
       }
 
+      const refusalAdjustedContent = this.recoverOvercautiousRefusal(
+        aiResponse.content,
+        userMessage,
+        approachMode,
+        aiResponse.provider,
+        keywordCrisis
+      );
+
       // ---- Post-processing safety layer ----
-      const processedContent = this.postProcessResponse(aiResponse.content);
+      const processedContent = this.postProcessResponse(refusalAdjustedContent);
+      const finalResponseContent = this.ensureNonEmptyResponse(
+        processedContent,
+        userMessage,
+        approachMode,
+        aiResponse.provider
+      );
 
-      // Save user message (with sentiment metadata)
-      await this.saveChatMessage(userId, userMessage, 'user', {
-        sentiment: sentimentSnapshot,
-        recommendations: recommendationResult.items
-      }, activeConversationId);
+      // Save user message and update memory together to avoid extra serial round-trips.
+      await Promise.all([
+        this.saveChatMessage(userId, userMessage, 'user', {
+          sentiment: sentimentSnapshot,
+          recommendations: recommendationResult.items
+        }, activeConversationId),
+        conversationMemoryService.updateMemory(userId, userMessage, 'user')
+      ]);
 
-      // Update conversation memory with user message
-      await conversationMemoryService.updateMemory(userId, userMessage, 'user');
-
-      const botMessage = await this.saveChatMessage(userId, processedContent, 'bot', {
+      const botMessage = await this.saveChatMessage(userId, finalResponseContent, 'bot', {
         provider: aiResponse.provider,
         model: aiResponse.model,
         processingTime: aiResponse.processingTime,
@@ -391,8 +633,12 @@ export class ChatService {
         recommendationRationale: recommendationResult.rationale
       }, activeConversationId);
 
+      if (pendingRepairContext) {
+        await this.markRepairContextResolved(pendingRepairContext.feedbackId);
+      }
+
       // Update conversation memory with bot response
-      await conversationMemoryService.updateMemory(userId, aiResponse.content, 'bot');
+      await conversationMemoryService.updateMemory(userId, finalResponseContent, 'bot');
 
       // Update conversation timestamp
       if (activeConversationId) {
@@ -416,7 +662,7 @@ export class ChatService {
       );
 
       return {
-        response: aiResponse.content,
+        response: finalResponseContent,
         provider: aiResponse.provider,
         model: aiResponse.model,
         usage: aiResponse.usage,
@@ -485,7 +731,10 @@ export class ChatService {
   }
 
   private async getUserContext(userId: string): Promise<UserContext> {
-    const [user, insight, activeGoals] = await Promise.all([
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [user, insight, activeGoals, todayIntention, sleepLogs, gratitudeEntries] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -496,6 +745,21 @@ export class ChatService {
           moodEntries: {
             orderBy: { createdAt: 'desc' },
             take: 5
+          },
+          microCheckins: {
+            orderBy: { createdAt: 'desc' },
+            take: 5
+          },
+          journalEntries: {
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            select: {
+              id: true,
+              prompt: true,
+              mood: true,
+              tags: true,
+              createdAt: true
+            }
           }
         }
       }),
@@ -506,7 +770,35 @@ export class ChatService {
         where: { userId, status: 'active' },
         orderBy: { updatedAt: 'desc' },
         take: 5
-      })
+      }),
+      prisma.dailyIntention.findFirst({
+        where: {
+          userId,
+          createdAt: {
+            gte: startOfToday
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }),
+      prisma.sleepLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 7
+      }),
+      ((prisma as any).gratitudeEntry
+        ? (prisma as any).gratitudeEntry.findMany({
+          where: {
+            userId,
+            createdAt: {
+              gte: new Date(Date.now() - (3 * 24 * 60 * 60 * 1000))
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 6
+        })
+        : Promise.resolve([])) as Promise<Array<{ id: string; items: unknown; note?: string | null; createdAt: Date }>>
     ]);
 
     if (!user) {
@@ -551,6 +843,66 @@ export class ChatService {
 
     const moodTrend = this.analyzeMoodTrend(user.moodEntries ?? []);
     const { age, ageGroup } = this.calculateAgeInfo(user.birthday || undefined);
+    const recentCheckins = (user.microCheckins ?? []).map((checkin) => ({
+      id: checkin.id,
+      type: checkin.type,
+      mood: checkin.mood,
+      createdAt: checkin.createdAt,
+      responses:
+        checkin.responses && typeof checkin.responses === 'object' && !Array.isArray(checkin.responses)
+          ? (checkin.responses as Record<string, unknown>)
+          : {}
+    }));
+    const recentJournals = (user.journalEntries ?? []).map((entry) => ({
+      id: entry.id,
+      prompt: entry.prompt,
+      mood: entry.mood,
+      createdAt: entry.createdAt,
+      tags: Array.isArray(entry.tags)
+        ? entry.tags.filter((tag): tag is string => typeof tag === 'string')
+        : []
+    }));
+    const recentMoodEntries = (user.moodEntries ?? []).map((entry) => ({
+      mood: entry.mood,
+      emotion: entry.emotion,
+      emotionGroup: entry.emotionGroup,
+      intensity: entry.intensity,
+      trigger: entry.trigger,
+      createdAt: entry.createdAt
+    }));
+    const recentSleepLogs = (sleepLogs ?? []).map((log) => ({
+      id: log.id,
+      bedTime: log.bedTime,
+      wakeTime: log.wakeTime,
+      quality: log.quality,
+      duration: log.duration,
+      factors: Array.isArray(log.factors)
+        ? log.factors.filter((factor): factor is string => typeof factor === 'string')
+        : [],
+      createdAt: log.createdAt
+    }));
+
+    const recentGratitudeEntries = (gratitudeEntries ?? []).map((entry) => {
+      const rawItems = Array.isArray(entry.items) ? entry.items : [];
+      return {
+        id: entry.id,
+        items: rawItems.filter((item): item is string => typeof item === 'string' && item.trim().length > 0),
+        note: entry.note ?? null,
+        createdAt: entry.createdAt,
+      };
+    });
+
+    const sleepDurations = recentSleepLogs
+      .map((log) => (typeof log.duration === 'number' ? log.duration : null))
+      .filter((value): value is number => value !== null);
+    const sleepAverages = {
+      weeklyDuration: sleepDurations.length > 0
+        ? Number((sleepDurations.reduce((sum, value) => sum + value, 0) / sleepDurations.length).toFixed(2))
+        : null,
+      weeklyQuality: recentSleepLogs.length > 0
+        ? Number((recentSleepLogs.reduce((sum, log) => sum + log.quality, 0) / recentSleepLogs.length).toFixed(2))
+        : null
+    };
 
     // Privacy enforcement: if the user has NOT given data consent,
     // exclude detailed assessment scores, mood entries, and personal metrics
@@ -564,9 +916,29 @@ export class ChatService {
       lastName: user.lastName || undefined,
       age,
       ageGroup,
+      region: user.region || undefined,
+      language: user.language || undefined,
       approach: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
       approachEngine: user.approach as 'western' | 'eastern' | 'hybrid' | undefined,
       recentAssessments: privacyRestricted ? [] : detailedAssessments,
+      recentCheckins: privacyRestricted ? [] : recentCheckins,
+      recentJournals: privacyRestricted ? [] : recentJournals,
+      recentMoodEntries: privacyRestricted ? [] : recentMoodEntries,
+      todayIntention: privacyRestricted
+        ? undefined
+        : todayIntention
+          ? {
+            id: todayIntention.id,
+            intention: todayIntention.intention,
+            isCustom: todayIntention.isCustom,
+            completed: todayIntention.completed,
+            reflection: todayIntention.reflection,
+            createdAt: todayIntention.createdAt
+          }
+          : undefined,
+          recentGratitudeEntries: privacyRestricted ? [] : recentGratitudeEntries,
+      recentSleepLogs: privacyRestricted ? [] : recentSleepLogs,
+      sleepAverages: privacyRestricted ? undefined : sleepAverages,
       currentMood: privacyRestricted ? undefined : (user.moodEntries ?? [])[0]?.mood,
       moodTrend: privacyRestricted ? undefined : moodTrend,
       hasCompletedAssessments: privacyRestricted ? false : (user.assessments ?? []).length > 0,
@@ -606,22 +978,37 @@ export class ChatService {
   }
 
   private determineConversationApproach(userContext: UserContext, userMessage: string): ApproachMode {
-    if (userContext.approach) {
-      return userContext.approach;
+    const normalized = userMessage.toLowerCase();
+    const somaticCue = SOMATIC_SIGNAL_PATTERN.test(normalized);
+    const cognitiveCue = COGNITIVE_LOOP_PATTERN.test(normalized);
+
+    if (somaticCue && !cognitiveCue) {
+      return 'eastern';
     }
 
-    const normalized = userMessage.toLowerCase();
+    if (cognitiveCue && !somaticCue) {
+      return 'western';
+    }
+
+    if (somaticCue && cognitiveCue) {
+      return userContext.approach || 'hybrid';
+    }
+
     const easternCue = /meditat|mindful|breath|yoga|chakra|ayurveda|pranayama|grounding/.test(normalized);
     const westernCue = /thought|pattern|trigger|therapy|cognitive|cbt|journal/.test(normalized);
 
     if (easternCue && westernCue) {
-      return 'hybrid';
+      return userContext.approach || 'hybrid';
     }
     if (easternCue) {
       return 'eastern';
     }
     if (westernCue) {
       return 'western';
+    }
+
+    if (userContext.approach) {
+      return userContext.approach;
     }
 
     if (userContext.assessmentInsights?.byType) {
@@ -638,7 +1025,39 @@ export class ChatService {
     return 'hybrid';
   }
 
-  private estimateSentiment(message: string): SentimentSnapshot {
+  private estimateSentiment(message: string, enhancedSentiment?: EnhancedSentiment): SentimentSnapshot {
+    if (enhancedSentiment) {
+      const negativeEmotions = new Set(['sadness', 'anxiety', 'anger', 'fear']);
+      const positiveEmotions = new Set(['joy']);
+      const primaryEmotion = enhancedSentiment.primary.emotion;
+
+      const label: SentimentSnapshot['label'] = positiveEmotions.has(primaryEmotion)
+        ? 'positive'
+        : negativeEmotions.has(primaryEmotion)
+          ? 'negative'
+          : 'neutral';
+
+      const scaledScore = Math.round((enhancedSentiment.primary.confidence * enhancedSentiment.primary.intensity) / 2.5);
+      const score = label === 'positive'
+        ? Math.max(1, scaledScore)
+        : label === 'negative'
+          ? -Math.max(1, scaledScore)
+          : 0;
+
+      const aiKeywords = [
+        ...enhancedSentiment.indicators.progressIndicators,
+        ...enhancedSentiment.indicators.concerningPatterns,
+      ];
+
+      return {
+        label,
+        score,
+        dominantEmotion: primaryEmotion === 'neutral' ? null : primaryEmotion,
+        keywords: Array.from(new Set(aiKeywords)).slice(0, 6),
+        summary: `Sentiment ${label} (score ${score})${primaryEmotion !== 'neutral' ? ` with ${primaryEmotion} tone` : ''}`
+      };
+    }
+
     const lower = message.toLowerCase();
     let score = 0;
     const matchedKeywords = new Set<string>();
@@ -674,6 +1093,158 @@ export class ChatService {
       keywords: Array.from(matchedKeywords),
       summary: `Sentiment ${label} (score ${score})${dominantEmotion ? ` with ${dominantEmotion} tone` : ''}`
     };
+  }
+
+  private async analyzeSentimentFastPass(message: string): Promise<EnhancedSentiment> {
+    const heuristicSentiment = this.analyzeEnhancedSentiment(message);
+    const trimmedMessage = message.trim();
+
+    if (!trimmedMessage || trimmedMessage.length < 8) {
+      return heuristicSentiment;
+    }
+
+    try {
+      const fastPassResponse = await llmService.generateResponse(
+        [
+          {
+            role: 'system',
+            content: `You are a sentiment fast-pass classifier for a mental wellness chat app.
+Return strictly valid JSON, and nothing else.
+
+Schema:
+{
+  "primaryEmotion": "joy|sadness|anxiety|anger|fear|neutral",
+  "confidence": number, // 0 to 1
+  "intensity": number, // 0 to 10
+  "crisisRisk": number, // 0 to 1
+  "secondaryEmotions": [{ "emotion": string, "confidence": number }],
+  "progressIndicators": string[],
+  "concerningPatterns": string[],
+  "tone": { "formality": number, "urgency": number, "hopefulness": number }
+}
+
+Rules:
+- Keep values conservative.
+- Use "neutral" if uncertain.
+- crisisRisk must only be high for direct self-harm or severe safety risk language.
+- Output JSON only.`
+          },
+          {
+            role: 'user',
+            content: trimmedMessage,
+          }
+        ],
+        {
+          temperature: 0,
+          maxTokens: 220,
+          timeout: 1800,
+        }
+      );
+
+      const parsed = this.parseFastPassSentiment(fastPassResponse.content);
+      if (!parsed) {
+        return heuristicSentiment;
+      }
+
+      const primaryEmotion = this.normalizeFastPassEmotion(parsed.primaryEmotion);
+
+      const secondary = Array.isArray(parsed.secondaryEmotions)
+        ? parsed.secondaryEmotions
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const emotion = typeof entry.emotion === 'string' ? entry.emotion : null;
+            const confidence = this.clampNumber(entry.confidence, 0, 1, 0.4);
+            if (!emotion) return null;
+            return { emotion, confidence };
+          })
+          .filter((entry): entry is { emotion: string; confidence: number } => Boolean(entry))
+          .slice(0, 2)
+        : heuristicSentiment.secondary;
+
+      return {
+        primary: {
+          emotion: primaryEmotion,
+          confidence: this.clampNumber(parsed.confidence, 0, 1, heuristicSentiment.primary.confidence),
+          intensity: this.clampNumber(parsed.intensity, 0, 10, heuristicSentiment.primary.intensity),
+        },
+        secondary,
+        tone: {
+          formality: this.clampNumber(parsed.tone?.formality, 0, 1, heuristicSentiment.tone.formality),
+          urgency: this.clampNumber(parsed.tone?.urgency, 0, 1, heuristicSentiment.tone.urgency),
+          hopefulness: this.clampNumber(parsed.tone?.hopefulness, 0, 1, heuristicSentiment.tone.hopefulness),
+        },
+        indicators: {
+          crisisRisk: this.clampNumber(parsed.crisisRisk, 0, 1, heuristicSentiment.indicators.crisisRisk),
+          progressIndicators: this.sanitizeStringArray(parsed.progressIndicators, heuristicSentiment.indicators.progressIndicators),
+          concerningPatterns: this.sanitizeStringArray(parsed.concerningPatterns, heuristicSentiment.indicators.concerningPatterns),
+        },
+        linguisticFeatures: heuristicSentiment.linguisticFeatures,
+      };
+    } catch (error) {
+      return heuristicSentiment;
+    }
+  }
+
+  private parseFastPassSentiment(content: string): {
+    primaryEmotion?: unknown;
+    confidence?: unknown;
+    intensity?: unknown;
+    crisisRisk?: unknown;
+    secondaryEmotions?: Array<{ emotion?: unknown; confidence?: unknown }>;
+    progressIndicators?: unknown;
+    concerningPatterns?: unknown;
+    tone?: { formality?: unknown; urgency?: unknown; hopefulness?: unknown };
+  } | null {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return null;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+
+      return parsed as {
+        primaryEmotion?: unknown;
+        confidence?: unknown;
+        intensity?: unknown;
+        crisisRisk?: unknown;
+        secondaryEmotions?: Array<{ emotion?: unknown; confidence?: unknown }>;
+        progressIndicators?: unknown;
+        concerningPatterns?: unknown;
+        tone?: { formality?: unknown; urgency?: unknown; hopefulness?: unknown };
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeFastPassEmotion(value: unknown): EnhancedSentiment['primary']['emotion'] {
+    const normalized = typeof value === 'string' ? value.toLowerCase().trim() : '';
+    if (normalized === 'joy' || normalized === 'sadness' || normalized === 'anxiety' || normalized === 'anger' || normalized === 'fear') {
+      return normalized;
+    }
+    return 'neutral';
+  }
+
+  private clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, value));
+  }
+
+  private sanitizeStringArray(value: unknown, fallback: string[]): string[] {
+    if (!Array.isArray(value)) {
+      return fallback;
+    }
+    const cleaned = value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    return cleaned.length > 0 ? cleaned.slice(0, 5) : fallback;
   }
 
   /**
@@ -901,18 +1472,33 @@ export class ChatService {
     userContext: UserContext;
     sentiment: SentimentSnapshot;
     directives: CoachingDirectives;
+    progressSignals?: ProgressSignal[];
     recommendations?: RecommendationResult['items'];
     memoryContext?: any;
     contextInsight?: any;
     feedbackSummary?: string;
+    repairContext?: PendingRepairContext;
   }): string {
-    const { approach, userContext, sentiment, directives, recommendations = [], memoryContext, contextInsight, feedbackSummary } = args;
+    const {
+      approach,
+      userContext,
+      sentiment,
+      directives,
+      progressSignals = [],
+      recommendations = [],
+      memoryContext,
+      contextInsight,
+      feedbackSummary,
+      repairContext
+    } = args;
 
     const wellnessText = userContext.wellnessScore
       ? `${userContext.wellnessScore.toFixed(1)} / 100`
       : 'not yet calculated';
 
     const trendText = userContext.wellbeingTrend ?? 'trend unavailable';
+    const culturalPromptSection = this.buildCulturalPromptSection(userContext);
+    const simpleLanguageSection = this.buildSimpleLanguageSection(Boolean(userContext.simpleLanguage));
 
     const recommendationHighlights = userContext.assessmentInsights?.recommendations?.slice(0, 2) ?? [];
     const recommendationText = recommendationHighlights.length
@@ -944,6 +1530,62 @@ export class ChatService {
       ? `Recommended resources to consider next:\n${recommendationLines.join('\n')}`
       : null;
 
+    const progressSection = progressSignals.length
+      ? `Progress signals to optionally acknowledge (mention at most one naturally):\n${progressSignals
+        .slice(0, 4)
+        .map((signal) => `${signal.direction === 'improving' ? '✅' : '⚠️'} ${signal.detail}`)
+        .join('\n')}`
+      : null;
+
+    const repairSection = repairContext
+      ? `CONVERSATIONAL REPAIR CONTEXT:\nThe user marked your previous response as unhelpful on ${repairContext.createdAt.toLocaleString()}.\nDisliked reply excerpt: "${repairContext.dislikedMessagePreview}"${repairContext.note ? `\nWhat the user said would help: "${repairContext.note}"` : ''}\nFor this response, begin with a short acknowledgement and ask what support they want right now before giving suggestions.`
+      : null;
+
+    const checkinSection = userContext.recentCheckins && userContext.recentCheckins.length > 0
+      ? `Recent micro check-ins:\n${userContext.recentCheckins
+        .slice(0, 4)
+        .map((checkin) => {
+          const responses = checkin.responses || {};
+          if (checkin.type === 'morning') {
+            const energy = typeof responses.energyLevel === 'number' ? responses.energyLevel : 'n/a';
+            const dreading = typeof responses.dreading === 'string' ? responses.dreading : null;
+            const lookingForward = typeof responses.lookingForward === 'string' ? responses.lookingForward : null;
+            return `- Morning check-in: energy ${energy}/5${dreading ? `, dreading "${dreading}"` : ''}${lookingForward ? `, looking forward to "${lookingForward}"` : ''}`;
+          }
+          if (checkin.type === 'evening') {
+            const dayRating =
+              typeof responses.dayRating === 'number'
+                ? responses.dayRating
+                : typeof responses.overallDay === 'number'
+                  ? responses.overallDay
+                  : 'n/a';
+            const smallWin =
+              typeof responses.smallWin === 'string'
+                ? responses.smallWin
+                : typeof responses.wentWell === 'string'
+                  ? responses.wentWell
+                  : null;
+            const grateful = typeof responses.grateful === 'string' ? responses.grateful : null;
+            const energyCompared = typeof responses.energyCompared === 'string' ? responses.energyCompared : null;
+            return `- Evening reflection: day ${dayRating}/5${smallWin ? `, small win "${smallWin}"` : ''}${grateful ? `, grateful for "${grateful}"` : ''}${energyCompared ? `, energy vs morning "${energyCompared}"` : ''}`;
+          }
+          const helpfulness = typeof responses.helpfulness === 'number' ? responses.helpfulness : 'n/a';
+          return `- Post-chat check-in: helpfulness ${helpfulness}/5`;
+        })
+        .join('\n')}`
+      : null;
+
+    const journalSection = userContext.recentJournals && userContext.recentJournals.length > 0
+      ? `Recent journal themes (do not quote private content):\n${userContext.recentJournals
+        .slice(0, 4)
+        .map((entry) => {
+          const tagsText = entry.tags.length > 0 ? entry.tags.join(', ') : 'general reflection';
+          const moodText = entry.mood ? `mood ${entry.mood}` : 'mood unspecified';
+          return `- ${new Date(entry.createdAt).toLocaleDateString()}: ${moodText}; themes: ${tagsText}`;
+        })
+        .join('\n')}\nUse this as light context only. Never claim to have read exact private journal wording.`
+      : null;
+
     const directivesText = [
       directives.westernFocus.length
         ? `Conversation focus (western):
@@ -971,7 +1613,7 @@ export class ChatService {
       if (memoryContext.recentTopics && memoryContext.recentTopics.length > 0) {
         memorySection += `\nRECENT CONVERSATION TOPICS:\n`;
         memorySection += memoryContext.recentTopics.slice(0, 5).map((topic: any) =>
-          `- ${topic.topic} (mentioned ${topic.count} times, last on ${new Date(topic.lastMentioned).toLocaleDateString()})`
+          `- ${topic.topic} (mentioned ${topic.effectiveMentions ?? topic.mentions ?? 0} times, last on ${new Date(topic.lastMentioned).toLocaleDateString()})`
         ).join('\n');
       }
 
@@ -1020,14 +1662,23 @@ export class ChatService {
       domainText,
       `Latest message sentiment: ${sentiment.summary}. Keywords: ${sentiment.keywords.length ? sentiment.keywords.join(', ') : 'none detected'
       }`,
+      culturalPromptSection,
+      simpleLanguageSection,
       recommendationText,
       recommendationSection,
+      progressSection,
+      repairSection,
+      checkinSection,
+      journalSection,
       directivesText,
       memorySection || null,
       contextSection || null,
       goalsSection || null,
       this.buildAssessmentDetailSection(userContext),
       this.buildMoodSection(userContext),
+      this.buildIntentionSection(userContext),
+      this.buildGratitudeSection(userContext),
+      this.buildSleepSection(userContext),
       feedbackSummary || null,
       `RESPONSE STRUCTURE (follow this order):
 1) Validate the emotion — "It sounds like you're feeling..." or "I can see this is..."
@@ -1051,9 +1702,57 @@ PERSONALITY RULES — ALWAYS:
 - Be trauma-informed: never push someone to share more than they want
 - Remind about professional help if the user discloses severe distress or risk
 - You are a wellness companion, NOT a licensed therapist — never claim otherwise`
+      ,
+      `FORMAT REQUIREMENTS (strict):
+- Use clear Markdown formatting.
+- Start with one short empathetic paragraph (1-2 sentences).
+- Then add heading: "### Practical Next Step" and include 2-4 bullet points.
+- End with heading: "### Check-in Question" and exactly one gentle question.
+- Keep spacing readable with blank lines between sections.
+- Avoid walls of text.`
     ]
       .filter(Boolean)
       .join('\n\n');
+  }
+
+  private buildCulturalPromptSection(userContext: UserContext): string | null {
+    if (!userContext.region && !userContext.language) {
+      return null;
+    }
+
+    const locationText = userContext.region
+      ? `User location context: ${userContext.region}.`
+      : null;
+    const languageText = userContext.language
+      ? `Preferred language context: ${userContext.language}.`
+      : null;
+
+    return [
+      'CULTURAL ADAPTATION GUIDANCE:',
+      locationText,
+      languageText,
+      '- Avoid assumptions about identity, family structure, religion, or finances.',
+      '- Use culturally respectful language and practical examples that can fit local context.',
+      '- Prefer globally understandable wording over niche idioms or region-specific slang.',
+      '- When suggesting external support, acknowledge local or community resources may vary by region.'
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private buildSimpleLanguageSection(simpleLanguageEnabled: boolean): string | null {
+    if (!simpleLanguageEnabled) {
+      return null;
+    }
+
+    return [
+      'SIMPLE LANGUAGE MODE (must follow):',
+      '- Use short, direct sentences and common words.',
+      '- Explain one idea at a time and avoid jargon.',
+      '- If a clinical term is needed, define it in plain language immediately.',
+      '- Offer one clear next step before asking the closing question.',
+      '- Keep tone warm and respectful while staying easy to understand.'
+    ].join('\n');
   }
 
   private getTemperatureForApproach(approach: ApproachMode): number {
@@ -1070,12 +1769,45 @@ PERSONALITY RULES — ALWAYS:
   private getMaxTokensForApproach(approach: ApproachMode): number {
     switch (approach) {
       case 'western':
-        return 350;
+        return 220;
       case 'eastern':
-        return 380;
+        return 240;
       default:
-        return 380;
+        return 240;
     }
+  }
+
+  private recoverOvercautiousRefusal(
+    content: string,
+    userMessage: string,
+    approach: ApproachMode,
+    provider?: string,
+    keywordCrisis = false
+  ): string {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      return content;
+    }
+
+    const refusalPatterns: RegExp[] = [
+      /i can(?:not|'t)\s+(?:provide|assist|help|engage).{0,160}(?:self-harm|suicide|harming yourself)/i,
+      /if you[’']?re experiencing thoughts of self-harm or suicide/i,
+      /i can(?:not|'t)\s+engage in this conversation/i,
+      /i can(?:not|'t)\s+provide a response that includes a monologue/i,
+      /^(?:i can(?:not|'t)|sorry,\s*i can(?:not|'t))\s+(?:help|assist)(?:\s+with that)?\.?$/i
+    ];
+
+    const looksLikeRefusal = refusalPatterns.some((pattern) => pattern.test(trimmed));
+    if (!looksLikeRefusal) {
+      return content;
+    }
+
+    if (keywordCrisis || this.detectCrisisLanguage(userMessage)) {
+      return content;
+    }
+
+    chatLogger.warn({ provider }, 'Recovered non-crisis provider refusal with supportive fallback response');
+    return this.getFallbackResponse(userMessage, approach);
   }
 
   /**
@@ -1127,7 +1859,66 @@ PERSONALITY RULES — ALWAYS:
       chatLogger.warn({ originalWords: words.length }, 'Post-processing: response truncated for length');
     }
 
+    // 4. Enforce readable structure when model output is a dense paragraph
+    processed = this.ensureStructuredMarkdown(processed);
+
     return processed;
+  }
+
+  private ensureStructuredMarkdown(content: string): string {
+    const trimmed = content.trim();
+    if (!trimmed) return trimmed;
+
+    const hasStructure = /(^|\n)\s*(#{1,6}\s|[-*]\s|\d+\.\s)/m.test(trimmed);
+    if (hasStructure) {
+      return trimmed;
+    }
+
+    const sentences = trimmed
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (sentences.length <= 1) {
+      return trimmed;
+    }
+
+    const intro = sentences.slice(0, 2).join(' ');
+    const questionCandidate = [...sentences].reverse().find((s) => s.includes('?'));
+    const checkInQuestion = questionCandidate ?? 'How does that feel for you right now?';
+
+    const actionPool = sentences
+      .slice(2)
+      .filter((s) => s !== checkInQuestion)
+      .slice(0, 3);
+
+    const actionItems = actionPool.length
+      ? actionPool
+      : ['Take one slow breath in for 4 counts, and out for 6 counts.'];
+
+    return [
+      intro,
+      '### Practical Next Step',
+      ...actionItems.map((item) => `- ${item}`),
+      '### Check-in Question',
+      checkInQuestion
+    ].join('\n\n');
+  }
+
+  private ensureNonEmptyResponse(
+    content: string,
+    userMessage: string,
+    approach: ApproachMode,
+    provider?: string
+  ): string {
+    const trimmed = content.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+
+    const fallback = this.getFallbackResponse(userMessage, approach);
+    chatLogger.warn({ provider, approach }, 'AI provider returned empty content; using fallback response');
+    return fallback;
   }
 
   /**
@@ -1156,7 +1947,11 @@ PERSONALITY RULES — ALWAYS:
    * Build a mood section for the system prompt.
    */
   private buildMoodSection(userContext: UserContext): string | null {
-    if (!userContext.currentMood && !userContext.moodTrend) {
+    const granularMoods = (userContext.recentMoodEntries ?? [])
+      .filter((entry) => Boolean(entry.emotion))
+      .slice(0, 4);
+
+    if (!userContext.currentMood && !userContext.moodTrend && granularMoods.length === 0) {
       return null;
     }
 
@@ -1167,7 +1962,91 @@ PERSONALITY RULES — ALWAYS:
     if (userContext.moodTrend) {
       parts.push(`Mood trend: ${userContext.moodTrend}`);
     }
+
+    if (granularMoods.length > 0) {
+      const emotionLine = granularMoods
+        .map((entry) => {
+          const intensityText = typeof entry.intensity === 'number' ? `intensity ${entry.intensity}/10` : null;
+          const triggerText = entry.trigger ? `trigger: ${entry.trigger}` : null;
+          const details = [intensityText, triggerText].filter(Boolean).join(', ');
+          return details ? `${entry.emotion} (${details})` : entry.emotion;
+        })
+        .join(', ');
+
+      parts.push(`Granular emotions: ${emotionLine}`);
+    }
+
     return `USER MOOD:\n${parts.join('. ')}.`;
+  }
+
+  private buildIntentionSection(userContext: UserContext): string | null {
+    if (!userContext.todayIntention) {
+      return null;
+    }
+
+    const status = userContext.todayIntention.completed === null
+      ? 'not yet reflected'
+      : userContext.todayIntention.completed
+        ? 'completed'
+        : 'not completed';
+
+    const reflectionText = userContext.todayIntention.reflection
+      ? ` Reflection: "${userContext.todayIntention.reflection}".`
+      : '';
+
+    return `TODAY'S INTENTION:\n"${userContext.todayIntention.intention}" (status: ${status}).${reflectionText}`;
+  }
+
+  private buildGratitudeSection(userContext: UserContext): string | null {
+    const entries = (userContext.recentGratitudeEntries ?? [])
+      .filter((entry) => Array.isArray(entry.items) && entry.items.length > 0)
+      .slice(0, 3);
+
+    if (entries.length === 0) {
+      return null;
+    }
+
+    const lines = entries.map((entry) => {
+      const gratitudeItems = entry.items.slice(0, 3).join(', ');
+      const dateText = new Date(entry.createdAt).toLocaleDateString();
+      const noteText = entry.note ? ` Note: ${entry.note}` : '';
+      return `- ${dateText}: grateful for ${gratitudeItems}.${noteText}`;
+    });
+
+    return `RECENT GRATITUDE CONTEXT:\n${lines.join('\n')}\nIf relevant, acknowledge these as strengths and protective factors without sounding repetitive.`;
+  }
+
+  private buildSleepSection(userContext: UserContext): string | null {
+    const latestSleep = userContext.recentSleepLogs?.[0];
+    const averages = userContext.sleepAverages;
+
+    if (!latestSleep && !averages) {
+      return null;
+    }
+
+    const lines: string[] = [];
+
+    if (latestSleep) {
+      const durationText = typeof latestSleep.duration === 'number'
+        ? `${latestSleep.duration.toFixed(1)} hours`
+        : 'duration unavailable';
+      const factorsText = latestSleep.factors.length > 0
+        ? `, disrupted by ${latestSleep.factors.slice(0, 3).join(', ')}`
+        : '';
+      lines.push(`Last sleep log: ${durationText}, quality ${latestSleep.quality}/5${factorsText}.`);
+    }
+
+    if (averages && (averages.weeklyDuration !== null || averages.weeklyQuality !== null)) {
+      const avgDuration = averages.weeklyDuration !== null ? `${averages.weeklyDuration.toFixed(1)} hours` : 'n/a';
+      const avgQuality = averages.weeklyQuality !== null ? `${averages.weeklyQuality.toFixed(1)}/5` : 'n/a';
+      lines.push(`7-day average sleep: ${avgDuration}, quality ${avgQuality}.`);
+    }
+
+    if (lines.length === 0) {
+      return null;
+    }
+
+    return `SLEEP CONTEXT:\n${lines.join(' ')}`;
   }
 
   /**
@@ -1175,24 +2054,19 @@ PERSONALITY RULES — ALWAYS:
    */
   private async buildFeedbackSummary(userId: string): Promise<string | null> {
     try {
-      const recentBotMessages = await prisma.chatMessage.findMany({
-        where: { userId, type: 'bot' },
+      const recentFeedback = await prisma.chatFeedback.findMany({
+        where: { userId },
         orderBy: { createdAt: 'desc' },
         take: 20,
-        select: { metadata: true }
+        select: { helpful: true }
       });
 
-      let liked = 0;
-      let disliked = 0;
-
-      for (const msg of recentBotMessages) {
-        if (!msg.metadata) continue;
-        try {
-          const meta = JSON.parse(msg.metadata);
-          if (meta.feedback === 'liked') liked++;
-          if (meta.feedback === 'disliked') disliked++;
-        } catch { /* skip unparseable */ }
+      if (recentFeedback.length === 0) {
+        return this.buildLegacyFeedbackSummary(userId);
       }
+
+      const liked = recentFeedback.filter((entry) => entry.helpful).length;
+      const disliked = recentFeedback.length - liked;
 
       const total = liked + disliked;
       if (total < 2) return null; // Not enough data
@@ -1210,6 +2084,98 @@ PERSONALITY RULES — ALWAYS:
     } catch (error) {
       chatLogger.warn({ error }, 'Failed to build feedback summary');
       return null;
+    }
+  }
+
+  private async buildLegacyFeedbackSummary(userId: string): Promise<string | null> {
+    const recentBotMessages = await prisma.chatMessage.findMany({
+      where: { userId, type: 'bot' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { metadata: true }
+    });
+
+    let liked = 0;
+    let disliked = 0;
+
+    for (const msg of recentBotMessages) {
+      if (!msg.metadata) continue;
+      try {
+        const meta = JSON.parse(msg.metadata);
+        if (meta.feedback === 'liked') liked++;
+        if (meta.feedback === 'disliked') disliked++;
+      } catch {
+        // Skip unparseable metadata payloads
+      }
+    }
+
+    const total = liked + disliked;
+    if (total < 2) {
+      return null;
+    }
+
+    const likeRate = Math.round((liked / total) * 100);
+    let hint = `USER FEEDBACK PATTERN: ${liked} liked / ${disliked} disliked out of ${total} rated responses (${likeRate}% approval).`;
+
+    if (likeRate < 50) {
+      hint += '\nThe user has been dissatisfied with recent responses. Try shorter, more empathetic replies with fewer suggestions.';
+    } else if (likeRate >= 80) {
+      hint += '\nThe user responds well to your current style. Maintain this approach.';
+    }
+
+    return hint;
+  }
+
+  private async getPendingRepairContext(userId: string): Promise<PendingRepairContext | null> {
+    const pendingFeedback = await prisma.chatFeedback.findFirst({
+      where: {
+        userId,
+        helpful: false,
+        resolvedAt: null
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        note: true,
+        message: {
+          select: {
+            content: true
+          }
+        }
+      }
+    });
+
+    if (!pendingFeedback) {
+      return null;
+    }
+
+    const thirtyMinutesMs = 30 * 60 * 1000;
+    if (Date.now() - pendingFeedback.createdAt.getTime() > thirtyMinutesMs) {
+      return null;
+    }
+
+    const preview = pendingFeedback.message.content
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 220);
+
+    return {
+      feedbackId: pendingFeedback.id,
+      createdAt: pendingFeedback.createdAt,
+      note: pendingFeedback.note,
+      dislikedMessagePreview: preview
+    };
+  }
+
+  private async markRepairContextResolved(feedbackId: string): Promise<void> {
+    try {
+      await prisma.chatFeedback.update({
+        where: { id: feedbackId },
+        data: { resolvedAt: new Date() }
+      });
+    } catch (error) {
+      chatLogger.warn({ feedbackId, error }, 'Failed to mark feedback as repair-resolved');
     }
   }
 
@@ -1412,6 +2378,28 @@ PERSONALITY RULES — ALWAYS:
 
     const hasExerciseKeyword = exerciseKeywords.some(keyword => lowerMessage.includes(keyword));
 
+    const explicitExerciseIntentPatterns = [
+      'breathing exercise',
+      'grounding exercise',
+      'mindfulness exercise',
+      'relaxation exercise',
+      'meditation exercise',
+      'give me an exercise',
+      'suggest an exercise',
+      'recommend an exercise',
+      'can we do a breathing',
+      'guide me through breathing',
+      'walk me through a breathing',
+      'walk me through meditation',
+      'what exercise should i do',
+      'which exercise should i do',
+      'what breathing technique'
+    ];
+
+    const hasExplicitExerciseIntent = explicitExerciseIntentPatterns.some(pattern =>
+      lowerMessage.includes(pattern)
+    );
+
     // Check for request patterns
     const requestPatterns = [
       'can you help me',
@@ -1428,7 +2416,12 @@ PERSONALITY RULES — ALWAYS:
 
     const hasRequestPattern = requestPatterns.some(pattern => lowerMessage.includes(pattern));
 
-    if (hasExerciseKeyword || hasRequestPattern) {
+    // Require explicit exercise intent OR a combination of generic request + exercise keyword.
+    // This prevents false positives for messages such as assessment discussions
+    // that ask for a plan but do not request an exercise.
+    const shouldTriggerExerciseMode = hasExplicitExerciseIntent || (hasExerciseKeyword && hasRequestPattern);
+
+    if (shouldTriggerExerciseMode) {
       // Try to extract time available
       let timeAvailable: number | undefined;
 
@@ -1538,6 +2531,191 @@ Would you like me to help you find local resources?`;
       return "Thank you for sharing with me. I can hear that you're going through something difficult right now. While I'm having some technical difficulties, I want you to know that your feelings are important and valid. Can you tell me more about the specific situation so we can work through it together?";
     }
     return "Thank you for sharing with me. I can hear that you're going through something difficult right now. While I'm having some technical difficulties, I want you to know that your feelings are important and valid. How are you feeling in this moment?";
+  }
+
+  private parseConversationMetadata(rawMetadata: unknown): ConversationMetadataState {
+    if (!rawMetadata) {
+      return {};
+    }
+
+    let parsed: unknown = rawMetadata;
+
+    if (typeof rawMetadata === 'string') {
+      try {
+        parsed = JSON.parse(rawMetadata);
+      } catch {
+        return {};
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const record = parsed as Record<string, unknown>;
+    const metadata: ConversationMetadataState = {};
+
+    if (typeof record.deEscalationAttempt === 'number' && Number.isFinite(record.deEscalationAttempt)) {
+      metadata.deEscalationAttempt = Math.max(0, Math.floor(record.deEscalationAttempt));
+    }
+
+    if (typeof record.lastDistressAt === 'string') {
+      metadata.lastDistressAt = record.lastDistressAt;
+    }
+
+    if (typeof record.lastAssessmentPromptAt === 'string') {
+      metadata.lastAssessmentPromptAt = record.lastAssessmentPromptAt;
+    }
+
+    return metadata;
+  }
+
+  private async getConversationMetadataState(conversationId: string, userId: string): Promise<ConversationMetadataState> {
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      select: { metadata: true },
+    });
+
+    if (!conversation) {
+      return {};
+    }
+
+    return this.parseConversationMetadata(conversation.metadata);
+  }
+
+  private async setConversationMetadataState(conversationId: string, metadata: ConversationMetadataState): Promise<void> {
+    const cleaned: ConversationMetadataState = {};
+
+    if (typeof metadata.deEscalationAttempt === 'number' && Number.isFinite(metadata.deEscalationAttempt)) {
+      cleaned.deEscalationAttempt = Math.max(0, Math.floor(metadata.deEscalationAttempt));
+    }
+
+    if (typeof metadata.lastDistressAt === 'string') {
+      cleaned.lastDistressAt = metadata.lastDistressAt;
+    }
+
+    if (typeof metadata.lastAssessmentPromptAt === 'string') {
+      cleaned.lastAssessmentPromptAt = metadata.lastAssessmentPromptAt;
+    }
+
+    const hasValues = Object.keys(cleaned).length > 0;
+
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        metadata: hasValues ? JSON.stringify(cleaned) : null,
+      },
+    });
+  }
+
+  private async resetDeEscalationState(conversationId: string, userId: string): Promise<void> {
+    try {
+      const metadata = await this.getConversationMetadataState(conversationId, userId);
+      if (!metadata.deEscalationAttempt || metadata.deEscalationAttempt <= 0) {
+        return;
+      }
+
+      await this.setConversationMetadataState(conversationId, {
+        ...metadata,
+        deEscalationAttempt: 0,
+      });
+    } catch (error) {
+      chatLogger.warn({ conversationId, userId, error }, 'Failed to reset de-escalation state');
+    }
+  }
+
+  private getGroundingDeEscalationResponse(): string {
+    return [
+      'I hear how intense this feels right now, and I am here with you.',
+      '',
+      'Let\'s take one slow step together before anything else:',
+      '- Inhale gently for 4 counts',
+      '- Exhale slowly for 6 counts',
+      '- Name 3 things you can see around you right now',
+      '',
+      'When you\'re ready, tell me those 3 things so we can keep grounding together.'
+    ].join('\n');
+  }
+
+  private getEscalatedCrisisResponse(region?: string | null): string {
+    return [
+      'Thank you for staying with me and sharing this. Because this still feels very heavy, I want to make sure you have immediate human support as well:',
+      '',
+      this.getCrisisResponse(region)
+    ].join('\n\n');
+  }
+
+  private async getAssessmentPromptAction(args: {
+    userId: string;
+    conversationId?: string;
+    userMessage: string;
+    sentiment: SentimentSnapshot;
+  }): Promise<AssessmentPromptAction | null> {
+    const { userId, conversationId, userMessage, sentiment } = args;
+    if (!conversationId) {
+      return null;
+    }
+
+    const lowerMessage = userMessage.toLowerCase();
+    if (/assessment|gad-?2|gad-?7|questionnaire|test/i.test(lowerMessage)) {
+      return null;
+    }
+
+    const anxietySignal =
+      sentiment.dominantEmotion === 'anxiety' ||
+      (sentiment.label === 'negative' && /(anx|panic|worried|worry|overwhelm|racing)/i.test(lowerMessage));
+
+    if (!anxietySignal) {
+      return null;
+    }
+
+    const latestAnxietyAssessment = await prisma.assessmentResult.findFirst({
+      where: {
+        userId,
+        assessmentType: {
+          in: ['anxiety_gad2', 'gad2', 'anxiety_assessment', 'anxiety', 'gad7', 'gad-7'],
+        },
+      },
+      orderBy: { completedAt: 'desc' },
+      select: { completedAt: true },
+    });
+
+    const daysSinceLastAssessment = latestAnxietyAssessment
+      ? Math.max(0, Math.floor((Date.now() - latestAnxietyAssessment.completedAt.getTime()) / (1000 * 60 * 60 * 24)))
+      : null;
+
+    const needsAssessmentCheck = daysSinceLastAssessment === null || daysSinceLastAssessment >= 14;
+    if (!needsAssessmentCheck) {
+      return null;
+    }
+
+    const conversationMetadata = await this.getConversationMetadataState(conversationId, userId);
+    const lastPromptAt = conversationMetadata.lastAssessmentPromptAt
+      ? new Date(conversationMetadata.lastAssessmentPromptAt)
+      : null;
+
+    if (lastPromptAt && !Number.isNaN(lastPromptAt.getTime())) {
+      const twelveHoursMs = 12 * 60 * 60 * 1000;
+      if (Date.now() - lastPromptAt.getTime() < twelveHoursMs) {
+        return null;
+      }
+    }
+
+    await this.setConversationMetadataState(conversationId, {
+      ...conversationMetadata,
+      lastAssessmentPromptAt: new Date().toISOString(),
+    });
+
+    return {
+      actionRequired: 'trigger_gad2_assessment',
+      assessmentType: 'anxiety_gad2',
+      prompt: 'I notice you\'re describing strong anxiety right now. Would you be open to a quick 2-minute anxiety check (GAD-2) so we can tailor support more precisely?',
+      ctaLabel: 'Start quick anxiety check',
+      daysSinceLastAssessment,
+    };
   }
 
   private buildEmergencyRecommendationSet(sentiment?: SentimentSnapshot | null): RecommendationResult {

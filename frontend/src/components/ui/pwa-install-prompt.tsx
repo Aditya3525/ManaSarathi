@@ -109,7 +109,7 @@ export function PWAInstallPrompt() {
             
             <div className="flex-1 space-y-2">
               <div>
-                <h3 className="font-semibold text-sm">Install MaanSarathi</h3>
+                <h3 className="font-semibold text-sm">Install ManaSarathi</h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isIOS 
                     ? 'Tap the share button and select "Add to Home Screen" for quick access'

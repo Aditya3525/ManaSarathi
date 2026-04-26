@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { LogOut, Menu, Shield, X, Search, Command } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { Button } from '../components/ui/button';
 import { cn } from '../components/ui/utils';
@@ -16,6 +16,7 @@ interface AdminShellNavItem {
   icon: LucideIcon;
   badge?: React.ReactNode;
   description?: string;
+  group?: string;
 }
 
 interface AdminShellProps {
@@ -52,7 +53,14 @@ export function AdminShell({
       }
       
       // G + key shortcuts for quick navigation
-      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (
+        e.key === 'g' &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA'
+      ) {
         const handleNextKey = (nextE: KeyboardEvent) => {
           const shortcuts: Record<string, string> = {
             'o': 'overview',
@@ -89,44 +97,81 @@ export function AdminShell({
 
   const breadcrumbs = generateBreadcrumbs(activeItem, onSelect);
 
-  const renderNav = (orientation: 'vertical' | 'horizontal') => (
-    <nav className={cn('space-y-1', orientation === 'horizontal' && 'flex flex-row items-center gap-1 space-y-0')}>
-      {navItems.map((item) => {
-        const isActive = item.value === activeItem;
-        return (
-          <Button
-            key={item.value}
-            type="button"
-            variant={isActive ? 'secondary' : 'ghost'}
-            className={cn(
-              'w-full justify-start gap-3 text-sm font-medium transition-all duration-200',
-              orientation === 'horizontal' && 'w-auto px-3 py-2',
-              !isActive && 'text-muted-foreground hover:text-foreground hover:translate-x-1',
-              isActive && 'bg-primary/10 text-primary border-l-2 border-primary'
-            )}
-            onClick={() => {
-              onSelect(item.value);
-              setMobileNavOpen(false);
-            }}
-          >
-            <item.icon className={cn(
-              "h-4 w-4 transition-transform duration-200",
-              isActive && "scale-110"
-            )} aria-hidden="true" />
-            <span>{item.label}</span>
-            {item.badge ? (
-              <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary">
-                {item.badge}
-              </span>
-            ) : null}
-          </Button>
-        );
-      })}
-    </nav>
-  );
+  const renderNavButton = (item: AdminShellNavItem, orientation: 'vertical' | 'horizontal') => {
+    const isActive = item.value === activeItem;
+    return (
+      <Button
+        key={item.value}
+        type="button"
+        variant={isActive ? 'secondary' : 'ghost'}
+        className={cn(
+          'w-full justify-start gap-3 text-sm font-medium transition-all duration-200',
+          orientation === 'horizontal' && 'w-auto px-3 py-2',
+          !isActive && 'text-muted-foreground hover:text-foreground hover:translate-x-1',
+          isActive && 'bg-primary/10 text-primary border-l-2 border-primary'
+        )}
+        onClick={() => {
+          onSelect(item.value);
+          setMobileNavOpen(false);
+        }}
+      >
+        <item.icon className={cn(
+          'h-4 w-4 transition-transform duration-200',
+          isActive && 'scale-110'
+        )} aria-hidden="true" />
+        <span>{item.label}</span>
+        {item.badge ? (
+          <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary">
+            {item.badge}
+          </span>
+        ) : null}
+      </Button>
+    );
+  };
+
+  const renderNav = (orientation: 'vertical' | 'horizontal') => {
+    if (orientation === 'horizontal') {
+      return (
+        <nav className="flex flex-row items-center gap-1">
+          {navItems.map((item) => renderNavButton(item, orientation))}
+        </nav>
+      );
+    }
+
+    const groupedItems = navItems.reduce<Array<{ group: string; items: AdminShellNavItem[] }>>((acc, item) => {
+      const groupName = item.group || 'Navigation';
+      const existing = acc.find((group) => group.group === groupName);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        acc.push({ group: groupName, items: [item] });
+      }
+      return acc;
+    }, []);
+
+    return (
+      <nav className="space-y-4">
+        {groupedItems.map((group) => (
+          <div key={group.group} className="space-y-1">
+            <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {group.group}
+            </p>
+            {group.items.map((item) => renderNavButton(item, orientation))}
+          </div>
+        ))}
+      </nav>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-muted/30 via-background to-muted/20 text-foreground transition-colors duration-300">
+      <a
+        href="#admin-main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md"
+      >
+        Skip to content
+      </a>
+
       {/* Command Palette */}
       <CommandPalette
         open={commandPaletteOpen}
@@ -281,7 +326,7 @@ export function AdminShell({
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 space-y-4 lg:space-y-6">
+        <main id="admin-main-content" className="flex-1 space-y-4 lg:space-y-6">
           {/* Header */}
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/90 backdrop-blur-sm px-4 py-4 shadow-sm transition-all duration-300 hover:shadow-md sm:px-6">
             <div className="flex items-center gap-3">
@@ -303,7 +348,7 @@ export function AdminShell({
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {lastUpdatedLabel ? (
-                <span className="hidden text-xs text-muted-foreground sm:inline-flex items-center gap-1">
+                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                   {lastUpdatedLabel}
                 </span>
               ) : null}

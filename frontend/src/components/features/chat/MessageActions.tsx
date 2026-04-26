@@ -60,8 +60,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     if (onDislike) {
       onDislike(messageId);
       push({
-        title: 'Feedback received',
-        description: 'We\'ll use this to improve our responses',
+        title: 'Additional feedback',
+        description: 'You can share details right below this message.',
         type: 'info',
       });
     }
@@ -74,7 +74,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+    <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity duration-200">
       {/* Copy Button */}
       <Button
         variant="ghost"

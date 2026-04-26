@@ -11,16 +11,16 @@ import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
 import { Separator } from '../../ui/separator';
 
 const DEFAULT_SECURITY_QUESTIONS = [
-  'What is your mother\'s maiden name?',
+  "What is your mother's maiden name?",
   'What was the name of your first pet?',
   'What city were you born in?',
-  "What is your favorite teacher\'s name?",
+  "What is your favorite teacher's name?",
   "What was the model of your first mobile phone?",
-  'What is your favorite childhood friend\'s name?',
+  "What is your favorite childhood friend's name?",
   'What is your favorite movie?',
   'What was the name of your first school?',
-  "What\'s your favorite food?",
-  "What\'s your dream job as a child?"
+  "What's your favorite food?",
+  "What's your dream job as a child?"
 ];
 
 interface SecurityQuestionSetupProps {

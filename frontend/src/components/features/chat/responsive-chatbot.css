@@ -24,6 +24,24 @@
   scrollbar-width: none;
 }
 
+.chat-sidebar-resizer {
+  width: 10px;
+  cursor: col-resize;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 120ms ease;
+}
+
+.chat-sidebar-resizer:hover,
+.chat-sidebar-resizer:focus-visible,
+.chat-sidebar-resizer--active {
+  background: hsl(var(--accent));
+}
+
 /* Touch-friendly minimum sizes for mobile */
 @media (max-width: 767px) {
   .touch-target {

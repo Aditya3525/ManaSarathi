@@ -12,6 +12,18 @@ type YouTubeMetadata = {
   isoDuration: string | null;
 };
 
+type YouTubeSearchResult = {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  durationSeconds: number | null;
+  durationMinutes: number | null;
+  channelTitle: string | null;
+  publishedAt: string | null;
+  url: string;
+};
+
 type PrismaLike = {
   content: {
     count: (args: any) => Promise<number>;
@@ -34,6 +46,7 @@ type MediaRoutesOptions = {
   resolvePublicUploadPath: (publicUrl: string) => string | null;
   detectMediaTypeFromExtension: (fileName: string) => MediaType;
   getYouTubeMetadata: (id: string) => Promise<YouTubeMetadata | null>;
+  searchYouTubeVideos: (query: string, limit?: number) => Promise<YouTubeSearchResult[]>;
   youtubeThumbFromId: (id?: string | null) => string | null;
   probeMediaMetadata: (diskPath: string) => Promise<any | null>;
 };
@@ -51,6 +64,7 @@ export const createMediaRoutes = ({
   resolvePublicUploadPath,
   detectMediaTypeFromExtension,
   getYouTubeMetadata,
+  searchYouTubeVideos,
   youtubeThumbFromId,
   probeMediaMetadata,
 }: MediaRoutesOptions): express.Router => {
@@ -116,6 +130,24 @@ export const createMediaRoutes = ({
     } catch (e) {
       console.error('YouTube metadata error', e);
       res.status(500).json({ success: false, error: 'Failed to fetch metadata' });
+    }
+  });
+
+  router.get('/youtube/search', requireAdmin as any, async (req, res) => {
+    try {
+      const query = String(req.query?.query || '').trim();
+      const parsedLimit = Number.parseInt(String(req.query?.limit || '8'), 10);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 8;
+
+      if (!query) {
+        return res.status(400).json({ success: false, error: 'Missing query parameter' });
+      }
+
+      const results = await searchYouTubeVideos(query, limit);
+      res.json({ success: true, data: results });
+    } catch (e) {
+      console.error('YouTube search endpoint error', e);
+      res.status(500).json({ success: false, error: 'Failed to search YouTube videos' });
     }
   });
 

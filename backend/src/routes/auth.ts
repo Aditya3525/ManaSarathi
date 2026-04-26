@@ -1,5 +1,6 @@
 import express from 'express';
 import passport from '../config/passport';
+import rateLimit from 'express-rate-limit';
 import {
   register,
   login,
@@ -7,6 +8,8 @@ import {
   googleAuthSuccess,
   googleAuthFailure,
   validateToken,
+  verifyEmail,
+  resendEmailVerification,
   setupPassword,
   updateProfile,
   logout,
@@ -55,8 +58,8 @@ const isAllowedFrontendOrigin = (origin: string): boolean => {
 
     return (
       hostname.endsWith('.vercel.app') ||
-      hostname === 'maansarathi.app' ||
-      hostname === 'maansarathi-frontend.onrender.com'
+      hostname === 'manasarthi.app' ||
+      hostname === 'manasarthi-frontend.onrender.com'
     );
   } catch {
     return false;
@@ -75,9 +78,27 @@ const encodeOAuthState = (payload: { platform: 'web' | 'mobile'; frontendOrigin?
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 };
 
+const resendVerificationLimiter = rateLimit({
+  windowMs: parseInt(process.env.RESEND_VERIFICATION_WINDOW_MS || '600000', 10),
+  max: parseInt(process.env.RESEND_VERIFICATION_MAX_REQUESTS || '5', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  keyGenerator: (req) => {
+    const emailPart = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : 'unknown';
+    return `${req.ip || 'unknown-ip'}:${emailPart}`;
+  },
+  message: {
+    success: false,
+    error: 'Too many verification resend requests. Please wait before trying again.'
+  }
+});
+
 // Traditional email/password routes
 router.post('/register', validate(registerSchema), asyncHandler(register));
 router.post('/login', validate(loginSchema), asyncHandler(login));
+router.get('/verify-email', asyncHandler(verifyEmail));
+router.post('/resend-verification', resendVerificationLimiter, asyncHandler(resendEmailVerification));
 
 // Google OAuth routes
 // Accept ?platform=mobile query param so the callback knows where to redirect
@@ -117,8 +138,9 @@ router.get('/google/failure', googleAuthFailure);
 // (Mobile apps can't use browser redirect flow, so they send a code from Google Sign-In SDK)
 router.post('/google/mobile', asyncHandler(async (req, res) => {
   const { code, idToken, email, name, googleId, profilePhoto, firstName, lastName } = req.body;
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
-  if (!email || !googleId) {
+  if (!normalizedEmail || !googleId) {
     return res.status(400).json({
       success: false,
       error: 'Email and googleId are required for mobile Google auth',
@@ -129,12 +151,13 @@ router.post('/google/mobile', asyncHandler(async (req, res) => {
 
   try {
     // Find or create user by email
-    let user = await db.user.findUnique({ where: { email } });
+    let user = await db.user.findUnique({ where: { email: normalizedEmail } });
 
     if (user) {
       // Update Google ID and profile info if needed
       const updateData: any = {};
       if (!user.googleId) updateData.googleId = googleId;
+      if (!user.isEmailVerified) updateData.isEmailVerified = true;
       if (!user.profilePhoto && profilePhoto) updateData.profilePhoto = profilePhoto;
       if (!user.firstName && firstName) updateData.firstName = firstName;
       if (!user.lastName && lastName) updateData.lastName = lastName;
@@ -146,12 +169,13 @@ router.post('/google/mobile', asyncHandler(async (req, res) => {
       // Create new user
       user = await db.user.create({
         data: {
-          email,
-          name: name || `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0],
+          email: normalizedEmail,
+          name: name || `${firstName || ''} ${lastName || ''}`.trim() || normalizedEmail.split('@')[0],
           googleId,
           profilePhoto: profilePhoto || null,
           firstName: firstName || null,
           lastName: lastName || null,
+          isEmailVerified: true,
           isOnboarded: false,
           dataConsent: true,
         },

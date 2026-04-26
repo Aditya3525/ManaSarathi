@@ -1,9 +1,8 @@
-import { Search, Plus, Loader2, FolderOpen, AlertCircle } from 'lucide-react';
+import { Search, Plus, FolderOpen, AlertCircle, X, Loader2, RefreshCw } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 
 import {
   useConversations,
-  useCreateConversation,
   useDeleteConversation,
   useRenameConversation,
   useArchiveConversation,
@@ -21,6 +20,8 @@ interface ConversationHistorySidebarProps {
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string | null) => void;
   className?: string;
+  showCloseButton?: boolean;
+  onCloseSidebar?: () => void;
 }
 
 // Helper function to group conversations by date
@@ -60,28 +61,37 @@ function groupConversationsByDate(conversations: Conversation[]) {
   });
 
   // Filter out empty groups
-  return Object.entries(groups).filter(([_, convs]) => convs.length > 0);
+  return Object.entries(groups).filter(([, convs]) => convs.length > 0);
 }
 
 export function ConversationHistorySidebar({
   activeConversationId,
   onSelectConversation,
   className = '',
+  showCloseButton = false,
+  onCloseSidebar,
 }: ConversationHistorySidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch conversations
-  const { data: conversations = [], isLoading, error } = useConversations(false);
+  const {
+    data: conversations = [],
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useConversations(false);
   const { data: searchResults = [] } = useSearchConversations(searchQuery);
 
   // Mutations
-  const createConversation = useCreateConversation();
   const deleteConversation = useDeleteConversation();
   const renameConversation = useRenameConversation();
   const archiveConversation = useArchiveConversation();
 
   // Use search results if searching, otherwise use all conversations
   const displayedConversations = searchQuery.trim() ? searchResults : conversations;
+  const showLoadingState = (isLoading || (isFetching && conversations.length === 0)) && !searchQuery.trim();
+  const showRetryingState = !showLoadingState && Boolean(error) && conversations.length === 0 && !searchQuery.trim();
 
   // Group conversations by date
   const groupedConversations = useMemo(
@@ -126,6 +136,22 @@ export function ConversationHistorySidebar({
     <div className={`flex flex-col h-full bg-background border-r ${className}`}>
       {/* Header with New Chat button */}
       <div className="p-4 border-b space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
+          {showCloseButton && onCloseSidebar ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Minimize sidebar"
+              onClick={onCloseSidebar}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+
         <Button
           onClick={handleNewChat}
           className="w-full"
@@ -159,9 +185,13 @@ export function ConversationHistorySidebar({
       {/* Conversation List */}
       <ScrollArea className="flex-1">
         <div className="p-2">
-          {isLoading ? (
+          {showLoadingState ? (
             // Loading skeleton
             <div className="space-y-2">
+              <div className="px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading conversations...
+              </div>
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="px-3 py-2">
                   <Skeleton className="h-4 w-3/4 mb-2" />
@@ -170,16 +200,28 @@ export function ConversationHistorySidebar({
                 </div>
               ))}
             </div>
-          ) : error ? (
-            // Error state
+          ) : showRetryingState ? (
+            // Retry state when initial retrieval failed
             <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-              <AlertCircle className="h-12 w-12 text-destructive mb-3" />
+              <AlertCircle className="h-12 w-12 text-amber-500 mb-3" />
               <p className="text-sm text-muted-foreground">
-                Failed to load conversations
+                Loading conversations...
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {error instanceof Error ? error.message : 'Unknown error'}
+                We could not retrieve history yet. Try again.
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  void refetch();
+                }}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                Retry
+              </Button>
             </div>
           ) : displayedConversations.length === 0 ? (
             // Empty state
@@ -223,7 +265,7 @@ export function ConversationHistorySidebar({
       </ScrollArea>
 
       {/* Footer with conversation count */}
-      {!isLoading && conversations.length > 0 && (
+      {!showLoadingState && conversations.length > 0 && (
         <div className="p-3 border-t">
           <p className="text-xs text-muted-foreground text-center">
             {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}

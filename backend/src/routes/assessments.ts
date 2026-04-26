@@ -6,6 +6,7 @@ import {
 	getAssessmentTemplates,
 	submitAssessment,
 	getAssessmentHistory,
+	getAssessmentReminder,
 	startAssessmentSession,
 	getActiveAssessmentSession,
 	getAssessmentSessionById,
@@ -30,6 +31,7 @@ router.get('/templates', validate(getAssessmentTemplatesSchema), getAssessmentTe
 router.post('/', validate(submitAssessmentSchema), submitAssessment as any);
 router.post('/submit-combined', submitCombinedAssessments as any);
 router.get('/history', validate(getAssessmentHistorySchema), getAssessmentHistory as any);
+router.get('/reminder', getAssessmentReminder as any);
 router.post('/sessions', validate(startAssessmentSessionSchema), startAssessmentSession as any);
 router.get('/sessions/active', getActiveAssessmentSession as any);
 router.get('/sessions/:sessionId', getAssessmentSessionById as any);

@@ -170,13 +170,269 @@ export interface AssessmentSessionSummary {
   }>;
 }
 
+export interface AssessmentReminder {
+  shouldRemind: boolean;
+  reason: 'first-assessment' | 'stale-assessment' | 'recent-assessment' | string;
+  thresholdDays: number;
+  daysSinceLastAssessment: number | null;
+  lastCompletedAt: string | null;
+  lastAssessmentType: string | null;
+  message: string;
+}
+
+export type DashboardMode =
+  | 'morning-start'
+  | 'evening-wind-down'
+  | 'post-crisis'
+  | 'low-mood-streak'
+  | 'improving'
+  | 'returning'
+  | 'default';
+
+export type OneThingActionType = 'practice' | 'checkin' | 'mood' | 'habit' | 'assessment' | 'chat';
+
+export interface OneThingToday {
+  title: string;
+  description: string;
+  actionType: OneThingActionType;
+  actionData?: Record<string, unknown>;
+}
+
+export interface DashboardModeResult {
+  mode: DashboardMode;
+  priorityWidgets: string[];
+  collapsedWidgets: string[];
+  message?: string;
+  oneThingToday?: OneThingToday;
+}
+
+export interface DashboardSummaryData {
+  user: {
+    id: string;
+    name: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    approach: string | null;
+    profileCompletion: number;
+    memberSince: string;
+  };
+  assessmentScores: {
+    anxiety: number | null;
+    stress: number | null;
+    emotionalIntelligence: number | null;
+    wellnessScore: number | null;
+    byType: Record<string, AssessmentTypeSummary>;
+    overallTrend: string;
+    aiSummary: string;
+    updatedAt: string;
+  } | null;
+  recentInsights: Array<{
+    type: 'ai-summary' | 'pattern' | 'progress';
+    title: string;
+    description: string;
+    icon: string;
+    severity?: 'success' | 'warning' | 'info';
+    timestamp: string;
+  }>;
+  weeklyProgress: {
+    practices: {
+      completed: number;
+      goal: number;
+      percentage: number;
+    };
+    moodCheckins: {
+      completed: number;
+      goal: number;
+      percentage: number;
+    };
+    assessments: {
+      completed: number;
+      goal: number;
+      percentage: number;
+    };
+    currentStreak: number;
+  };
+  recentMoods: Array<{
+    mood: string;
+    notes: string | null;
+    createdAt: string;
+  }>;
+  recommendedPractice: {
+    title: string;
+    description: string | null;
+    type: string;
+    duration: string | number | null;
+    tags: string[] | string | null;
+    reason: string;
+    approach: string | null;
+  } | null;
+}
+
+export interface DashboardUnifiedData {
+  summary: DashboardSummaryData;
+  weeklyProgress: {
+    practices: {
+      completed: number;
+      goal: number;
+      percentage: number;
+      details: Array<{
+        title: string;
+        type: string;
+        completedAt: string | null;
+      }>;
+    };
+    moodCheckins: {
+      completed: number;
+      goal: number;
+      percentage: number;
+      moodDistribution: Record<string, number>;
+    };
+    assessments: {
+      completed: number;
+      goal: number;
+      percentage: number;
+      types: string[];
+    };
+    streak: {
+      current: number;
+      message: string;
+    };
+  };
+  mode: DashboardModeResult;
+  checkins: CheckinSummary;
+  crisisEvents: CrisisEvent[];
+  intention: DailyIntention | null;
+  sleep: {
+    history: {
+      logs: SleepLog[];
+      days: number;
+      total: number;
+    };
+    stats: SleepStats;
+  };
+  gratitude: {
+    entries: GratitudeEntry[];
+    days: number;
+    total: number;
+  };
+  nudges: {
+    nudges: AdaptiveNudge[];
+    total: number;
+  };
+  assessmentReminder: AssessmentReminder;
+  habits: {
+    habits: UserHabit[];
+    total: number;
+  };
+  communityInsights: CommunityInsightsPayload;
+}
+
 // ─── Mood ─────────────────────────────────────────────────────────────────────
 
 export interface MoodEntry {
   id: string;
   mood: string;
+  emotion?: string | null;
+  emotionGroup?: string | null;
+  intensity?: number | null;
+  trigger?: string | null;
   notes: string | null;
   createdAt: string;
+}
+
+export interface MicroCheckin {
+  id: string;
+  userId: string;
+  type: 'morning' | 'evening' | 'post-chat' | string;
+  responses: Record<string, unknown>;
+  mood?: string | null;
+  createdAt: string;
+}
+
+export interface CheckinSummary {
+  checkins: MicroCheckin[];
+  avgEnergy: number | null;
+  avgDayRating: number | null;
+  totalCheckins: number;
+  days: number;
+}
+
+export interface CrisisEvent {
+  id: string;
+  userId: string;
+  conversationId?: string | null;
+  crisisLevel: string;
+  confidence: number;
+  indicators: string;
+  actionTaken: string;
+  followUpResponse?: string | null;
+  detectedAt: string;
+  responseTime?: number | null;
+  resolved: boolean;
+  resolvedAt?: string | null;
+}
+
+export interface JournalEntry {
+  id: string;
+  userId: string;
+  prompt?: string | null;
+  content: string;
+  mood?: string | null;
+  tags?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JournalReflection {
+  id: string;
+  userId: string;
+  weekOf: string;
+  patterns: {
+    recurringThemes?: string[];
+    emotionalTrend?: string;
+    insights?: string[];
+  };
+  aiSummary: string;
+  createdAt: string;
+}
+
+export interface DailyIntention {
+  id: string;
+  userId: string;
+  intention: string;
+  isCustom: boolean;
+  completed: boolean | null;
+  reflection?: string | null;
+  createdAt: string;
+}
+
+export interface GratitudeEntry {
+  id: string;
+  userId: string;
+  items: string[];
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface SleepLog {
+  id: string;
+  userId: string;
+  bedTime: string;
+  wakeTime: string;
+  quality: number;
+  factors?: string[] | null;
+  duration?: number | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface SleepStats {
+  periodDays: number;
+  totalLogs: number;
+  averageQuality: number | null;
+  averageDuration: number | null;
+  commonFactors: Array<{ factor: string; count: number }>;
 }
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
@@ -269,8 +525,71 @@ export interface ChatSendMessageResponse {
   recommendationsMeta?: Record<string, unknown>;
   ai_metadata?: Record<string, unknown>;
   fallback?: Record<string, unknown> | null;
+  assessmentPrompt?: {
+    actionRequired: 'trigger_gad2_assessment';
+    assessmentType: 'anxiety_gad2';
+    prompt: string;
+    ctaLabel: string;
+    daysSinceLastAssessment: number | null;
+  };
   crisis?: boolean;
   context?: unknown;
+}
+
+export type ChatStreamEvent =
+  | {
+      type: 'status';
+      stage: 'processing' | 'streaming' | 'completed';
+      message?: string;
+    }
+  | {
+      type: 'token';
+      token: string;
+    }
+  | {
+      type: 'done';
+      payload: ChatSendMessageResponse;
+    }
+  | {
+      type: 'error';
+      error: string;
+    };
+
+export interface AdaptiveNudge {
+  id: string;
+  type: 'milestone' | 'nudge';
+  message: string;
+  ctaLabel?: string;
+  ctaPage?: string;
+  createdAt: string;
+}
+
+export interface UserHabit {
+  id: string;
+  userId: string;
+  title: string;
+  cue: string;
+  practiceId?: string | null;
+  active: boolean;
+  streak: number;
+  lastCompletedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityInsightMetric {
+  id: 'breathing-adoption' | 'stress-improvement' | 'journal-consistency';
+  label: string;
+  value: number;
+  unit: 'percent' | 'points';
+  description: string;
+  sampleSize: number;
+}
+
+export interface CommunityInsightsPayload {
+  generatedAt: string;
+  expiresAt: string;
+  metrics: CommunityInsightMetric[];
 }
 
 export interface UserEngagementRecord {
@@ -457,6 +776,9 @@ export const assessmentsApi = {
   getAssessmentHistory: () =>
     request<{ history: AssessmentHistoryEntry[]; insights: AssessmentInsights }>('/assessments/history'),
 
+  getAssessmentReminder: () =>
+    request<AssessmentReminder>('/assessments/reminder'),
+
   startAssessmentSession: (payload: { selectedTypes: string[] }) =>
     request<{ session: AssessmentSessionSummary }>('/assessments/sessions', {
       method: 'POST',
@@ -479,10 +801,28 @@ export const assessmentsApi = {
 // ─── chatApi ──────────────────────────────────────────────────────────────────
 
 export const chatApi = {
-  sendMessage: (content: string, conversationId?: string) =>
+  sendMessage: (content: string, conversationId?: string, options?: { simpleLanguage?: boolean }) =>
     request<ChatSendMessageResponse>(
       '/chat/message',
-      { method: 'POST', body: JSON.stringify({ content, conversationId }) }
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          content,
+          conversationId,
+          simpleLanguage: options?.simpleLanguage,
+        })
+      }
+    ),
+
+  submitMessageFeedback: (messageId: string, feedback: 'liked' | 'disliked', note?: string) =>
+    request<{
+      messageId: string;
+      feedback: 'liked' | 'disliked';
+      note?: string | null;
+      repairPrompt?: string | null;
+    }>(
+      `/chat/message/${messageId}/feedback`,
+      { method: 'PUT', body: JSON.stringify({ feedback, note }) }
     ),
 
   getChatHistory: () =>
@@ -500,13 +840,137 @@ export const chatApi = {
     }>('/chat/check-in'),
 
   getMoodBasedGreeting: () =>
-    request<{ greeting: string }>('/chat/greeting'),
+    request<{
+      greeting: string;
+      hasContext?: boolean;
+      actionItems?: string[];
+      progressSummary?: string;
+    }>('/chat/greeting'),
 
   getExerciseRecommendations: (context: Record<string, unknown>) =>
     request<ExerciseRecommendationsResponse>('/chat/exercises', {
       method: 'POST',
       body: JSON.stringify(context),
     }),
+
+  streamMessage: async (
+    content: string,
+    conversationId?: string,
+    options?: { simpleLanguage?: boolean },
+    onEvent?: (event: ChatStreamEvent) => void
+  ): Promise<ChatSendMessageResponse> => {
+    const token = getTokenForPath('/chat/stream');
+    const response = await fetch(`${getApiBaseUrl()}/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        content,
+        conversationId,
+        simpleLanguage: options?.simpleLanguage,
+      }),
+    });
+
+    if (!response.ok) {
+      let message = `Request failed with status ${response.status}`;
+      try {
+        const body = await response.json();
+        message = body?.error || body?.message || message;
+      } catch {
+        // Ignore parse errors and use status fallback.
+      }
+      throw new Error(message);
+    }
+
+    if (!response.body) {
+      throw new Error('Streaming response body is unavailable');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let donePayload: ChatSendMessageResponse | null = null;
+
+    const parseEventChunk = (chunk: string): ChatStreamEvent | null => {
+      const lines = chunk
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      const dataLine = lines.find((line) => line.startsWith('data:'));
+      if (!dataLine) {
+        return null;
+      }
+
+      const payloadText = dataLine.slice('data:'.length).trim();
+      if (!payloadText) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(payloadText) as ChatStreamEvent;
+      } catch {
+        return null;
+      }
+    };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let separatorIndex = buffer.indexOf('\n\n');
+      while (separatorIndex >= 0) {
+        const rawEvent = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+
+        const parsedEvent = parseEventChunk(rawEvent);
+        if (!parsedEvent) {
+          separatorIndex = buffer.indexOf('\n\n');
+          continue;
+        }
+
+        onEvent?.(parsedEvent);
+
+        if (parsedEvent.type === 'done') {
+          donePayload = parsedEvent.payload;
+        }
+
+        if (parsedEvent.type === 'error') {
+          throw new Error(parsedEvent.error || 'Streaming failed');
+        }
+
+        separatorIndex = buffer.indexOf('\n\n');
+      }
+    }
+
+    buffer += decoder.decode();
+
+    // Parse any final buffered event that was not newline-terminated.
+    if (buffer.trim().length > 0) {
+      const parsedEvent = parseEventChunk(buffer);
+      if (parsedEvent) {
+        onEvent?.(parsedEvent);
+        if (parsedEvent.type === 'done') {
+          donePayload = parsedEvent.payload;
+        }
+        if (parsedEvent.type === 'error') {
+          throw new Error(parsedEvent.error || 'Streaming failed');
+        }
+      }
+    }
+
+    if (!donePayload) {
+      throw new Error('Stream completed without a final payload');
+    }
+
+    return donePayload;
+  },
 };
 
 // ─── conversationsApi ─────────────────────────────────────────────────────────
@@ -571,10 +1035,17 @@ export const moodApi = {
   getMoodHistory: () =>
     request<MoodEntry[]>('/mood'),
 
-  logMood: (mood: string, notes?: string) =>
+  logMood: (payload: {
+    mood?: string;
+    emotion?: string;
+    emotionGroup?: string;
+    intensity?: number;
+    trigger?: string;
+    notes?: string;
+  }) =>
     request<MoodEntry>('/mood', {
       method: 'POST',
-      body: JSON.stringify({ mood, notes }),
+      body: JSON.stringify(payload),
     }),
 
   deleteMoodEntry: (id: string) =>
@@ -582,6 +1053,174 @@ export const moodApi = {
 
   getMoodStats: () =>
     request<Record<string, unknown>>('/mood/stats'),
+};
+
+// ─── checkinsApi ─────────────────────────────────────────────────────────────
+
+export const checkinsApi = {
+  createCheckin: (payload: {
+    type: 'morning' | 'evening' | 'post-chat' | string;
+    responses: Record<string, unknown>;
+    mood?: string;
+  }) =>
+    request<MicroCheckin>('/checkins', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getSummary: (days = 7) =>
+    request<CheckinSummary>(`/checkins/summary?days=${days}`),
+};
+
+// ─── gratitudeApi ───────────────────────────────────────────────────────────
+
+export const gratitudeApi = {
+  createEntry: (payload: { items: string[]; note?: string }) =>
+    request<GratitudeEntry>('/gratitude', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getEntries: (days = 30) =>
+    request<{ entries: GratitudeEntry[]; days: number; total: number }>(`/gratitude?days=${days}`),
+};
+
+// ─── dashboardApi ───────────────────────────────────────────────────────────
+
+export const dashboardApi = {
+  getUnified: () =>
+    request<DashboardUnifiedData>('/dashboard/unified'),
+
+  getMode: () =>
+    request<DashboardModeResult>('/dashboard/mode'),
+
+  getAdaptiveNudges: () =>
+    request<{ nudges: AdaptiveNudge[]; total: number }>('/dashboard/nudges'),
+
+  getCommunityInsights: (force = false) =>
+    request<CommunityInsightsPayload>(`/dashboard/community-insights${force ? '?force=true' : ''}`),
+};
+
+// ─── habitsApi ──────────────────────────────────────────────────────────────
+
+export const habitsApi = {
+  listHabits: (active?: boolean) => {
+    const params = typeof active === 'boolean' ? `?active=${active}` : '';
+    return request<{ habits: UserHabit[]; total: number }>(`/habits${params}`);
+  },
+
+  createHabit: (payload: { title: string; cue: string; practiceId?: string }) =>
+    request<UserHabit>('/habits', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateHabit: (id: string, payload: Partial<Pick<UserHabit, 'title' | 'cue' | 'active' | 'practiceId'>>) =>
+    request<UserHabit>(`/habits/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  completeHabit: (id: string) =>
+    request<UserHabit & { completedToday: boolean }>(`/habits/${id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  deleteHabit: (id: string) =>
+    request<{ id: string }>(`/habits/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// ─── crisisApi ───────────────────────────────────────────────────────────────
+
+export const crisisApi = {
+  getRecentEvents: () =>
+    request<CrisisEvent[]>('/crisis/recent-events'),
+
+  submitFollowUp: (payload: {
+    eventId: string;
+    response: 'better' | 'same' | 'struggling';
+  }) =>
+    request<CrisisEvent>('/crisis/follow-up', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
+// ─── journalApi ──────────────────────────────────────────────────────────────
+
+export const journalApi = {
+  createEntry: (payload: {
+    prompt?: string;
+    content: string;
+    mood?: string;
+    tags?: string[];
+  }) =>
+    request<JournalEntry>('/journal', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getEntries: (days = 30) =>
+    request<{ entries: JournalEntry[]; days: number; total: number }>(`/journal?days=${days}`),
+
+  getPrompt: () =>
+    request<{ prompt: string; emotion: string; approach: string }>('/journal/prompts'),
+
+  getReflection: () =>
+    request<JournalReflection>('/journal/reflection'),
+
+  deleteEntry: (id: string) =>
+    request<void>(`/journal/${id}`, { method: 'DELETE' }),
+};
+
+// ─── intentionsApi ───────────────────────────────────────────────────────────
+
+export const intentionsApi = {
+  getToday: () =>
+    request<DailyIntention | null>('/intentions/today'),
+
+  getPresets: () =>
+    request<string[]>('/intentions/presets'),
+
+  setTodayIntention: (payload: { intention: string; isCustom?: boolean }) =>
+    request<DailyIntention>('/intentions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  reflect: (id: string, payload: { completed: boolean; reflection?: string }) =>
+    request<DailyIntention>(`/intentions/${id}/reflect`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  getHistory: (days = 7) =>
+    request<{ intentions: DailyIntention[]; days: number; total: number }>(`/intentions?days=${days}`),
+};
+
+// ─── sleepApi ────────────────────────────────────────────────────────────────
+
+export const sleepApi = {
+  logSleep: (payload: {
+    bedTime: string;
+    wakeTime: string;
+    quality: number;
+    factors?: string[];
+    notes?: string;
+  }) =>
+    request<SleepLog>('/sleep', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getHistory: (days = 30) =>
+    request<{ logs: SleepLog[]; days: number; total: number }>(`/sleep?days=${days}`),
+
+  getStats: (days = 30) =>
+    request<SleepStats>(`/sleep/stats?days=${days}`),
 };
 
 // ─── engagementApi ───────────────────────────────────────────────────────────

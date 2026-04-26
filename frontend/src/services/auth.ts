@@ -13,6 +13,7 @@ export interface StoredUser {
   id: string;
   name: string;
   email: string;
+  isEmailVerified?: boolean;
   firstName?: string;
   lastName?: string;
   profilePhoto?: string;
@@ -33,6 +34,16 @@ export interface StoredUser {
   createdAt?: string;
   updatedAt?: string;
 }
+
+type AuthServiceError = Error & {
+  response?: { data?: unknown };
+  suggestLogin?: boolean;
+  email?: string;
+  status?: number;
+  error?: string;
+};
+
+export type RegisterResult = { user: StoredUser; token: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -92,7 +103,7 @@ export async function loginUser(credentials: {
   const data = await response.json();
 
   if (!response.ok) {
-    const err: any = new Error(data?.error || 'Invalid credentials');
+    const err = new Error(data?.error || 'Invalid credentials') as AuthServiceError;
     err.response = { data };
     throw err;
   }
@@ -101,7 +112,6 @@ export async function loginUser(credentials: {
     throw new Error('Invalid response from server');
   }
 
-  localStorage.setItem('token', data.data.token);
   return { user: data.data.user as StoredUser, token: data.data.token };
 }
 
@@ -113,7 +123,7 @@ export async function registerUser(userData: {
   name: string;
   email: string;
   password: string;
-}): Promise<{ user: StoredUser; token: string }> {
+}): Promise<RegisterResult> {
   const response = await fetch(`${getApiBaseUrl()}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -123,12 +133,29 @@ export async function registerUser(userData: {
   const data = await response.json();
 
   if (!response.ok) {
-    const err: any = new Error(data?.error || 'Registration failed');
+    const firstValidationMessage = (() => {
+      const validationErrors = data?.errors;
+      if (!validationErrors || typeof validationErrors !== 'object') return null;
+
+      for (const fieldErrors of Object.values(validationErrors as Record<string, unknown>)) {
+        if (!Array.isArray(fieldErrors)) continue;
+        const firstError = fieldErrors.find(
+          (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
+        );
+        if (firstError) return firstError;
+      }
+
+      return null;
+    })();
+
+    const errorMessage = firstValidationMessage || data?.error || 'Registration failed';
+    const err = new Error(errorMessage) as AuthServiceError;
+    err.error = errorMessage;
     if (data?.error?.toLowerCase().includes('already exists') || response.status === 409) {
-      (err as any).suggestLogin = true;
-      (err as any).email = userData.email;
+      err.suggestLogin = true;
+      err.email = userData.email;
     }
-    (err as any).status = response.status;
+    err.status = response.status;
     throw err;
   }
 
@@ -136,8 +163,26 @@ export async function registerUser(userData: {
     throw new Error('Invalid response from server');
   }
 
-  localStorage.setItem('token', data.data.token);
   return { user: data.data.user as StoredUser, token: data.data.token };
+}
+
+export async function resendEmailVerification(email: string): Promise<{ message: string; verificationUrl?: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to resend verification email');
+  }
+
+  return {
+    message: data?.data?.message || 'If an account exists for this email, a verification link has been sent.',
+    verificationUrl: typeof data?.data?.verificationUrl === 'string' ? data.data.verificationUrl : undefined,
+  };
 }
 
 /**
@@ -163,6 +208,8 @@ export async function completeOnboarding(
     language?: string;
     emergencyContact?: string;
     emergencyPhone?: string;
+    dataConsent?: boolean;
+    clinicianSharing?: boolean;
   }
 ): Promise<StoredUser | null> {
   const response = await fetch(`${getApiBaseUrl()}/users/complete-onboarding`, {

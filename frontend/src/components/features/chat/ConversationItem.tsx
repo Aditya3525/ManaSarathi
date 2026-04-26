@@ -80,7 +80,6 @@ export function ConversationItem({
           onBlur={handleRename}
           onKeyDown={handleKeyDown}
           className="h-8 text-sm"
-          autoFocus
           maxLength={100}
         />
       </div>
@@ -95,6 +94,14 @@ export function ConversationItem({
         ${isActive ? 'bg-accent text-accent-foreground' : ''}
       `}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">

@@ -1,10 +1,10 @@
 /**
- * Service Worker for MaanSarathi PWA
+ * Service Worker for ManaSarathi PWA
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'MaanSarathi-v1.0.4';
-const API_CACHE_NAME = 'MaanSarathi-api-v1.0.4';
+const CACHE_NAME = 'ManaSarathi-v1.0.5';
+const API_CACHE_NAME = 'ManaSarathi-api-v1.0.5';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -14,10 +14,15 @@ const STATIC_ASSETS = [
 ];
 
 // API endpoints to cache
-const API_ROUTES = [
+const CACHEABLE_API_ROUTES = [
   '/api/users/me',
   '/api/assessments/definitions',
   '/api/plans/modules',
+  '/api/dashboard/summary',
+  '/api/dashboard/insights',
+  '/api/dashboard/weekly-progress',
+  '/api/dashboard/community-insights',
+  '/api/checkins/summary',
 ];
 
 // Install event - cache static assets
@@ -71,6 +76,10 @@ self.addEventListener('fetch', (event) => {
 
   // API requests - Network First, fallback to cache
   if (url.pathname.startsWith('/api/')) {
+    if (!isCacheableApiRoute(url.pathname)) {
+      return;
+    }
+
     event.respondWith(
       networkFirstStrategy(request, API_CACHE_NAME)
     );
@@ -142,7 +151,8 @@ async function networkFirstStrategy(request, cacheName) {
     const networkResponse = await fetch(request);
 
     // Cache successful responses
-    if (networkResponse && networkResponse.status === 200) {
+    const cacheControl = networkResponse.headers.get('cache-control') || '';
+    if (networkResponse && networkResponse.status === 200 && !cacheControl.includes('no-store')) {
       const cache = await caches.open(cacheName);
       cache.put(request, networkResponse.clone());
     }
@@ -170,6 +180,10 @@ function isCacheableRequest(request) {
   } catch {
     return false;
   }
+}
+
+function isCacheableApiRoute(pathname) {
+  return CACHEABLE_API_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
 // Background sync for offline actions
@@ -223,7 +237,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification('MaanSarathi', options)
+    self.registration.showNotification('ManaSarathi', options)
   );
 });
 

@@ -45,7 +45,7 @@ async function main() {
       const hashedPassword = await bcrypt.hash(login.portalPassword, 10);
       await prisma.user.update({
         where: { id: therapist.userId },
-        data: { password: hashedPassword },
+        data: { password: hashedPassword, isEmailVerified: true },
       });
       console.log(`   ✅ Password updated to: ${login.portalPassword}\n`);
       continue;
@@ -59,7 +59,7 @@ async function main() {
       const hashedPassword = await bcrypt.hash(login.portalPassword, 10);
       await prisma.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        data: { password: hashedPassword, isEmailVerified: true },
       });
     } else {
       // Create new user
@@ -69,6 +69,7 @@ async function main() {
           email: login.portalEmail,
           name: therapist.name,
           password: hashedPassword,
+          isEmailVerified: true,
           isOnboarded: true,
         },
       });

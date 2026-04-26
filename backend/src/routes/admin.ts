@@ -5,6 +5,18 @@ import multer from 'multer';
 import fetch from 'node-fetch';
 import ffmpeg from 'fluent-ffmpeg';
 import ytdl from 'ytdl-core';
+const ytSearch = require('yt-search') as (query: string) => Promise<{
+  videos?: Array<{
+    videoId?: string;
+    title?: string;
+    description?: string;
+    thumbnail?: string;
+    seconds?: number;
+    author?: { name?: string };
+    ago?: string;
+    url?: string;
+  }>;
+}>;
 // @ts-ignore
 import ffmpegStatic from 'ffmpeg-static';
 // @ts-ignore
@@ -22,6 +34,7 @@ import bulkRoutes from './admin/bulkRoutes';
 import activityLogRoutes from './admin/activityLogRoutes';
 import { createMediaRoutes } from './admin/mediaRoutes';
 import { createPracticeContentRoutes } from './admin/practiceContentRoutes';
+import dashboardRoutes from './admin/dashboardRoutes';
 import { createTherapistManagementRoutes } from './admin/therapistManagementRoutes';
 import { requireAdmin, ADMIN_EMAILS } from './admin/requireAdmin';
 
@@ -73,7 +86,8 @@ const contentValidationSchema = Joi.object({
   environment: Joi.array().items(Joi.string().valid('home', 'work', 'public', 'nature')).optional(),
   culturalContext: Joi.string().max(500).allow('', null).optional(),
   hasSubtitles: Joi.boolean().optional(),
-  transcript: Joi.string().max(50000).allow('', null).optional()
+  transcript: Joi.string().max(50000).allow('', null).optional(),
+  scheduledPublishAt: Joi.date().iso().allow(null).optional()
 });
 
 const practiceValidationSchema = Joi.object({
@@ -115,7 +129,8 @@ const practiceValidationSchema = Joi.object({
     instruction: Joi.string().required().max(500),
     duration: Joi.number().optional()
   })).max(50).optional(),
-  contraindications: Joi.array().items(Joi.string().max(200)).max(20).optional()
+  contraindications: Joi.array().items(Joi.string().max(200)).max(20).optional(),
+  scheduledPublishAt: Joi.date().iso().allow(null).optional()
 });
 
 const sanitizeFolderPath = (value?: string): string | null => {
@@ -220,6 +235,54 @@ type YouTubeMetadata = {
   durationSeconds: number | null;
   isoDuration: string | null;
 };
+
+type YouTubeSearchResult = {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  durationSeconds: number | null;
+  durationMinutes: number | null;
+  channelTitle: string | null;
+  publishedAt: string | null;
+  url: string;
+};
+
+async function searchYouTubeVideos(query: string, limit = 8): Promise<YouTubeSearchResult[]> {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery) return [];
+
+  try {
+    const searchResult = await ytSearch(normalizedQuery);
+    const videos = Array.isArray(searchResult?.videos) ? searchResult.videos : [];
+
+    return videos
+      .slice(0, Math.min(Math.max(limit, 1), 20))
+      .map((video) => {
+        const id = String(video.videoId || '').trim();
+        const durationSeconds = Number.isFinite(video.seconds) ? Number(video.seconds) : null;
+        const url = id ? `https://www.youtube.com/watch?v=${id}` : String(video.url || '').trim();
+
+        return {
+          id,
+          title: String(video.title || 'Untitled video').trim(),
+          description: video.description ? String(video.description) : null,
+          thumbnail: video.thumbnail ? String(video.thumbnail) : youtubeThumbFromId(id),
+          durationSeconds,
+          durationMinutes: durationSeconds && durationSeconds > 0
+            ? Math.max(1, Math.round(durationSeconds / 60))
+            : null,
+          channelTitle: video.author?.name ? String(video.author.name) : null,
+          publishedAt: video.ago ? String(video.ago) : null,
+          url,
+        };
+      })
+      .filter((item) => Boolean(item.id && item.url));
+  } catch (error) {
+    console.error('YouTube search failed', error);
+    return [];
+  }
+}
 
 async function getYouTubeMetadata(id: string): Promise<YouTubeMetadata | null> {
   const apiKey = process.env.YOUTUBE_API_KEY;
@@ -342,6 +405,7 @@ router.use('/', createMediaRoutes({
   resolvePublicUploadPath,
   detectMediaTypeFromExtension,
   getYouTubeMetadata,
+  searchYouTubeVideos,
   youtubeThumbFromId,
   probeMediaMetadata,
 }));
@@ -354,6 +418,7 @@ router.use('/', createPracticeContentRoutes({
   youtubeThumbFromId,
 }));
 
+router.use('/', dashboardRoutes);
 router.use('/', assessmentRoutes);
 router.use('/', analyticsRoutes);
 router.use('/', userRoutes);

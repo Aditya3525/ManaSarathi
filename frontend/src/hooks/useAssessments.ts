@@ -120,12 +120,20 @@ export function useSubmitAssessment() {
       }
       return response.data;
     },
-    onSuccess: () => {
-      // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
+    onSuccess: (data) => {
+      if (userId && data?.history && data?.insights) {
+        queryClient.setQueryData(queryKeys.assessmentHistory(userId), {
+          history: data.history,
+          insights: data.insights,
+        });
+        queryClient.setQueryData(queryKeys.assessmentInsights(userId), data.insights);
+      } else {
+        queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
+      }
+
       queryClient.invalidateQueries({ queryKey: queryKeys.assessments });
-      
+
       push({
         title: 'Assessment Completed',
         description: 'Your assessment has been saved successfully.',

@@ -113,13 +113,21 @@ export function ExportDialog({
         <div className="space-y-6 py-4">
           {/* Format Selection */}
           <div className="space-y-3">
-            <Label>Export Format</Label>
+            <p className="text-sm font-medium">Export Format</p>
             <RadioGroup value={format} onValueChange={handleFormatChange}>
               {(['pdf', 'text', 'json'] as ExportFormat[]).map((formatType) => (
-                <label
+                <div
                   key={formatType}
-                  htmlFor={formatType}
                   className="flex items-start space-x-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setFormat(formatType)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setFormat(formatType);
+                    }
+                  }}
                 >
                   <RadioGroupItem value={formatType} id={formatType} className="mt-1" />
                   <div className="flex-1 pointer-events-none">
@@ -133,14 +141,14 @@ export function ExportDialog({
                       {getFormatDescription(formatType)}
                     </p>
                   </div>
-                </label>
+                </div>
               ))}
             </RadioGroup>
           </div>
 
           {/* Options */}
           <div className="space-y-3">
-            <Label>Export Options</Label>
+            <p className="text-sm font-medium">Export Options</p>
             <div className="flex items-center space-x-2 rounded-lg border p-3">
               <Checkbox
                 id="systemMessages"

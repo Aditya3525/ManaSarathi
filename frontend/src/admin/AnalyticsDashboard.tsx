@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Download
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -40,64 +40,10 @@ import {
 } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
-import { adminFetch } from './adminApi';
 import { AdminSectionCard } from './AdminSectionCard';
-
-interface AnalyticsData {
-  overview: {
-    totalUsers: number;
-    activeUsers: number;
-    newUsers: number;
-    premiumUsers: number;
-    activeRate: string;
-    premiumRate: string;
-  };
-  assessments: {
-    totalAssessments: number;
-    completedAssessments: number;
-    completionRate: string;
-    averagePerUser: string;
-    byType: Array<{
-      assessmentType: string;
-      name: string;
-      id: string;
-      type?: string;
-      completions: number;
-    }>;
-  };
-  practices: {
-    totalPractices: number;
-    completions: number;
-    popular: Array<{
-      id: string;
-      title: string;
-      type: string;
-      duration: number;
-    }>;
-  };
-  content: {
-    totalContent: number;
-    views: number;
-    popular: Array<{
-      id: string;
-      title: string;
-      type: string;
-      category: string;
-    }>;
-  };
-  trends: {
-    userGrowth: Array<{ date: string; count: number }>;
-    engagement: Array<{ date: string; count: number }>;
-  };
-  timeframe: {
-    type: string;
-    startDate: string;
-    endDate: string;
-  };
-}
+import { useAdminAnalytics } from './hooks/useAdminQueries';
 
 const CHART_COLORS = {
   primary: '#8b5cf6',
@@ -112,59 +58,123 @@ const PIE_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b8
 
 export const AnalyticsDashboard: React.FC = () => {
   const { push } = useNotificationStore();
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [activeTab, setActiveTab] = useState('overview');
+  const analyticsQuery = useAdminAnalytics(timeframe);
+  const analytics = analyticsQuery.data ?? null;
+  const isLoading = analyticsQuery.isLoading;
+  const isRefreshing = analyticsQuery.isFetching;
 
-  const fetchAnalytics = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await adminFetch(`${getApiBaseUrl()}/admin/analytics?timeframe=${timeframe}`);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setAnalytics(data.data);
-      } else {
-        throw new Error(data.message || data.error || 'Failed to load analytics');
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-      setAnalytics(null);
+  useEffect(() => {
+    if (analyticsQuery.error) {
       push({
         type: 'error',
         title: 'Analytics Error',
-        description: error instanceof Error ? error.message : 'Failed to load analytics'
+        description: analyticsQuery.error instanceof Error
+          ? analyticsQuery.error.message
+          : 'Failed to load analytics'
       });
-    } finally {
-      setIsLoading(false);
     }
-  }, [timeframe, push]);
+  }, [analyticsQuery.error, push]);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
+  const escapeCsvCell = (value: string | number | null | undefined) => {
+    const cell = value === null || value === undefined ? '' : String(value);
+    if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+      return `"${cell.replace(/"/g, '""')}"`;
+    }
+    return cell;
+  };
 
-  const handleExport = () => {
+  const buildCsv = () => {
+    if (!analytics) {
+      return '';
+    }
+
+    const rows: string[] = [];
+    rows.push(['section', 'metric', 'value'].map(escapeCsvCell).join(','));
+
+    rows.push(['meta', 'timeframe', analytics.timeframe.type].map(escapeCsvCell).join(','));
+    rows.push(['meta', 'startDate', analytics.timeframe.startDate].map(escapeCsvCell).join(','));
+    rows.push(['meta', 'endDate', analytics.timeframe.endDate].map(escapeCsvCell).join(','));
+
+    rows.push(['overview', 'totalUsers', analytics.overview.totalUsers].map(escapeCsvCell).join(','));
+    rows.push(['overview', 'activeUsers', analytics.overview.activeUsers].map(escapeCsvCell).join(','));
+    rows.push(['overview', 'newUsers', analytics.overview.newUsers].map(escapeCsvCell).join(','));
+    rows.push(['overview', 'premiumUsers', analytics.overview.premiumUsers].map(escapeCsvCell).join(','));
+    rows.push(['overview', 'activeRate', analytics.overview.activeRate].map(escapeCsvCell).join(','));
+    rows.push(['overview', 'premiumRate', analytics.overview.premiumRate].map(escapeCsvCell).join(','));
+
+    rows.push(['assessments', 'totalAssessments', analytics.assessments.totalAssessments].map(escapeCsvCell).join(','));
+    rows.push(['assessments', 'completedAssessments', analytics.assessments.completedAssessments].map(escapeCsvCell).join(','));
+    rows.push(['assessments', 'completionRate', analytics.assessments.completionRate].map(escapeCsvCell).join(','));
+    rows.push(['assessments', 'averagePerUser', analytics.assessments.averagePerUser].map(escapeCsvCell).join(','));
+
+    analytics.assessments.byType.forEach((item) => {
+      rows.push([
+        'assessmentType',
+        item.name || item.assessmentType,
+        item.completions,
+      ].map(escapeCsvCell).join(','));
+    });
+
+    rows.push(['content', 'totalContent', analytics.content.totalContent].map(escapeCsvCell).join(','));
+    rows.push(['content', 'views', analytics.content.views].map(escapeCsvCell).join(','));
+    analytics.content.popular.forEach((item) => {
+      rows.push([
+        'contentPopular',
+        `${item.title} (${item.type}/${item.category})`,
+        '',
+      ].map(escapeCsvCell).join(','));
+    });
+
+    rows.push(['practices', 'totalPractices', analytics.practices.totalPractices].map(escapeCsvCell).join(','));
+    rows.push(['practices', 'completions', analytics.practices.completions].map(escapeCsvCell).join(','));
+    analytics.practices.popular.forEach((item) => {
+      rows.push([
+        'practicePopular',
+        `${item.title} (${item.type}, ${item.duration}m)`,
+        '',
+      ].map(escapeCsvCell).join(','));
+    });
+
+    analytics.trends.userGrowth.forEach((point) => {
+      rows.push(['trendUserGrowth', point.date, point.count].map(escapeCsvCell).join(','));
+    });
+    analytics.trends.engagement.forEach((point) => {
+      rows.push(['trendEngagement', point.date, point.count].map(escapeCsvCell).join(','));
+    });
+
+    return rows.join('\n');
+  };
+
+  const handleExport = (format: 'json' | 'csv') => {
     if (!analytics) return;
-    
-    const exportData = {
-      generated: new Date().toISOString(),
-      timeframe: analytics.timeframe,
-      ...analytics
-    };
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const dateStamp = new Date().toISOString().split('T')[0];
+    const fileBase = `analytics-${analytics.timeframe.type}-${dateStamp}`;
+
+    const blob =
+      format === 'csv'
+        ? new Blob([buildCsv()], { type: 'text/csv;charset=utf-8;' })
+        : new Blob(
+            [
+              JSON.stringify(
+                {
+                  generated: new Date().toISOString(),
+                  timeframe: analytics.timeframe,
+                  ...analytics,
+                },
+                null,
+                2
+              ),
+            ],
+            { type: 'application/json' }
+          );
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analytics-${analytics.timeframe.type}-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = format === 'csv' ? `${fileBase}.csv` : `${fileBase}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -173,7 +183,7 @@ export const AnalyticsDashboard: React.FC = () => {
     push({
       type: 'success',
       title: 'Exported',
-      description: 'Analytics data exported successfully'
+      description: format === 'csv' ? 'Analytics data exported as CSV' : 'Analytics data exported as JSON'
     });
   };
 
@@ -191,13 +201,17 @@ export const AnalyticsDashboard: React.FC = () => {
           <SelectItem value="all">All time</SelectItem>
         </SelectContent>
       </Select>
-      <Button variant="outline" onClick={fetchAnalytics} disabled={isLoading}>
-        <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+      <Button variant="outline" onClick={() => void analyticsQuery.refetch()} disabled={isRefreshing}>
+        <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
         Refresh
       </Button>
-      <Button variant="outline" onClick={handleExport} disabled={!analytics}>
+      <Button variant="outline" onClick={() => handleExport('json')} disabled={!analytics}>
         <Download className="h-4 w-4 mr-2" />
-        Export
+        Export JSON
+      </Button>
+      <Button variant="outline" onClick={() => handleExport('csv')} disabled={!analytics}>
+        <Download className="h-4 w-4 mr-2" />
+        Export CSV
       </Button>
     </div>
   );

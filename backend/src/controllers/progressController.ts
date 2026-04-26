@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import Joi from 'joi';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 const trackSchema = Joi.object({
   metric: Joi.string().min(2).max(64).required(),

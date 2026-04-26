@@ -27,6 +27,9 @@ export const useConversations = (includeArchived = false) => {
     },
     staleTime: 30000, // 30 seconds
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * (2 ** attempt), 8000),
   });
 };
 

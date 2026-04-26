@@ -1,6 +1,7 @@
 import { PrismaClient, AssessmentResult, ChatMessage, MoodEntry } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { advancedAnalyticsService } from './advancedAnalyticsService';
+import { llmService } from './llmProvider';
 
 const prisma = new PrismaClient();
 const crisisLogger = logger.child({ module: 'CrisisDetection' });
@@ -54,6 +55,50 @@ const CRISIS_PATTERNS = {
 };
 
 export class CrisisDetectionService {
+  /**
+   * AI-assisted crisis scoring (0-10). This supplements, not replaces, keyword checks.
+   */
+  async assessCrisisWithAI(message: string): Promise<{ score: number; reasoning: string }> {
+    try {
+      const response = await llmService.generateResponse(
+        [
+          {
+            role: 'system',
+            content:
+              'You are a safety classifier. Rate the user message for self-harm/suicide risk from 0 to 10. '
+              + '0 = no risk, 3 = mild distress, 5 = moderate distress, 7 = high concern with explicit self-harm cues, 9-10 = immediate crisis. '
+              + 'Do NOT score above 6 unless the user explicitly mentions self-harm, suicide intent, plan, means, or desire to die. '
+              + 'General stress, anxiety, grief, or feeling overwhelmed without self-harm intent should stay at 0-5. '
+              + 'Respond ONLY as JSON: {"score": number, "reasoning": "one-word"}.'
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        {
+          maxTokens: 40,
+          temperature: 0,
+          timeout: 4000
+        }
+      );
+
+      const raw = response.content?.trim() || '{}';
+      const parsed = JSON.parse(raw) as { score?: number; reasoning?: string };
+      const safeScore = Number.isFinite(parsed.score) ? Math.max(0, Math.min(10, Number(parsed.score))) : 0;
+
+      return {
+        score: safeScore,
+        reasoning: parsed.reasoning || 'unspecified'
+      };
+    } catch {
+      return {
+        score: 0,
+        reasoning: 'ai-unavailable'
+      };
+    }
+  }
+
   /**
    * Detect crisis level from multi-layered context
    */

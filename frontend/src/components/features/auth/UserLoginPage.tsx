@@ -1,7 +1,8 @@
-import { ArrowLeft, CheckCircle, Shield, Sparkles, UserRound } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Eye, EyeOff, Shield, Sparkles, UserRound } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { getServerBaseUrl } from '../../../config/apiConfig';
+import { validateSignupEmail } from '../../../utils/emailValidation';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
@@ -14,7 +15,9 @@ interface UserLoginPageProps {
   onLogin: (credentials: { email: string; password: string }) => Promise<void> | void;
   onSignUp: (userData: { name: string; email: string; password: string }) => Promise<void> | void;
   authError?: string | null;
-  loginError?: { message?: string; error?: string } | null;
+  loginError?: { message?: string; error?: string; suggestion?: string; verificationUrl?: string } | null;
+  onChooseLoginAsUser?: (rememberChoice?: boolean) => Promise<void> | void;
+  onChooseLoginAsAdmin?: (rememberChoice?: boolean) => Promise<void> | void;
   onNavigateHome: () => void;
   onNavigateAdmin: () => void;
   startOAuth?: () => void;
@@ -25,6 +28,8 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
   onSignUp,
   authError,
   loginError,
+  onChooseLoginAsUser,
+  onChooseLoginAsAdmin,
   onNavigateHome,
   onNavigateAdmin,
   startOAuth
@@ -38,6 +43,21 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [activeView, setActiveView] = useState<'login' | 'signup'>('login');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
+  const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
+
+  const passwordChecks = {
+    minLength: signupPassword.length >= 8,
+    lower: /[a-z]/.test(signupPassword),
+    upper: /[A-Z]/.test(signupPassword),
+    number: /\d/.test(signupPassword),
+    special: /[^A-Za-z\d]/.test(signupPassword),
+  };
+  const isStrongSignupPassword = Object.values(passwordChecks).every(Boolean);
+  const signupEmailValidation = validateSignupEmail(signupEmail);
+  const isValidSignupEmail = signupEmailValidation.isValid;
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -57,6 +77,17 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
       return;
     }
 
+    if (!isValidSignupEmail) {
+      setSignupValidationError(signupEmailValidation.message || 'Please enter a valid email address.');
+      return;
+    }
+
+    if (!isStrongSignupPassword) {
+      setSignupValidationError('Use at least 8 characters with uppercase, lowercase, number, and special character.');
+      return;
+    }
+
+    setSignupValidationError(null);
     setIsCreatingAccount(true);
     try {
       await Promise.resolve(onSignUp({ name: fullName, email: signupEmail, password: signupPassword }));
@@ -74,8 +105,15 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
     window.location.assign(`${getServerBaseUrl()}/api/auth/google?frontend_origin=${frontendOrigin}`);
   };
 
-  const combinedError = authError || loginError?.message || loginError?.error;
+  const combinedError = loginError?.error || loginError?.message || authError;
+  const loginSuggestion = loginError?.suggestion;
   const isSignupView = activeView === 'signup';
+
+  React.useEffect(() => {
+    if (loginSuggestion !== 'choose_admin_or_user') {
+      setRememberAdminDestinationChoice(false);
+    }
+  }, [loginSuggestion]);
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.2fr,1fr]">
@@ -162,9 +200,9 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
                 <CardDescription>Unlock personalized insights, practices, and mindful nudges.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 px-6 pb-6">
-                {authError && (
+                {(signupValidationError || authError) && (
                   <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
-                    {authError}
+                    {signupValidationError || authError}
                   </div>
                 )}
 
@@ -186,7 +224,10 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
                       id="signup-email"
                       type="email"
                       value={signupEmail}
-                      onChange={(event) => setSignupEmail(event.target.value)}
+                      onChange={(event) => {
+                        setSignupEmail(event.target.value);
+                        if (signupValidationError) setSignupValidationError(null);
+                      }}
                       placeholder="Enter your email"
                       required
                     />
@@ -194,18 +235,44 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      value={signupPassword}
-                      onChange={(event) => setSignupPassword(event.target.value)}
-                      placeholder="Create a password"
-                      required
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        type={showSignupPassword ? 'text' : 'password'}
+                        value={signupPassword}
+                        onChange={(event) => {
+                          setSignupPassword(event.target.value);
+                          if (signupValidationError) setSignupValidationError(null);
+                        }}
+                        placeholder="Create a strong password"
+                        required
+                        minLength={8}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowSignupPassword((prev) => !prev)}
+                        aria-label={showSignupPassword ? 'Hide signup password' : 'Show signup password'}
+                      >
+                        {showSignupPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                      </Button>
+                    </div>
+                    <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                      <p className="mb-1 font-medium text-foreground">Password must include:</p>
+                      <ul className="space-y-1">
+                        <li className="flex items-center gap-2">{passwordChecks.minLength ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} 8+ characters</li>
+                        <li className="flex items-center gap-2">{passwordChecks.upper ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Uppercase letter</li>
+                        <li className="flex items-center gap-2">{passwordChecks.lower ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Lowercase letter</li>
+                        <li className="flex items-center gap-2">{passwordChecks.number ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Number</li>
+                        <li className="flex items-center gap-2">{passwordChecks.special ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Special character</li>
+                      </ul>
+                    </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={isCreatingAccount || !fullName || !signupEmail || !signupPassword}>
+                  <Button type="submit" className="w-full" disabled={isCreatingAccount || !fullName || !signupEmail || !signupPassword || !isStrongSignupPassword || !isValidSignupEmail}>
                     {isCreatingAccount ? 'Creating account…' : 'Create account'}
                   </Button>
                 </form>
@@ -246,6 +313,62 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
                 {combinedError && (
                   <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
                     {combinedError}
+                    {loginSuggestion === 'create_account' && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => {
+                            setSignupEmail(email);
+                            setActiveView('signup');
+                          }}
+                        >
+                          Create an account with this email
+                        </button>
+                      </div>
+                    )}
+                    {loginSuggestion === 'use_google_or_setup_password' && (
+                      <div className="mt-2 text-xs">
+                        Tip: use <strong>Continue with Google</strong> for this account, then set a password in your profile.
+                      </div>
+                    )}
+                    {loginSuggestion === 'choose_admin_or_user' && (
+                      <div className="mt-3 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
+                        <p className="text-sm font-semibold text-foreground">Choose your destination</p>
+                        <p className="text-xs text-muted-foreground">
+                          {loginError?.message || 'This account can access both user and admin areas. Select where to continue.'}
+                        </p>
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5"
+                            checked={rememberAdminDestinationChoice}
+                            onChange={(event) => setRememberAdminDestinationChoice(event.target.checked)}
+                          />
+                          Remember my choice on this device
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onChooseLoginAsUser?.(rememberAdminDestinationChoice)}
+                            disabled={!onChooseLoginAsUser}
+                          >
+                            Login as User
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onChooseLoginAsAdmin?.(rememberAdminDestinationChoice)}
+                            disabled={!onChooseLoginAsAdmin}
+                          >
+                            Open Admin Dashboard
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -265,16 +388,28 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
                   <div className="space-y-2">
                     <Label htmlFor="user-password">Password</Label>
-                    <Input
-                      id="user-password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Enter your password"
-                      required
-                      minLength={6}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="user-password"
+                        type={showLoginPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        required
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowLoginPassword((prev) => !prev)}
+                        aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showLoginPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                      </Button>
+                    </div>
                   </div>
 
                   <Button type="submit" className="w-full" disabled={isSubmitting || !email || !password}>

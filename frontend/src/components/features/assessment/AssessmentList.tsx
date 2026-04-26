@@ -29,6 +29,12 @@ import {
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent } from '../../ui/card';
+import { InlineLoading } from '../../ui/loading-spinner';
+import { Progress } from '../../ui/progress';
+import { 
+  ResponsiveContainer, 
+  ResponsiveCollapsibleSection
+} from '../../ui/responsive-layout';
 
 // Type for available assessment from API
 interface AvailableAssessment {
@@ -41,12 +47,6 @@ interface AvailableAssessment {
   questions: number;
   tags: string;
 }
-import { InlineLoading } from '../../ui/loading-spinner';
-import { Progress } from '../../ui/progress';
-import { 
-  ResponsiveContainer, 
-  CollapsibleSection
-} from '../../ui/responsive-layout';
 
 import { AssessmentTrendsVisualization } from './AssessmentTrendsVisualization';
 import { friendlyAssessmentLabel, trendLabelForType, deltaClassForType } from './assessmentUtils';
@@ -511,7 +511,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
   // Show loading state while fetching assessments
   if (isLoadingAssessments) {
     return (
-      <ResponsiveContainer spacing={device.isMobile ? 'small' : 'medium'} className="min-h-screen bg-background pb-safe">
+      <ResponsiveContainer spacing={device.isMobile ? 'small' : 'medium'} className="min-h-screen bg-background pb-safe page-enter">
         <div className="flex flex-col items-center justify-center h-96 space-y-4">
           <InlineLoading size={device.isMobile ? 'sm' : 'md'} />
           <p className="text-muted-foreground">Loading assessments...</p>
@@ -527,7 +527,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
   }
 
   return (
-    <ResponsiveContainer spacing={device.isMobile ? 'small' : 'medium'} className="min-h-screen bg-background pb-safe">
+    <ResponsiveContainer spacing={device.isMobile ? 'small' : 'medium'} className="min-h-screen bg-background pb-safe page-enter">
       {/* Header - Responsive */}
       <div className={`bg-gradient-to-r from-primary/10 to-accent/10 ${device.isMobile ? 'p-4' : 'p-6'}`}>
         <div className="max-w-4xl mx-auto">
@@ -892,7 +892,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
 
                       {/* Recommendations - collapsible on mobile */}
                       {assessment.completed && assessment.recommendations && assessment.recommendations.length > 0 && !device.isMobile && (
-                        <CollapsibleSection
+                        <ResponsiveCollapsibleSection
                           title="Insights"
                           defaultOpen={false}
                           icon={<Info className="h-4 w-4" />}
@@ -904,7 +904,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
                               ))}
                             </ul>
                           </div>
-                        </CollapsibleSection>
+                        </ResponsiveCollapsibleSection>
                       )}
                     </div>
                   </div>
@@ -955,7 +955,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
 
         {/* RECENT ASSESSMENT HISTORY - Collapsible on mobile */}
         {history.length > 0 && (
-          <CollapsibleSection
+          <ResponsiveCollapsibleSection
             title="Recent Assessment History"
             defaultOpen={!device.isMobile}
             summary={`${history.length} ${history.length === 1 ? 'entry' : 'entries'} • Latest: ${combinedHistoryWithChange[0] ? getRelativeTime(combinedHistoryWithChange[0].completedAt) : 'N/A'}`}
@@ -1067,11 +1067,11 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
                 </div>
               </CardContent>
             </Card>
-          </CollapsibleSection>
+          </ResponsiveCollapsibleSection>
         )}
 
         {/* PRIVACY & SAFETY - Collapsed by default on mobile */}
-        <CollapsibleSection
+        <ResponsiveCollapsibleSection
           title="Privacy & Safety"
           defaultOpen={!device.isMobile}
           summary="Your data is confidential and encrypted"
@@ -1093,7 +1093,7 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
               </Button>
             </CardContent>
           </Card>
-        </CollapsibleSection>
+        </ResponsiveCollapsibleSection>
       </div>
     </ResponsiveContainer>
   );

@@ -1,8 +1,9 @@
 import {
-    ArrowLeft, Calendar, CheckCircle, Clock, Edit2, Heart,
-    Loader2, LogOut, MessageSquare, Save, Star, Users, X, XCircle, RefreshCw, Plus, Image
+    Calendar, CalendarDays, CheckCircle, Clock, Edit2, Heart,
+    Loader2, MessageSquare, Save, Star, Users, X, RefreshCw, Plus
 } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -18,86 +19,23 @@ import {
   SelectValue
 } from '../components/ui/select';
 import { Separator } from '../components/ui/separator';
+import { Skeleton } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-interface TherapistProfile {
-    id: string;
-    name: string;
-    credential: string;
-    title: string;
-    bio: string;
-    specialtiesJson: string;
-    email?: string | null;
-    phone?: string | null;
-    website?: string | null;
-    street?: string | null;
-    city?: string | null;
-    state?: string | null;
-    zipCode?: string | null;
-    country?: string | null;
-    sessionFee?: number | null;
-    offersSliding: boolean;
-    acceptsInsurance: boolean;
-    insurances?: string | null;
-    availabilityJson: string;
-    yearsExperience?: number | null;
-    languages?: string | null;
-    rating?: number | null;
-    reviewCount: number;
-    isActive: boolean;
-    isVerified: boolean;
-    profileImageUrl?: string | null;
-}
-
-interface Booking {
-    id: string;
-    userId: string;
-    preferredDate?: string | null;
-    preferredTime?: string | null;
-    message?: string | null;
-    userEmail: string;
-    userPhone?: string | null;
-    status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
-    therapistNotes?: string | null;
-    adminNotes?: string | null;
-    createdAt: string;
-    user?: { id: string; name: string; email: string; profilePhoto?: string | null };
-}
-
-interface Stats {
-    pending: number;
-    confirmed: number;
-    completed: number;
-    total: number;
-    uniqueClients: number;
-}
-
-// ─── API helpers ────────────────────────────────────────────────────────────
-import { getApiBaseUrl } from '../config/apiConfig';
-
-const API = `${getApiBaseUrl()}/therapist-portal`;
-
-function getTherapistToken(): string | null {
-    return localStorage.getItem('therapistToken');
-}
-
-async function apiFetch(path: string, opts: RequestInit = {}) {
-    const token = getTherapistToken();
-    const res = await fetch(`${API}${path}`, {
-        ...opts,
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...opts.headers,
-        },
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Request failed');
-    }
-    return res.json();
-}
+import { BOOKING_DATE_RANGE_OPTIONS, BOOKING_STATUS_FILTERS, BookingDateRange, TherapistTab } from '../constants/therapist';
+import { ClientProfile } from './ClientProfile';
+import { ClientsList } from './ClientsList';
+import { CrisisAlertsFeed } from './CrisisAlertsFeed';
+import { SessionNotesEditor } from './SessionNotesEditor';
+import { SessionNotesList } from './SessionNotesList';
+import { TherapistCalendar } from './TherapistCalendar';
+import {
+    TherapistBooking,
+    TherapistProfile,
+    TherapistStats,
+    useTherapistDashboardQueryBundle
+} from './hooks/useTherapistQueries';
+import { TherapistShell } from './TherapistShell';
+import { therapistFetch } from './useTherapistAuth';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface TherapistDashboardProps {
@@ -105,53 +43,66 @@ interface TherapistDashboardProps {
     therapistName?: string;
 }
 
-type Tab = 'overview' | 'bookings' | 'profile';
+type DateRange = BookingDateRange;
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboardProps) {
-    const [tab, setTab] = useState<Tab>('overview');
-    const [stats, setStats] = useState<Stats | null>(null);
-    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [tab, setTab] = useState<TherapistTab>('overview');
     const [profile, setProfile] = useState<TherapistProfile | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [originalProfile, setOriginalProfile] = useState<TherapistProfile | null>(null);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [dateRange, setDateRange] = useState<DateRange>('all');
+    const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+    const [noteRefreshSignal, setNoteRefreshSignal] = useState(0);
     const [actionBookingId, setActionBookingId] = useState<string | null>(null);
     const [noteInput, setNoteInput] = useState('');
+    const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
 
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(null), 3000);
-    };
+    const { statsQuery, bookingsQuery, profileQuery, isLoading: loading, refetchAll } = useTherapistDashboardQueryBundle();
+    const stats = (statsQuery.data as TherapistStats | undefined) ?? null;
+    const bookings = (bookingsQuery.data as TherapistBooking[] | undefined) ?? [];
+    const fetchedProfile = (profileQuery.data as TherapistProfile | undefined) ?? null;
 
-    // ─ Fetch all data
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [statsRes, bookingsRes, profileRes] = await Promise.all([
-                apiFetch('/stats'),
-                apiFetch('/bookings'),
-                apiFetch('/profile'),
-            ]);
-            if (statsRes.success) setStats(statsRes.data);
-            if (bookingsRes.success) setBookings(bookingsRes.data);
-            if (profileRes.success) setProfile(profileRes.data);
-        } catch (e: any) {
-            console.error('Dashboard fetch error:', e);
+    const apiFetch = useCallback(async (path: string, opts: RequestInit = {}) => {
+        const res = await therapistFetch(path, opts);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Request failed');
         }
-        setLoading(false);
+        return res.json();
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    const isProfileDirty = Boolean(
+        profile && originalProfile && JSON.stringify(profile) !== JSON.stringify(originalProfile)
+    );
 
-    // Keep therapist queue fresh so booking state changes sync quickly.
     useEffect(() => {
-        const interval = window.setInterval(() => {
-            fetchData();
-        }, 30000);
-        return () => window.clearInterval(interval);
-    }, [fetchData]);
+        if (!fetchedProfile || isProfileDirty) {
+            return;
+        }
+
+        setProfile(fetchedProfile);
+        setOriginalProfile(JSON.parse(JSON.stringify(fetchedProfile)));
+    }, [fetchedProfile, isProfileDirty]);
+
+    useEffect(() => {
+        const queryError = statsQuery.error || bookingsQuery.error || profileQuery.error;
+        if (queryError instanceof Error) {
+            toast.error(queryError.message || 'Unable to load therapist dashboard');
+        }
+    }, [bookingsQuery.error, profileQuery.error, statsQuery.error]);
+
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isProfileDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isProfileDirty]);
 
     // ─ Booking actions
     const updateBookingStatus = async (
@@ -159,40 +110,102 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
         status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED',
         note?: string
     ) => {
+        if (updatingBookingId === id) {
+            return;
+        }
+
         try {
             const resolvedNote = (note ?? noteInput).trim();
             if (status === 'CANCELLED' && resolvedNote.length < 3) {
-                showToast('Please add a short reason before declining.');
+                toast.warning('Please add a short reason before declining.');
                 return;
             }
 
+            setUpdatingBookingId(id);
             const body: any = { status };
             if (resolvedNote) body.therapistNotes = resolvedNote;
             await apiFetch(`/bookings/${id}/status`, { method: 'PUT', body: JSON.stringify(body) });
-            showToast(`Booking ${status.toLowerCase()}`);
+            toast.success(`Booking ${status.toLowerCase()}`);
             setActionBookingId(null);
             setNoteInput('');
-            fetchData();
+            await refetchAll();
         } catch (e: any) {
-            showToast(e.message || 'Failed');
+            toast.error(e.message || 'Action failed');
+        } finally {
+            setUpdatingBookingId(null);
         }
+    };
+
+    const validateProfile = (): string[] => {
+        const errors: string[] = [];
+        if (!profile) return ['Profile not loaded'];
+        if (!profile.name?.trim()) errors.push('Display name is required');
+        if (profile.name && profile.name.length > 100) errors.push('Name must be under 100 characters');
+        if (profile.phone && !/^\d{10}$/.test(profile.phone)) errors.push('Phone must be 10 digits');
+        if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) errors.push('Invalid email format');
+        if (profile.sessionFee !== null && profile.sessionFee !== undefined && profile.sessionFee < 0) {
+            errors.push('Session fee cannot be negative');
+        }
+        if (profile.bio && profile.bio.length > 2000) errors.push('Bio must be under 2000 characters');
+        return errors;
     };
 
     // ─ Profile save
     const saveProfile = async () => {
         if (!profile) return;
+
+        const errors = validateProfile();
+        if (errors.length > 0) {
+            toast.error(errors[0]);
+            return;
+        }
+
         setSaving(true);
         try {
             await apiFetch('/profile', { method: 'PUT', body: JSON.stringify(profile) });
-            showToast('Profile updated');
+            setOriginalProfile(JSON.parse(JSON.stringify(profile)));
+            await profileQuery.refetch();
+            toast.success('Profile updated');
         } catch (e: any) {
-            showToast(e.message || 'Failed to save');
+            toast.error(e.message || 'Failed to save');
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     // ─ Filtered bookings
-    const filtered = statusFilter === 'ALL' ? bookings : bookings.filter(b => b.status === statusFilter);
+    const filtered = useMemo(() => {
+        let result = statusFilter === 'ALL' ? bookings : bookings.filter((booking) => booking.status === statusFilter);
+
+        if (dateRange !== 'all') {
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            const getRangeStart = () => {
+                switch (dateRange) {
+                    case 'today':
+                        return startOfDay;
+                    case 'this-week': {
+                        const start = new Date(startOfDay);
+                        start.setDate(start.getDate() - start.getDay());
+                        return start;
+                    }
+                    case 'this-month':
+                        return new Date(now.getFullYear(), now.getMonth(), 1);
+                    default:
+                        return new Date(0);
+                }
+            };
+
+            const rangeStart = getRangeStart();
+            result = result.filter((booking) => {
+                const bookingDate = booking.preferredDate ? new Date(booking.preferredDate) : new Date(booking.createdAt);
+                return bookingDate >= rangeStart;
+            });
+        }
+
+        return result;
+    }, [bookings, dateRange, statusFilter]);
 
     // helpers
     const statusColor = (s: string) => {
@@ -205,68 +218,75 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
         }
     };
 
+    const hasSharedAssessmentContext = (message?: string | null) =>
+        typeof message === 'string' && message.includes('Shared Assessment Context:');
+
+    const navItems = useMemo(() => ([
+        { key: 'overview' as TherapistTab, label: 'Overview', icon: Star },
+        { key: 'clients' as TherapistTab, label: 'Clients', icon: Users },
+        { key: 'bookings' as TherapistTab, label: 'Bookings', icon: Calendar, badge: stats?.pending },
+        { key: 'calendar' as TherapistTab, label: 'Calendar', icon: CalendarDays },
+        { key: 'notes' as TherapistTab, label: 'Notes', icon: MessageSquare },
+        { key: 'profile' as TherapistTab, label: 'Profile', icon: Edit2 },
+    ]), [stats?.pending]);
+
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            <div className="min-h-screen bg-background">
+                <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+                    <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <Heart className="h-6 w-6 text-emerald-600" />
+                            <Skeleton className="h-6 w-32" />
+                        </div>
+                        <Skeleton className="h-8 w-20" />
+                    </div>
+                    <div className="max-w-6xl mx-auto px-4">
+                        <div className="flex gap-1 -mb-px py-2">
+                            {[1, 2, 3].map((item) => (
+                                <Skeleton key={item} className="h-10 w-24" />
+                            ))}
+                        </div>
+                    </div>
+                </header>
+                <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[1, 2, 3, 4].map((item) => (
+                            <Card key={item}>
+                                <CardContent className="pt-5 pb-4">
+                                    <Skeleton className="h-16 w-full" />
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                    <Card>
+                        <CardContent className="p-6">
+                            <Skeleton className="h-32 w-full" />
+                        </CardContent>
+                    </Card>
+                </main>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-background">
-            {/* Toast */}
-            {toast && (
-                <div className="fixed top-4 right-4 z-50 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-lg animate-in fade-in slide-in-from-top-2">
-                    {toast}
-                </div>
-            )}
-
-            {/* Header */}
-            <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                        <Heart className="h-6 w-6 text-emerald-600" />
-                        <div>
-                            <h1 className="text-lg font-semibold">Therapist Portal</h1>
-                            <p className="text-xs text-muted-foreground">{therapistName || profile?.name}</p>
-                        </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={onLogout}>
-                        <LogOut className="h-4 w-4 mr-2" /> Logout
-                    </Button>
-                </div>
-
-                {/* Tabs */}
-                <div className="max-w-6xl mx-auto px-4">
-                    <nav className="flex gap-1 -mb-px">
-                        {([
-                            { key: 'overview' as Tab, label: 'Overview', icon: <Star className="h-4 w-4" /> },
-                            { key: 'bookings' as Tab, label: 'Bookings', icon: <Calendar className="h-4 w-4" />, badge: stats?.pending },
-                            { key: 'profile' as Tab, label: 'Profile', icon: <Edit2 className="h-4 w-4" /> },
-                        ]).map(t => (
-                            <button
-                                key={t.key}
-                                onClick={() => setTab(t.key)}
-                                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.key
-                                    ? 'border-emerald-600 text-emerald-600'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-                                    }`}
-                            >
-                                {t.icon} {t.label}
-                                {t.badge ? (
-                                    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1.5 text-xs font-bold text-white">
-                                        {t.badge}
-                                    </span>
-                                ) : null}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-            </header>
-
-            {/* Content */}
-            <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <TherapistShell
+            therapist={{
+                name: therapistName || profile?.name || 'Therapist',
+                email: profile?.email,
+                credential: profile?.credential,
+            }}
+            onLogout={onLogout}
+            activeItem={tab}
+            onSelect={(value) => setTab(value as TherapistTab)}
+            navItems={navItems.map((item) => ({
+                value: item.key,
+                label: item.label,
+                icon: item.icon,
+                badge: item.badge,
+            }))}
+        >
+            <div className="space-y-6">
 
                 {/* ── OVERVIEW TAB ─────────────────────────────────────── */}
                 {tab === 'overview' && stats && (
@@ -296,10 +316,13 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                 <Button size="sm" variant="outline" onClick={() => { setTab('bookings'); setStatusFilter('PENDING'); }}>
                                     <Clock className="h-4 w-4 mr-1.5" /> Review Pending ({stats.pending})
                                 </Button>
+                                <Button size="sm" variant="outline" onClick={() => setTab('clients')}>
+                                    <Users className="h-4 w-4 mr-1.5" /> Open Clients
+                                </Button>
                                 <Button size="sm" variant="outline" onClick={() => setTab('profile')}>
                                     <Edit2 className="h-4 w-4 mr-1.5" /> Edit Profile
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={fetchData}>
+                                <Button size="sm" variant="outline" onClick={() => void refetchAll()}>
                                     <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
                                 </Button>
                             </CardContent>
@@ -321,6 +344,11 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                                     {b.preferredDate ? new Date(b.preferredDate).toLocaleDateString() : 'No date set'}
                                                     {b.preferredTime ? ` at ${b.preferredTime}` : ''}
                                                 </p>
+                                                {hasSharedAssessmentContext(b.message) && (
+                                                    <Badge variant="secondary" className="mt-1 text-[10px] uppercase tracking-wide">
+                                                        Shared assessment data
+                                                    </Badge>
+                                                )}
                                                 {b.message && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{b.message}</p>}
                                             </div>
                                             <div className="flex gap-2">
@@ -343,21 +371,60 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                 </CardContent>
                             </Card>
                         )}
+
+                        <CrisisAlertsFeed />
                     </>
+                )}
+
+                {/* ── CLIENTS TAB ──────────────────────────────────────── */}
+                {tab === 'clients' && (
+                    <div className="grid gap-4 xl:grid-cols-[370px_minmax(0,1fr)]">
+                        <ClientsList selectedClientId={selectedClientId} onSelectClient={setSelectedClientId} />
+                        <ClientProfile clientId={selectedClientId} />
+                    </div>
+                )}
+
+                {/* ── CALENDAR TAB ─────────────────────────────────────── */}
+                {tab === 'calendar' && <TherapistCalendar bookings={bookings} />}
+
+                {/* ── NOTES TAB ────────────────────────────────────────── */}
+                {tab === 'notes' && (
+                    <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+                        <ClientsList selectedClientId={selectedClientId} onSelectClient={setSelectedClientId} />
+                        <div className="space-y-4">
+                            <SessionNotesEditor
+                                clientId={selectedClientId}
+                                onSaved={() => setNoteRefreshSignal((value) => value + 1)}
+                            />
+                            <SessionNotesList clientId={selectedClientId} refreshSignal={noteRefreshSignal} />
+                        </div>
+                    </div>
                 )}
 
                 {/* ── BOOKINGS TAB ─────────────────────────────────────── */}
                 {tab === 'bookings' && (
                     <>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-[220px]">
                                 <h2 className="text-lg font-semibold">Booking Requests</h2>
-                                <Button size="sm" variant="ghost" onClick={fetchData} className="h-8 w-8 p-0" title="Refresh bookings">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                <Button size="sm" variant="ghost" onClick={() => void refetchAll()} className="h-8 w-8 p-0" title="Refresh bookings">
+                                    <RefreshCw className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <div className="flex gap-1">
-                                {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'].map(s => (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
+                                    <SelectTrigger className="w-[140px]">
+                                        <SelectValue placeholder="Date range" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {BOOKING_DATE_RANGE_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {BOOKING_STATUS_FILTERS.map(s => (
                                     <Button key={s} size="sm" variant={statusFilter === s ? 'default' : 'outline'}
                                         className={statusFilter === s ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
                                         onClick={() => setStatusFilter(s)}>
@@ -395,8 +462,15 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                                         <span>Requested {new Date(b.createdAt).toLocaleDateString()}</span>
                                                     </div>
                                                     {b.message && (
-                                                        <div className="mt-2 rounded bg-muted/50 p-2 text-sm">
-                                                            <MessageSquare className="h-3 w-3 inline mr-1 opacity-50" />{b.message}
+                                                        <div className="mt-2 space-y-1">
+                                                            {hasSharedAssessmentContext(b.message) && (
+                                                                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                                                                    Shared assessment context included
+                                                                </Badge>
+                                                            )}
+                                                            <div className="rounded bg-muted/50 p-2 text-sm whitespace-pre-wrap break-words">
+                                                                <MessageSquare className="h-3 w-3 inline mr-1 opacity-50" />{b.message}
+                                                            </div>
                                                         </div>
                                                     )}
                                                     {b.therapistNotes && (
@@ -417,33 +491,61 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                                                     className="text-xs"
                                                                 />
                                                                 <div className="flex gap-1.5">
-                                                                    <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={() => updateBookingStatus(b.id, 'CONFIRMED')}>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+                                                                        disabled={updatingBookingId === b.id}
+                                                                        onClick={() => updateBookingStatus(b.id, 'CONFIRMED')}
+                                                                    >
                                                                         Approve
                                                                     </Button>
                                                                     <Button
                                                                         size="sm"
                                                                         variant="destructive"
                                                                         className="flex-1 h-7 text-xs"
-                                                                        disabled={noteInput.trim().length < 3}
+                                                                        disabled={noteInput.trim().length < 3 || updatingBookingId === b.id}
                                                                         onClick={() => updateBookingStatus(b.id, 'CANCELLED')}
                                                                     >
                                                                         Decline
                                                                     </Button>
-                                                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setActionBookingId(null); setNoteInput(''); }}>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-7 px-2"
+                                                                        disabled={updatingBookingId === b.id}
+                                                                        onClick={() => { setActionBookingId(null); setNoteInput(''); }}
+                                                                    >
                                                                         <X className="h-3 w-3" />
                                                                     </Button>
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <Button size="sm" variant="outline" className="text-xs" onClick={() => setActionBookingId(b.id)}>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                                disabled={updatingBookingId === b.id}
+                                                                onClick={() => setActionBookingId(b.id)}
+                                                            >
                                                                 Respond
                                                             </Button>
                                                         )}
                                                     </div>
                                                 )}
                                                 {b.status === 'CONFIRMED' && (
-                                                    <Button size="sm" variant="outline" className="text-xs" onClick={() => updateBookingStatus(b.id, 'COMPLETED')}>
-                                                        <CheckCircle className="h-3 w-3 mr-1" /> Complete
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="text-xs"
+                                                        disabled={updatingBookingId === b.id}
+                                                        onClick={() => updateBookingStatus(b.id, 'COMPLETED')}
+                                                    >
+                                                        {updatingBookingId === b.id ? (
+                                                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                                        ) : (
+                                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                                        )}
+                                                        Complete
                                                     </Button>
                                                 )}
                                             </div>
@@ -501,6 +603,27 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                     };
 
                     const addAvailabilitySlot = (day: string, startTime: string, endTime: string) => {
+                        const isDuplicate = availability.some(
+                            (slot) => slot.day === day && slot.startTime === startTime && slot.endTime === endTime
+                        );
+                        if (isDuplicate) {
+                            toast.warning('This time slot already exists');
+                            return;
+                        }
+
+                        const hasOverlap = availability.some(
+                            (slot) => slot.day === day && startTime < slot.endTime && endTime > slot.startTime
+                        );
+                        if (hasOverlap) {
+                            toast.warning(`This slot overlaps with an existing slot on ${day}`);
+                            return;
+                        }
+
+                        if (startTime >= endTime) {
+                            toast.warning('End time must be after start time');
+                            return;
+                        }
+
                         const updated = [...availability, { day, startTime, endTime }];
                         setProfile({ ...profile, availabilityJson: JSON.stringify(updated) });
                     };
@@ -592,7 +715,15 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="p-phone">Phone</Label>
-                                        <Input id="p-phone" value={profile.phone || ''} onChange={e => setProfile({ ...profile, phone: e.target.value })} />
+                                        <Input
+                                            id="p-phone"
+                                            type="tel"
+                                            inputMode="tel"
+                                            maxLength={10}
+                                            value={profile.phone || ''}
+                                            onChange={e => setProfile({ ...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                                            placeholder="e.g. 9876543210"
+                                        />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="p-website">Website</Label>
@@ -698,17 +829,24 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                             </div>
 
                             <div className="flex justify-end pt-2">
-                                <Button onClick={saveProfile} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+                                <div className="flex items-center gap-2">
+                                    {isProfileDirty && (
+                                        <Badge variant="outline" className="text-amber-600 border-amber-300">
+                                            Unsaved changes
+                                        </Badge>
+                                    )}
+                                    <Button onClick={saveProfile} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
                                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                                     {saving ? 'Saving…' : 'Save Changes'}
-                                </Button>
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
                     );
                 })()}
-            </main>
-        </div>
+            </div>
+        </TherapistShell>
     );
 }
 

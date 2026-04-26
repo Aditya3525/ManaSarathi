@@ -40,9 +40,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { adminFetch } from './adminApi';
 import { getApiBaseUrl, getServerBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
+
+import { adminFetch } from './adminApi';
 
 interface MediaFile {
   id: string;
@@ -92,12 +93,12 @@ export const MediaManager: React.FC = () => {
       const files = Array.isArray(payload.data) ? payload.data : [];
       setMediaFiles(files);
 
-      const folders = Array.from(new Set(
+      const folders = Array.from(new Set<string>(
         files
           .map((file: MediaFile) => file.folder)
           .filter((folder: string | null | undefined): folder is string => Boolean(folder))
       ));
-      setKnownFolders((prev) => Array.from(new Set([...prev, ...folders])).sort());
+      setKnownFolders((prev) => Array.from(new Set<string>([...prev, ...folders])).sort((a, b) => a.localeCompare(b)));
     } catch (error) {
       console.error('Failed to load media files:', error);
       push({

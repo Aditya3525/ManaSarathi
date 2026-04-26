@@ -5,6 +5,7 @@ import prisma from './database';
 interface User {
   id: string;
   email: string;
+  isEmailVerified: boolean;
   name: string;
   googleId?: string;
   isOnboarded: boolean;
@@ -29,6 +30,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       });
 
     const email = (profile.emails?.[0]?.value || '').trim().toLowerCase();
+    if (!email) {
+      return done(new Error('Google account did not provide an email address'));
+    }
     const name = profile.displayName || profile.name?.givenName + ' ' + profile.name?.familyName || '';
     const firstName = profile.name?.givenName || '';
     const lastName = profile.name?.familyName || '';
@@ -43,6 +47,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     if (user) {
       // User exists, update their Google ID and profile info if not set
       const updateData: any = {};
+
+      if (!user.isEmailVerified) {
+        updateData.isEmailVerified = true;
+      }
       
       if (!user.googleId) {
         updateData.googleId = googleId;
@@ -75,6 +83,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         data: {
           email: email,
           name: name,
+          isEmailVerified: true,
           googleId: googleId,
           profilePhoto: profilePhoto,
           isOnboarded: false,
@@ -112,6 +121,7 @@ passport.deserializeUser(async (stored: any, done) => {
         id: true,
         name: true,
         email: true,
+        isEmailVerified: true,
         isOnboarded: true,
         approach: true,
         birthday: true,

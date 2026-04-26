@@ -18,15 +18,23 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
-  LifeBuoy
+  ThumbsDown,
+  ThumbsUp,
+  LifeBuoy,
+  PanelLeftClose,
+  PanelLeftOpen,
+  GripVertical
 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { chatApi, conversationsApi } from '../../../services/api';
+import { parseAssessmentPromptMeta, type AssessmentPromptMeta } from '../../../types/chat';
 import type { ISpeechRecognition, ISpeechRecognitionEvent, ISpeechRecognitionErrorEvent } from '../../../types/speech-recognition';
 import './responsive-chatbot.css';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,11 +67,13 @@ interface Message {
   type: 'user' | 'bot' | 'system';
   content: string;
   timestamp: Date;
+  metadata?: Record<string, unknown> | string | null;
   suggestions?: string[];
   isTyping?: boolean;
   feedback?: 'liked' | 'disliked' | null;
   enableTypewriter?: boolean;
   isExpanded?: boolean;
+  assessmentPrompt?: AssessmentPromptMeta | null;
 }
 
 const BREAKPOINTS = {
@@ -72,7 +82,45 @@ const BREAKPOINTS = {
   TABLET_LANDSCAPE: 1199,
 };
 
+const SIDEBAR_WIDTH_BOUNDS = {
+  MIN: 260,
+  MAX: 560,
+  DEFAULT: 320,
+};
+
+const EMPTY_ASSISTANT_FALLBACK = 'I am here with you. Could you share a little more so I can support you better?';
+
+const resolveNonEmptyContent = (value: unknown, fallback = EMPTY_ASSISTANT_FALLBACK): string => {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
+
 export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }: ResponsiveChatbotProps) {
+  const { settings: accessibilitySettings } = useAccessibility();
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return true;
+    }
+
+    return localStorage.getItem('mw-chat-sidebar-open') !== 'false';
+  });
+  const [desktopSidebarWidth, setDesktopSidebarWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') {
+      return SIDEBAR_WIDTH_BOUNDS.DEFAULT;
+    }
+
+    const raw = Number(localStorage.getItem('mw-chat-sidebar-width'));
+    if (!Number.isFinite(raw)) {
+      return SIDEBAR_WIDTH_BOUNDS.DEFAULT;
+    }
+
+    return Math.min(SIDEBAR_WIDTH_BOUNDS.MAX, Math.max(SIDEBAR_WIDTH_BOUNDS.MIN, raw));
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   // State management
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationStarters, setConversationStarters] = useState<string[]>([]);
@@ -86,8 +134,14 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [feedbackTargetMessageId, setFeedbackTargetMessageId] = useState<string | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState('');
+  const [isSubmittingFeedbackNote, setIsSubmittingFeedbackNote] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [voiceInputSupported, setVoiceInputSupported] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
   
   // Refs
@@ -96,6 +150,18 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const initializedForUserRef = useRef<string | null>(null);
+  const proactiveCheckInTimeoutRef = useRef<number | null>(null);
+  const currentConversationIdRef = useRef<string | null>(null);
+  const activeRequestIdRef = useRef(0);
+  const isResizingSidebarRef = useRef(false);
+
+  const userSignature = [user?.firstName, user?.lastName, user?.name]
+    .filter(Boolean)
+    .join('|') || 'anonymous';
+  const hasSpeakableMessage = messages.some(
+    (message) => message.type === 'bot' && message.content.trim().length > 0
+  );
 
   // Responsive helpers
   const isPhone = viewportWidth <= BREAKPOINTS.PHONE;
@@ -104,12 +170,95 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   const isDesktop = viewportWidth > BREAKPOINTS.TABLET_LANDSCAPE;
   const isMobile = isPhone || isTabletPortrait;
 
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    localStorage.setItem('mw-chat-sidebar-open', isDesktopSidebarOpen ? 'true' : 'false');
+  }, [isDesktopSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    localStorage.setItem('mw-chat-sidebar-width', String(desktopSidebarWidth));
+  }, [desktopSidebarWidth]);
+
+  useEffect(() => {
+    if (!isDesktop && !isTabletLandscape) {
+      if (isResizingSidebarRef.current) {
+        isResizingSidebarRef.current = false;
+        setIsResizingSidebar(false);
+      }
+      return;
+    }
+
+    const stopResize = () => {
+      if (isResizingSidebarRef.current) {
+        isResizingSidebarRef.current = false;
+        setIsResizingSidebar(false);
+      }
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isResizingSidebarRef.current) {
+        return;
+      }
+
+      const nextWidth = Math.min(
+        SIDEBAR_WIDTH_BOUNDS.MAX,
+        Math.max(SIDEBAR_WIDTH_BOUNDS.MIN, event.clientX)
+      );
+      setDesktopSidebarWidth(nextWidth);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopResize);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopResize);
+    };
+  }, [isDesktop, isTabletLandscape]);
+
+  const startSidebarResize = useCallback(() => {
+    if (!(isDesktop || isTabletLandscape)) {
+      return;
+    }
+
+    isResizingSidebarRef.current = true;
+    setIsResizingSidebar(true);
+  }, [isDesktop, isTabletLandscape]);
+
   // Handle viewport resize
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile && showTools) {
+      setShowTools(false);
+    }
+  }, [isMobile, showTools]);
+
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    const maxHeight = isMobile ? 132 : 120;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [inputValue, isMobile]);
 
   // Auto-scroll logic with user override detection
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -148,10 +297,20 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
 
   // Load conversation starters and initial greeting
   useEffect(() => {
+    if (initializedForUserRef.current === userSignature) {
+      return;
+    }
+    initializedForUserRef.current = userSignature;
+
+    if (proactiveCheckInTimeoutRef.current !== null) {
+      window.clearTimeout(proactiveCheckInTimeoutRef.current);
+      proactiveCheckInTimeoutRef.current = null;
+    }
+
     const loadInitialData = async () => {
       try {
         const greetingResponse = await chatApi.getMoodBasedGreeting();
-        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm MaanSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
+        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm ManaSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
         
         if (greetingResponse.success && greetingResponse.data?.greeting) {
           greetingText = greetingResponse.data.greeting;
@@ -174,7 +333,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
         const checkInResponse = await chatApi.getProactiveCheckIn();
         if (checkInResponse.success && checkInResponse.data?.shouldCheckIn) {
           const checkIn = checkInResponse.data;
-          setTimeout(() => {
+          proactiveCheckInTimeoutRef.current = window.setTimeout(() => {
             const checkInMessage: Message = {
               id: `checkin-${Date.now()}`,
               type: 'bot',
@@ -199,7 +358,14 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     };
 
     loadInitialData();
-  }, [user]);
+
+    return () => {
+      if (proactiveCheckInTimeoutRef.current !== null) {
+        window.clearTimeout(proactiveCheckInTimeoutRef.current);
+        proactiveCheckInTimeoutRef.current = null;
+      }
+    };
+  }, [user, userSignature]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -228,7 +394,10 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
         };
         
         recognitionRef.current = recognition;
+        setVoiceInputSupported(true);
       }
+    } else {
+      setVoiceInputSupported(false);
     }
 
     if ('speechSynthesis' in window) {
@@ -247,7 +416,15 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `voice-unsupported-${Date.now()}`,
+          type: 'system',
+          content: 'Voice input is not supported in this browser. Please use Chrome or Edge.',
+          timestamp: new Date(),
+        },
+      ]);
       return;
     }
 
@@ -287,81 +464,106 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     }
   };
 
-  const detectCrisisLanguage = (text: string): boolean => {
-    const crisisKeywords = [
-      'suicide', 'kill myself', 'end it all', 'don\'t want to live',
-      'hurt myself', 'self harm', 'cutting', 'overdose',
-      'hopeless', 'no point', 'better off dead'
-    ];
-    
-    return crisisKeywords.some(keyword => 
-      text.toLowerCase().includes(keyword.toLowerCase())
-    );
-  };
-
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputValue,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    const messageContent = inputValue;
-    setInputValue('');
-    setIsUserScrolling(false); // Re-enable auto-scroll on new message
-
-    if (detectCrisisLanguage(messageContent)) {
-      setShowCrisisWarning(true);
-      const crisisMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'system',
-        content: 'I\'m concerned about your safety. If you\'re having thoughts of hurting yourself, please reach out for immediate help.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, crisisMessage]);
+  const handleComposerVoiceOutput = () => {
+    if (isSpeaking) {
+      stopSpeaking();
       return;
     }
 
+    const speakableMessage = [...messages]
+      .reverse()
+      .find((message) => message.type === 'bot' && message.content.trim().length > 0);
+
+    if (speakableMessage) {
+      speakText(speakableMessage.content);
+    }
+  };
+
+  const sendMessageContent = async (
+    content: string,
+    options?: { showUserMessage?: boolean; conversationId?: string }
+  ) => {
+    if (isTyping || isLoadingConversation) {
+      return;
+    }
+
+    const messageContent = content.trim();
+    if (!messageContent) return;
+
+    const shouldShowUserMessage = options?.showUserMessage !== false;
+    if (shouldShowUserMessage) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: messageContent,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputValue('');
+    }
+
+    setIsUserScrolling(false);
     setIsTyping(true);
-    
+    const requestId = ++activeRequestIdRef.current;
+
     try {
-      const response = await chatApi.sendMessage(messageContent, currentConversationId || undefined);
-      
+      const targetConversationId = options?.conversationId ?? currentConversationIdRef.current ?? undefined;
+      const response = await chatApi.sendMessage(messageContent, targetConversationId, {
+        simpleLanguage: accessibilitySettings.simpleLanguage,
+      });
+
+      if (requestId !== activeRequestIdRef.current) {
+        return;
+      }
+
       if (response.success && response.data) {
         const messagePayload = response.data;
-        
+
         if (messagePayload.conversationId && messagePayload.conversationId !== currentConversationId) {
           setCurrentConversationId(messagePayload.conversationId);
         }
-        
+
         const structuredContent =
           typeof messagePayload.message === 'object' && messagePayload.message !== null
             ? messagePayload.message.content
             : undefined;
-        const resolvedContent =
-          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
+        const structuredMetadata =
+          typeof messagePayload.message === 'object' && messagePayload.message !== null && 'metadata' in messagePayload.message
+            ? ((messagePayload.message.metadata as Record<string, unknown> | string | null) ?? null)
+            : null;
+        const assessmentPrompt = parseAssessmentPromptMeta(
+          (messagePayload.assessmentPrompt as Record<string, unknown> | null | undefined) ?? structuredMetadata
+        );
+        const resolvedContent = resolveNonEmptyContent(
+          structuredContent,
+          'I apologize, but I encountered an issue generating a response.'
+        );
 
         const smartReplies = messagePayload.smartReplies || [];
 
-        const botMessageId = (Date.now() + 2).toString();
+        const persistedBotMessageId =
+          typeof messagePayload.message === 'object' &&
+          messagePayload.message !== null &&
+          'id' in messagePayload.message &&
+          messagePayload.message.id
+            ? String(messagePayload.message.id)
+            : (Date.now() + 2).toString();
         const botResponse: Message = {
-          id: botMessageId,
+          id: persistedBotMessageId,
           type: 'bot',
           content: resolvedContent,
+          metadata: structuredMetadata,
           timestamp: new Date(),
           suggestions: smartReplies,
-          enableTypewriter: true
+          enableTypewriter: true,
+          assessmentPrompt,
         };
 
-        setCurrentlyTypingMessageId(botMessageId);
+        setCurrentlyTypingMessageId(persistedBotMessageId);
         setMessages(prev => [...prev, botResponse]);
-        
-        if (!isMobile) {
-          speakText(resolvedContent);
+
+        if (messagePayload.crisis) {
+          setShowCrisisWarning(true);
         }
       } else {
         const fallbackMessage: Message = {
@@ -374,7 +576,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
       }
     } catch (error) {
       console.error('Chat API error:', error);
-      
+
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
         type: 'bot',
@@ -387,18 +589,86 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     }
   };
 
+  const handleSendMessage = async () => {
+    if (isTyping || isLoadingConversation) {
+      return;
+    }
+
+    setShowTools(false);
+    await sendMessageContent(inputValue);
+  };
+
   const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
-    // Auto-send on mobile for better UX
-    if (isMobile) {
-      setTimeout(() => handleSendMessage(), 100);
+    void sendMessageContent(suggestion);
+  };
+
+  const handleLike = async (messageId: string) => {
+    setMessageFeedback(prev => ({ ...prev, [messageId]: 'liked' }));
+    try {
+      await chatApi.submitMessageFeedback(messageId, 'liked');
+    } catch (error) {
+      console.error('Failed to submit like feedback:', error);
+      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
     }
   };
 
+  const submitDislikeFeedback = async (messageId: string, note?: string) => {
+    try {
+      setIsSubmittingFeedbackNote(true);
+      const feedbackResponse = await chatApi.submitMessageFeedback(messageId, 'disliked', note);
+      if (feedbackResponse.success && feedbackResponse.data?.repairPrompt) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `repair-${Date.now()}`,
+            type: 'system',
+            content: feedbackResponse.data.repairPrompt,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to submit dislike feedback:', error);
+      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
+    } finally {
+      setIsSubmittingFeedbackNote(false);
+      setFeedbackTargetMessageId(null);
+      setFeedbackNote('');
+    }
+  };
+
+  const handleDislike = (messageId: string) => {
+    setMessageFeedback(prev => ({ ...prev, [messageId]: 'disliked' }));
+    setFeedbackTargetMessageId(messageId);
+    setFeedbackNote('');
+  };
+
+  const handleRegenerate = async (messageId: string) => {
+    const messageIndex = messages.findIndex((m) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const userMessages = messages.slice(0, messageIndex).filter((m) => m.type === 'user');
+    if (userMessages.length === 0) return;
+
+    const lastUserMessage = userMessages[userMessages.length - 1];
+    setMessages(prev => prev.filter((m) => m.id !== messageId));
+
+    await sendMessageContent(lastUserMessage.content, {
+      showUserMessage: false,
+      conversationId: currentConversationId || undefined
+    });
+  };
+
   const handleSelectConversation = async (conversationId: string | null) => {
+    activeRequestIdRef.current += 1;
+    setIsTyping(false);
+
     if (conversationId === null) {
       setCurrentConversationId(null);
+      currentConversationIdRef.current = null;
       setMessages([]);
+      setInputValue('');
+      setIsLoadingConversation(false);
       setShowMobileSidebar(false);
       
       const greeting: Message = {
@@ -411,7 +681,10 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
       setMessages([greeting]);
     } else {
       setCurrentConversationId(conversationId);
+      currentConversationIdRef.current = conversationId;
+      setInputValue('');
       setShowMobileSidebar(false);
+      setIsLoadingConversation(true);
       
       const loadingMessage: Message = {
         id: 'loading',
@@ -427,8 +700,13 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           const loadedMessages: Message[] = response.data.messages.map((msg) => ({
             id: msg.id,
             type: msg.type as 'user' | 'bot' | 'system',
-            content: msg.content,
+            content:
+              msg.type === 'bot' || msg.type === 'system'
+                ? resolveNonEmptyContent(msg.content)
+                : String(msg.content ?? ''),
             timestamp: new Date(msg.createdAt),
+            metadata: msg.metadata ?? null,
+            assessmentPrompt: parseAssessmentPromptMeta(msg.metadata ?? null),
             suggestions: [],
           }));
           
@@ -451,6 +729,8 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           timestamp: new Date()
         };
         setMessages([errorMessage]);
+      } finally {
+        setIsLoadingConversation(false);
       }
     }
   };
@@ -471,6 +751,9 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   const MessageBubble = ({ message }: { message: Message }) => {
     const isUser = message.type === 'user';
     const isSystem = message.type === 'system';
+    const assessmentPrompt = !isUser && !isSystem
+      ? (message.assessmentPrompt ?? parseAssessmentPromptMeta(message.metadata))
+      : null;
     const maxLength = isMobile ? 300 : 500;
     const isLongMessage = message.content.length > maxLength;
     const shouldTruncate = isLongMessage && !message.isExpanded;
@@ -530,6 +813,20 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
               </Button>
             )}
           </div>
+
+          {assessmentPrompt && (
+            <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-sm text-foreground">{assessmentPrompt.prompt}</p>
+              {typeof assessmentPrompt.daysSinceLastAssessment === 'number' && (
+                <p className="text-xs text-muted-foreground">
+                  Last anxiety assessment was {assessmentPrompt.daysSinceLastAssessment} day(s) ago.
+                </p>
+              )}
+              <Button size="sm" onClick={() => onNavigate('assessments')} className={isMobile ? 'min-h-[40px]' : ''}>
+                {assessmentPrompt.ctaLabel}
+              </Button>
+            </div>
+          )}
           
           <div className={`flex items-center gap-1 md:gap-2 mt-1 text-xs text-muted-foreground ${
             isUser ? 'justify-end' : 'justify-start'
@@ -538,15 +835,39 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
               {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
             
-            {!isUser && !isSystem && !isMobile && (
-              <MessageActions
-                messageId={message.id}
-                content={message.content}
-                onLike={(id) => setMessageFeedback(prev => ({ ...prev, [id]: 'liked' }))}
-                onDislike={(id) => setMessageFeedback(prev => ({ ...prev, [id]: 'disliked' }))}
-                onRegenerate={async () => {}}
-                feedback={messageFeedback[message.id] || null}
-              />
+            {!isUser && !isSystem && (
+              isMobile ? (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-8 w-8 p-0 ${messageFeedback[message.id] === 'liked' ? 'bg-green-50 text-green-700' : ''}`}
+                    onClick={() => handleLike(message.id)}
+                    title="This was helpful"
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-8 w-8 p-0 ${messageFeedback[message.id] === 'disliked' ? 'bg-red-50 text-red-700' : ''}`}
+                    onClick={() => handleDislike(message.id)}
+                    title="This wasn't helpful"
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <MessageActions
+                  messageId={message.id}
+                  content={message.content}
+                  onLike={handleLike}
+                  onDislike={handleDislike}
+                  onRegenerate={handleRegenerate}
+                  onSpeak={speakText}
+                  feedback={messageFeedback[message.id] || null}
+                />
+              )
             )}
           </div>
 
@@ -612,8 +933,6 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
 
   // Composer with responsive controls
   const Composer = () => {
-    const [showTools, setShowTools] = useState(false);
-    
     return (
       <div className="flex-shrink-0 border-t p-3 md:p-4 bg-background safe-area-bottom">
         {/* Tools menu for mobile */}
@@ -623,9 +942,10 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
               variant="outline"
               size="sm"
               className="flex-1 min-h-[44px]"
+              disabled
+              title="Attachments coming soon"
               onClick={() => {
                 setShowTools(false);
-                // Handle attachment
               }}
             >
               <Paperclip className="h-4 w-4 mr-2" />
@@ -652,6 +972,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
               variant="ghost"
               size="sm"
               className="h-11 w-11 p-0 flex-shrink-0"
+              aria-label={showTools ? 'Hide tools' : 'Show tools'}
               onClick={() => setShowTools(!showTools)}
             >
               <Plus className="h-5 w-5" />
@@ -670,6 +991,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
                 }
               }}
               placeholder="Share what's on your mind..."
+              disabled={isLoadingConversation}
               className={`pr-20 resize-none ${isMobile ? 'min-h-[44px] max-h-[132px]' : 'min-h-[48px] max-h-[120px]'}`}
               rows={1}
               style={{
@@ -682,8 +1004,10 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
                 variant="ghost" 
                 size="sm" 
                 className={`h-8 w-8 p-0 ${isMobile ? 'min-h-[44px] min-w-[44px]' : ''}`}
-                onClick={isSpeaking ? stopSpeaking : undefined}
-                title={isSpeaking ? "Stop speaking" : "Voice output"}
+                onClick={handleComposerVoiceOutput}
+                disabled={!isSpeaking && !hasSpeakableMessage}
+                aria-label={isSpeaking ? 'Stop voice output' : 'Read latest assistant message aloud'}
+                title={isSpeaking ? 'Stop speaking' : 'Read latest assistant message'}
               >
                 {isSpeaking ? (
                   <VolumeX className="h-4 w-4" />
@@ -696,7 +1020,15 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
                 size="sm" 
                 className={`h-8 w-8 p-0 ${isListening ? 'bg-red-100 text-red-600' : ''} ${isMobile ? 'min-h-[44px] min-w-[44px]' : ''}`}
                 onClick={toggleVoiceInput}
-                title={isListening ? "Stop listening" : "Voice input"}
+                disabled={!voiceInputSupported || isLoadingConversation}
+                aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+                title={
+                  !voiceInputSupported
+                    ? 'Voice input is unavailable in this browser'
+                    : isListening
+                    ? 'Stop listening'
+                    : 'Voice input'
+                }
               >
                 <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
               </Button>
@@ -705,11 +1037,12 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           
           <Button 
             onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isTyping}
+            disabled={!inputValue.trim() || isTyping || isLoadingConversation}
             size={isMobile ? 'default' : 'sm'}
             className={`flex-shrink-0 ${isMobile ? 'h-11 w-11 p-0' : ''}`}
+            aria-label={isTyping ? 'Sending message' : isLoadingConversation ? 'Loading conversation' : 'Send message'}
           >
-            {isTyping ? (
+            {isTyping || isLoadingConversation ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
@@ -766,6 +1099,28 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           </div>
           
           <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+            {!isModal && (isDesktop || isTabletLandscape) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 md:px-3"
+                onClick={() => setIsDesktopSidebarOpen((prev) => !prev)}
+                aria-label={isDesktopSidebarOpen ? 'Hide conversations sidebar' : 'Show conversations sidebar'}
+              >
+                {isDesktopSidebarOpen ? (
+                  <>
+                    <PanelLeftClose className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Hide</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftOpen className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Conversations</span>
+                  </>
+                )}
+              </Button>
+            )}
             {isModal && onClose && (
               <Button variant="ghost" size="sm" onClick={onClose} className={isMobile ? 'h-9 w-9 p-0' : ''}>
                 <X className="h-4 w-4" />
@@ -796,7 +1151,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
       {/* Messages */}
       <div 
         ref={messagesContainerRef}
-        className={`flex-1 overflow-y-auto ${isMobile ? 'p-3' : 'p-4'} space-y-${isMobile ? '3' : '4'}`}
+        className={`flex-1 overflow-y-auto ${isMobile ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}
       >
         {messages.length === 0 ? (
           <EmptyState 
@@ -852,32 +1207,107 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     </div>
   );
 
+  const feedbackDialog = (
+    <Dialog
+      open={feedbackTargetMessageId !== null}
+      onOpenChange={(open) => {
+        if (open) {
+          return;
+        }
+
+        if (feedbackTargetMessageId) {
+          setMessageFeedback(prev => ({ ...prev, [feedbackTargetMessageId]: null }));
+        }
+
+        setFeedbackTargetMessageId(null);
+        setFeedbackNote('');
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Help Us Improve This Reply</DialogTitle>
+          <DialogDescription>
+            Share what would have been more helpful. This is optional.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={feedbackNote}
+          onChange={(event) => setFeedbackNote(event.target.value)}
+          placeholder="Example: I needed clearer next steps."
+          rows={4}
+          maxLength={400}
+        />
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (!feedbackTargetMessageId) {
+                return;
+              }
+              void submitDislikeFeedback(feedbackTargetMessageId);
+            }}
+            disabled={isSubmittingFeedbackNote}
+          >
+            Skip
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              if (!feedbackTargetMessageId) {
+                return;
+              }
+
+              const note = feedbackNote.trim();
+              void submitDislikeFeedback(feedbackTargetMessageId, note.length > 0 ? note : undefined);
+            }}
+            disabled={isSubmittingFeedbackNote}
+          >
+            {isSubmittingFeedbackNote ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              'Send Feedback'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <>
       {isModal ? (
         <div className="flex flex-col h-full">{chatContent}</div>
       ) : (
         <div className="min-h-screen bg-background flex h-screen">
-          {/* Desktop Sidebar - Only show on desktop */}
-          {isDesktop && (
-            <div className="w-80 border-r flex-shrink-0">
-              <ConversationHistorySidebar
-                activeConversationId={currentConversationId}
-                onSelectConversation={handleSelectConversation}
-                className="h-screen"
-              />
-            </div>
-          )}
-
-          {/* Tablet Landscape Sidebar - Show as resizable pane */}
-          {isTabletLandscape && (
-            <div className="w-64 border-r flex-shrink-0">
-              <ConversationHistorySidebar
-                activeConversationId={currentConversationId}
-                onSelectConversation={handleSelectConversation}
-                className="h-screen"
-              />
-            </div>
+          {/* Desktop / Tablet landscape sidebar */}
+          {(isDesktop || isTabletLandscape) && isDesktopSidebarOpen && (
+            <>
+              <div
+                className="border-r flex-shrink-0"
+                style={{ width: desktopSidebarWidth }}
+              >
+                <ConversationHistorySidebar
+                  activeConversationId={currentConversationId}
+                  onSelectConversation={handleSelectConversation}
+                  className="h-screen"
+                  showCloseButton
+                  onCloseSidebar={() => setIsDesktopSidebarOpen(false)}
+                />
+              </div>
+              <button
+                type="button"
+                className={`chat-sidebar-resizer ${isResizingSidebar ? 'chat-sidebar-resizer--active' : ''}`}
+                onPointerDown={startSidebarResize}
+                aria-label="Resize conversation sidebar"
+                title="Drag to resize sidebar"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </>
           )}
 
           {/* Mobile/Tablet Portrait Sidebar - Drawer */}
@@ -894,8 +1324,13 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
                 </SheetDescription>
                 <ConversationHistorySidebar
                   activeConversationId={currentConversationId}
-                  onSelectConversation={handleSelectConversation}
+                  onSelectConversation={(conversationId) => {
+                    handleSelectConversation(conversationId);
+                    setShowMobileSidebar(false);
+                  }}
                   className="h-full"
+                  showCloseButton
+                  onCloseSidebar={() => setShowMobileSidebar(false)}
                 />
               </SheetContent>
             </Sheet>
@@ -973,6 +1408,7 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           messageCount={messages.length}
         />
       )}
+      {feedbackDialog}
 
     </>
   );

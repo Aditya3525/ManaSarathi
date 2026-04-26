@@ -12,15 +12,29 @@ import {
   Target,
   TrendingUp
 } from 'lucide-react';
-import React, { useMemo } from 'react';
+import jsPDF from 'jspdf';
+import React, { useMemo, useState } from 'react';
 
 import {
   AssessmentHistoryEntry,
   AssessmentInsights
 } from '../../../services/api';
+import { useToast } from '../../../contexts/ToastContext';
+import {
+  saveAssessmentShareContext,
+  type AssessmentShareContext,
+} from '../../../utils/assessmentSharingContext';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../ui/dialog';
 import { Progress } from '../../ui/progress';
 import { InsightsSkeleton } from '../../ui/skeleton-loaders';
 
@@ -96,6 +110,12 @@ const formatRelativeTime = (dateString: string): string => {
 
   return 'Just now';
 };
+
+const sanitizeFileName = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'insights-report';
 
 const BASIC_OVERALL_ASSESSMENT_SET = new Set(OVERALL_ASSESSMENT_OPTION_IDS);
 const normalizeTypeKey = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -187,6 +207,10 @@ const getRecommendationIcon = (type: 'immediate' | 'daily' | 'support') => {
 };
 
 export function InsightsResults({ insights, history, onNavigate, isLoading, errorMessage, focusAssessmentType }: InsightsResultsProps) {
+  const { push } = useToast();
+  const [discussDialogOpen, setDiscussDialogOpen] = useState(false);
+  const [isExportingReport, setIsExportingReport] = useState(false);
+
   const hasInsights = insights && Object.keys(insights.byType).length > 0;
   const focusSet = useMemo(() => getFocusMatchSet(focusAssessmentType), [focusAssessmentType]);
 
@@ -345,13 +369,213 @@ export function InsightsResults({ insights, history, onNavigate, isLoading, erro
       return baseSummary || null;
     }
 
-    return segments.join(' ');
+    const focusedSummary = `Focus highlights: ${segments.join(' ')}`;
+    if (baseSummary) {
+      return `${baseSummary} ${focusedSummary}`;
+    }
+
+    return focusedSummary;
   }, [appliedFocusSet, insights]);
 
   const showAISummary = hasInsights && Boolean(aiSummaryContent);
 
   const backNavigationTarget = appliedFocusSet && !focusIncludesBasicOverall ? 'assessments' : 'dashboard';
   const backNavigationLabel = backNavigationTarget === 'assessments' ? 'Back to Assessments' : 'Back to Dashboard';
+
+  const shareCandidate = useMemo(() => {
+    if (!insights) return null;
+
+    const allEntries = Object.entries(insights.byType);
+    const scopedEntries = appliedFocusSet
+      ? allEntries.filter(([type]) => appliedFocusSet.has(normalizeTypeKey(type)))
+      : allEntries;
+    const entry = scopedEntries[0] ?? allEntries[0];
+
+    if (!entry) return null;
+
+    const [assessmentType, summary] = entry;
+    return {
+      assessmentType,
+      assessmentLabel: friendlyLabel(assessmentType),
+      latestScore: Math.round(summary.latestScore),
+      trend: trendLabelForType(assessmentType, summary.trend),
+      interpretation: summary.interpretation,
+      recommendations: (summary.recommendations ?? []).filter(Boolean).slice(0, 4),
+    };
+  }, [appliedFocusSet, insights]);
+
+  const openTherapistFlowWithContext = (source: AssessmentShareContext['source']) => {
+    if (!shareCandidate) {
+      push({
+        type: 'warning',
+        title: 'No insights to share yet',
+        description: 'Complete an assessment first, then you can share selected results with a therapist.',
+      });
+      onNavigate('help');
+      return;
+    }
+
+    const context: AssessmentShareContext = {
+      source,
+      assessmentType: shareCandidate.assessmentType,
+      assessmentLabel: shareCandidate.assessmentLabel,
+      latestScore: shareCandidate.latestScore,
+      trend: shareCandidate.trend,
+      interpretation: shareCandidate.interpretation,
+      recommendations: shareCandidate.recommendations,
+      wellnessScore: combinedWellnessScore ?? undefined,
+      generatedAt: new Date().toISOString(),
+    };
+
+    saveAssessmentShareContext(context);
+    onNavigate('help');
+  };
+
+  const openChatbotFlowWithContext = () => {
+    if (!shareCandidate) {
+      onNavigate('chatbot');
+      return;
+    }
+
+    const context: AssessmentShareContext = {
+      source: 'insights-discuss',
+      assessmentType: shareCandidate.assessmentType,
+      assessmentLabel: shareCandidate.assessmentLabel,
+      latestScore: shareCandidate.latestScore,
+      trend: shareCandidate.trend,
+      interpretation: shareCandidate.interpretation,
+      recommendations: shareCandidate.recommendations,
+      wellnessScore: combinedWellnessScore ?? undefined,
+      generatedAt: new Date().toISOString(),
+    };
+
+    saveAssessmentShareContext(context);
+    onNavigate('chatbot');
+  };
+
+  const handleExportReport = async () => {
+    if (!insights) {
+      push({
+        type: 'warning',
+        title: 'No report to export',
+        description: 'Complete an assessment first to export your report.',
+      });
+      return;
+    }
+
+    setIsExportingReport(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 16;
+      const contentWidth = pageWidth - margin * 2;
+      let y = 18;
+
+      const ensureSpace = (needed = 8) => {
+        if (y + needed > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+      };
+
+      const addWrappedText = (text: string, fontSize = 11, lineHeight = 6) => {
+        if (!text.trim()) return;
+        doc.setFontSize(fontSize);
+        const lines = doc.splitTextToSize(text, contentWidth);
+        ensureSpace(lines.length * lineHeight + 2);
+        doc.text(lines, margin, y);
+        y += lines.length * lineHeight + 2;
+      };
+
+      const addSectionTitle = (title: string) => {
+        ensureSpace(10);
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title, margin, y);
+        y += 7;
+        doc.setFont('helvetica', 'normal');
+      };
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Wellbeing Insights Report', margin, y);
+      y += 8;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+      y += 5;
+      if (focusLabel) {
+        doc.text(`Focus: ${focusLabel}`, margin, y);
+        y += 5;
+      }
+      if (combinedWellnessScore !== null) {
+        doc.text(`Overall wellness score: ${combinedWellnessScore}%`, margin, y);
+        y += 7;
+      }
+
+      if (aiSummaryContent) {
+        addSectionTitle('AI Summary');
+        addWrappedText(aiSummaryContent);
+      }
+
+      const reportEntries = [...visibleBasicSummaryEntries, ...visibleOtherSummaryEntries];
+      if (reportEntries.length > 0) {
+        addSectionTitle('Assessment Scores');
+        reportEntries.slice(0, 12).forEach(([type, summary]) => {
+          addWrappedText(
+            `${friendlyLabel(type)}: ${Math.round(summary.latestScore)}% (${trendLabelForType(type, summary.trend)})`,
+            11
+          );
+          addWrappedText(`Interpretation: ${summary.interpretation}`, 10, 5);
+          if (typeof summary.change === 'number') {
+            addWrappedText(`Recent change: ${formatChange(summary.change) ?? '0'} points`, 10, 5);
+          }
+          y += 2;
+        });
+      }
+
+      if (recommendations.length > 0) {
+        addSectionTitle('Recommended Actions');
+        recommendations.forEach((recommendation, index) => {
+          addWrappedText(`${index + 1}. ${recommendation.description}`, 10, 5);
+        });
+      }
+
+      if (hasTimelineData) {
+        addSectionTitle('Progress Timeline (Recent)');
+        visibleGroupedHistoryEntries.slice(0, 3).forEach(([type, entries]) => {
+          addWrappedText(`${friendlyLabel(type)}:`, 10, 5);
+          entries.slice(0, 2).forEach((entry) => {
+            addWrappedText(
+              `- ${Math.round(entry.score)}% (${entry.interpretation}) on ${new Date(entry.completedAt).toLocaleDateString()}`,
+              10,
+              5
+            );
+          });
+        });
+      }
+
+      const fileSuffix = focusLabel ? sanitizeFileName(focusLabel) : 'overall';
+      doc.save(`wellbeing-insights-${fileSuffix}-${Date.now()}.pdf`);
+
+      push({
+        type: 'success',
+        title: 'Report exported',
+        description: 'Your insights report has been downloaded as a PDF.',
+      });
+    } catch (error) {
+      console.error('Failed to export insights report:', error);
+      push({
+        type: 'error',
+        title: 'Export failed',
+        description: 'Unable to export your report right now. Please try again.',
+      });
+    } finally {
+      setIsExportingReport(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -743,26 +967,76 @@ export function InsightsResults({ insights, history, onNavigate, isLoading, erro
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4">
-          <Button className="flex-1" onClick={() => onNavigate('plan')}>
+          <Button
+            className="flex-1"
+            onClick={() => {
+              push({
+                type: 'info',
+                title: 'Coming Soon',
+                description: 'Personalized plan creation from insights will be available soon.',
+              });
+            }}
+          >
             <Play className="h-4 w-4 mr-2" />
-            Create Personalised Plan
+            Create Personalised Plan (Coming Soon)
           </Button>
 
-          <Button variant="outline" onClick={() => onNavigate('chatbot')}>
+          <Button variant="outline" onClick={() => setDiscussDialogOpen(true)}>
             <MessageCircle className="h-4 w-4 mr-2" />
             Discuss Results
           </Button>
 
-          <Button variant="outline" onClick={() => {}}>
+          <Button variant="outline" onClick={handleExportReport} disabled={isExportingReport || !hasInsights}>
             <Download className="h-4 w-4 mr-2" />
-            Export Report
+            {isExportingReport ? 'Exporting...' : 'Export Report'}
           </Button>
 
-          <Button variant="outline" onClick={() => {}}>
+          <Button variant="outline" onClick={() => openTherapistFlowWithContext('insights-share')}>
             <Share className="h-4 w-4 mr-2" />
             Share with Clinician
           </Button>
         </div>
+
+        <Dialog open={discussDialogOpen} onOpenChange={setDiscussDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Discuss Your Results</DialogTitle>
+              <DialogDescription>
+                Choose where you want to continue the discussion.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2">
+              <Button
+                className="w-full justify-start"
+                onClick={() => {
+                  setDiscussDialogOpen(false);
+                  openChatbotFlowWithContext();
+                }}
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Discuss with Chatbot
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  setDiscussDialogOpen(false);
+                  openTherapistFlowWithContext('insights-discuss');
+                }}
+              >
+                <Share className="h-4 w-4 mr-2" />
+                Discuss with Therapist
+              </Button>
+            </div>
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setDiscussDialogOpen(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Important Notes */}
         <Card>

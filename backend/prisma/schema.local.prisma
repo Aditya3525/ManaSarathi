@@ -1,0 +1,1174 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enums for enhanced content management
+enum ContentType {
+  VIDEO
+  AUDIO_MEDITATION
+  BREATHING_EXERCISE
+  ARTICLE
+  STORY
+  JOURNAL_PROMPT
+  CBT_WORKSHEET
+  YOGA_SEQUENCE
+  MINDFULNESS_EXERCISE
+  PSYCHOEDUCATION
+  CRISIS_RESOURCE
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PracticeCategory {
+  MEDITATION
+  YOGA
+  BREATHING
+  MINDFULNESS
+  JOURNALING
+  CBT_TECHNIQUE
+  GROUNDING_EXERCISE
+  SELF_REFLECTION
+  MOVEMENT
+  SLEEP_HYGIENE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isEmailVerified Boolean @default(false)
+  name      String
+  password  String?
+  googleId  String?  @unique
+  firstName String?
+  lastName  String?
+  profilePhoto String?
+  isOnboarded Boolean @default(false)
+  isPremium   Boolean @default(false)
+  approach    String? // 'western', 'eastern', 'hybrid'
+  birthday    DateTime?
+  gender      String?
+  region      String?
+  language    String?
+  emergencyContact String?
+  emergencyPhone   String?
+  dataConsent      Boolean @default(false)
+  clinicianSharing Boolean @default(false)
+  anonymousAnalytics   Boolean @default(true)
+  marketingEmails      Boolean @default(false)
+  researchParticipation Boolean @default(false)
+  consentUpdatedAt     DateTime?
+  deletionRequestedAt  DateTime?
+  securityQuestion   String?
+  securityAnswerHash String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assessments    AssessmentResult[]
+  moodEntries    MoodEntry[]
+  dailyIntentions DailyIntention[]
+  gratitudeEntries GratitudeEntry[]
+  habits       UserHabit[]
+  sleepLogs      SleepLog[]
+  microCheckins  MicroCheckin[]
+  journalEntries JournalEntry[]
+  journalReflection JournalReflection?
+  planModules    UserPlanModule[]
+  conversations  Conversation[]
+  chatMessages   ChatMessage[]
+  chatFeedbackEntries ChatFeedback[]
+  conversationMemory ConversationMemory?
+  conversationGoals ConversationGoal[]
+  progressTracking ProgressTracking[]
+  assessmentInsight AssessmentInsight?
+  assessmentSessions AssessmentSession[]
+  contentEngagements ContentEngagement[]
+  chatbotConversations ChatbotConversation[]
+  dashboardInsights    DashboardInsights?
+  supportTickets SupportTicket[]
+  safetyPlan     SafetyPlan?
+  therapistBookings TherapistBooking[]
+  therapistNotes TherapistNote[]
+  therapistProfile   Therapist?
+  
+  // Analytics relations
+  crisisEvents   CrisisEvent[]
+  userSessions   UserSession[]
+  wellnessSnapshots WellnessSnapshot[]
+  
+  @@index([email])
+  @@index([googleId])
+  @@index([isOnboarded])
+  @@index([approach])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model AssessmentResult {
+  id              String   @id @default(cuid())
+  userId          String
+  assessmentType  String // 'anxiety_assessment', 'anxiety', 'stress', 'emotionalIntelligence', 'overthinking'
+  score           Float
+  responses       String   // Store all question responses as JSON string
+  rawScore        Float?
+  maxScore        Float?
+  normalizedScore Float?
+  categoryScores  Json?
+  sessionId       String?
+  completedAt     DateTime @default(now())
+
+  // Relations
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session AssessmentSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assessmentType])
+  @@index([userId, assessmentType])
+  @@index([userId, completedAt])
+  @@index([sessionId])
+  @@index([completedAt])
+  @@map("assessment_results")
+}
+
+model AssessmentSession {
+  id            String   @id @default(cuid())
+  userId        String
+  selectedTypes Json
+  status        String   @default("pending")
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessments AssessmentResult[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+  @@map("assessment_sessions")
+}
+
+model AssessmentInsight {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  summary       Json
+  overallTrend  String
+  aiSummary     String
+  wellnessScore Float   @default(0) @map("wellness_score")
+  updatedAt     DateTime
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assessment_insights")
+}
+
+model MoodEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  mood      String   // 'Great', 'Good', 'Okay', 'Struggling', 'Anxious'
+  emotion   String?  // Granular emotion: 'anxious', 'nervous', 'hopeful'
+  emotionGroup String? // Parent emotion group: 'fear', 'joy', 'sadness', etc.
+  intensity Int?     // 1-10 intensity rating
+  trigger   String?  // Optional trigger context
+  notes     String?
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([mood])
+  @@map("mood_entries")
+}
+
+model DailyIntention {
+  id         String   @id @default(cuid())
+  userId     String
+  intention  String
+  isCustom   Boolean  @default(false)
+  completed  Boolean?
+  reflection String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("daily_intentions")
+}
+
+model GratitudeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  items     Json
+  note      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("gratitude_entries")
+}
+
+model UserHabit {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String
+  cue             String
+  practiceId      String?
+  active          Boolean   @default(true)
+  streak          Int       @default(0)
+  lastCompletedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active])
+  @@index([userId, createdAt])
+  @@map("user_habits")
+}
+
+model SleepLog {
+  id       String   @id @default(cuid())
+  userId   String
+  bedTime  DateTime
+  wakeTime DateTime
+  quality  Int      // 1-5 quality score
+  factors  Json?
+  duration Float?   // Duration in hours
+  notes    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("sleep_logs")
+}
+
+model MicroCheckin {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'morning', 'evening', 'post-chat'
+  responses Json
+  mood      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("micro_checkins")
+}
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  prompt    String?
+  content   String
+  mood      String?
+  tags      Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("journal_entries")
+}
+
+model JournalReflection {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  weekOf    DateTime
+  patterns  Json
+  aiSummary String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("journal_reflections")
+}
+
+model PlanModule {
+  id          String   @id @default(cuid())
+  title       String
+  type        String   // 'therapy', 'meditation', 'yoga', 'education'
+  duration    String
+  difficulty  String   // 'Beginner', 'Intermediate', 'Advanced'
+  description String
+  content     String   // Module content, exercises, etc. as JSON string
+  approach    String   // 'western', 'eastern', 'hybrid'
+  order       Int      // Display order
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userModules UserPlanModule[]
+  
+  @@index([approach])
+  @@index([type])
+  @@index([difficulty])
+  @@index([order])
+  @@map("plan_modules")
+}
+
+model UserPlanModule {
+  id           String   @id @default(cuid())
+  userId       String
+  moduleId     String
+  completed    Boolean  @default(false)
+  progress     Float    @default(0)
+  scheduledFor DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module PlanModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, moduleId])
+  @@index([userId])
+  @@index([moduleId])
+  @@index([userId, completed])
+  @@index([scheduledFor])
+  @@index([completed])
+  @@map("user_plan_modules")
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  userId        String
+  title         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
+  isArchived    Boolean  @default(false)
+  metadata      String?  // Store additional info as JSON string
+  
+  // Relations
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+  
+  @@index([userId, lastMessageAt])
+  @@index([userId, isArchived])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model ChatMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  content        String
+  type           String   // 'user', 'bot', 'system'
+  metadata       String?  // Store additional message data as JSON string
+  createdAt      DateTime @default(now())
+  
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedbackEntries ChatFeedback[]
+  
+  @@index([conversationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model ChatFeedback {
+  id         String    @id @default(cuid())
+  userId     String
+  messageId  String
+  helpful    Boolean
+  note       String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId, createdAt])
+  @@index([userId, helpful, resolvedAt, createdAt])
+  @@index([messageId])
+  @@map("chat_feedback")
+}
+
+model ConversationGoal {
+  id          String   @id @default(cuid())
+  userId      String
+  goalType    String   // 'reduce_anxiety', 'improve_sleep', 'manage_stress', etc.
+  title       String
+  description String?
+  targetValue Int?     // Optional numeric target
+  currentValue Int?    // Current progress
+  status      String   @default("active") // 'active', 'completed', 'paused'
+  progress    Int      @default(0) // 0-100
+  milestones  String   @default("[]") // JSON array of milestones
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([goalType])
+  @@map("conversation_goals")
+}
+
+model ConversationMemory {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  topics               String   @default("{}") // Store topics with metadata as JSON string
+  emotionalPatterns    String   @default("{}") // Store emotional patterns as JSON string
+  importantMoments     String   @default("[]") // Store important conversation moments as JSON string
+  conversationMetrics  String   @default("{}") // Store conversation style metrics as JSON string
+  actionItems          Json?
+  lastSessionSummary   String?
+  lastSessionDate      DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("conversation_memory")
+}
+
+model ProgressTracking {
+  id         String   @id @default(cuid())
+  userId     String
+  metric     String   // 'anxiety', 'stress', 'mood', 'sleep', etc.
+  value      Float
+  date       DateTime @default(now())
+  notes      String?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([metric])
+  @@index([userId, metric])
+  @@index([userId, metric, date])
+  @@index([date])
+  @@map("progress_tracking")
+}
+
+model AssessmentDefinition {
+  id           String  @id @default(cuid()) @map("assessment_id")
+  name         String  @map("assessment_name")
+  type         String  @map("assessment_type")
+  category     String
+  description  String?
+  timeEstimate String? @map("time_estimate")
+  isActive     Boolean @default(true) @map("is_active")
+  isBasicOverallOnly Boolean @default(false) @map("is_basic_overall_only") // Flag for basic overall assessment questions
+  visibleInMainList  Boolean @default(true) @map("visible_in_main_list") // Show in Mental Wellness Assessment section
+  tags         String? @map("tags") // Comma-separated tags: all,required,recommended,optional,advanced
+  scoringConfig String? @map("scoring_config") // JSON: scoring logic, interpretation bands, domains
+  createdBy    String? @map("created_by") // Admin user ID who created
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  questions AssessmentQuestion[]
+
+  @@index([category])
+  @@index([type])
+  @@index([isActive])
+  @@index([isBasicOverallOnly])
+  @@index([visibleInMainList])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id           String @id @default(cuid()) @map("question_id")
+  assessmentId String @map("assessment_id")
+  text         String @map("question_text")
+  order        Int    @map("question_order")
+  responseType String @map("response_type")
+  domain       String? @map("domain") // Optional: for domain-based scoring (e.g., "intrusion", "avoidance")
+  reverseScored Boolean @default(false) @map("reverse_scored") // For questions where high=good
+  metadata     String? @map("metadata") // JSON: additional question config
+
+  assessment AssessmentDefinition @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options    ResponseOption[]
+
+  @@index([assessmentId])
+  @@index([order])
+  @@map("questions")
+}
+
+model ResponseOption {
+  id         String @id @default(cuid()) @map("option_id")
+  questionId String @map("question_id")
+  value      Float? @map("option_value")
+  text       String @map("option_text")
+  order      Int    @map("option_order")
+
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("response_options")
+}
+
+model Content {
+  id          String   @id @default(cuid())
+  title       String
+  type        String   // Legacy field - will migrate to contentType enum
+  contentType ContentType? // New enum-based type
+  category    String   // 'anxiety', 'depression', 'mindfulness', etc.
+  approach    String   // 'western', 'eastern', 'hybrid'
+  content     String   // Article content or resource URL
+  description String?  // Human-readable description / summary
+  youtubeUrl  String?  // Optional YouTube link for video content
+  thumbnailUrl String? // Optional thumbnail image URL
+  duration    Int?     // Duration in seconds (changed from String)
+  difficulty  String?  // Legacy field
+  intensityLevel DifficultyLevel? // New enum-based difficulty
+  tags        String   // Comma-separated tags
+  focusAreas  String?  // JSON array of focus areas
+  immediateRelief Boolean @default(false)
+  crisisEligible  Boolean @default(false) // NEW: Can be used in crisis situations
+  timeOfDay       String? // NEW: JSON array of recommended times ['morning','afternoon','evening','night']
+  environment     String? // NEW: JSON array of suitable environments ['home','work','public','nature']
+  culturalContext String?
+  hasSubtitles    Boolean @default(false)
+  transcript      String?
+  completions     Int     @default(0)
+  averageRating   Float?
+  effectiveness   Float?
+  isPublished Boolean  @default(false)
+  scheduledPublishAt DateTime?
+  sourceUrl   String?
+  sourceName  String?
+  confidence  Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  engagements ContentEngagement[]
+  
+  @@index([immediateRelief])
+  @@index([isPublished])
+  @@map("content")
+}
+
+model Practice {
+  id          String   @id @default(cuid())
+  title       String
+  type        String   // Legacy field - 'meditation', 'breathing', 'yoga', 'sleep'
+  category    PracticeCategory? // New enum-based category
+  duration    Int      // Duration in minutes
+  difficulty  String   // Legacy field - 'Beginner', 'Intermediate', 'Advanced'
+  intensityLevel DifficultyLevel? // New enum-based difficulty
+  approach    String   // 'Western', 'Eastern', 'Hybrid', 'All'
+  format      String   // 'Audio', 'Video', 'Audio/Video'
+  description String?
+  audioUrl    String?
+  videoUrl    String?
+  youtubeUrl  String?
+  thumbnailUrl String?
+  tags        String?  // Comma-separated tags
+  instructions String? // Practice instructions
+  benefits    String?  // Practice benefits
+  precautions String?  // Practice precautions/warnings
+  focusAreas  String?  // NEW: JSON array of focus areas (matches Content)
+  immediateRelief Boolean @default(false) // NEW: Quick relief flag (matches Content)
+  crisisEligible  Boolean @default(false) // NEW: Can be used in crisis situations
+  requiredEquipment String? // JSON array of required equipment
+  environment       String? // JSON array of suitable environments ['home','work','public','nature']
+  timeOfDay         String? // JSON array of recommended times ['morning','afternoon','evening','night']
+  sensoryEngagement String? // JSON array of senses engaged
+  steps             String? // JSON structured practice steps
+  contraindications String? // JSON array of contraindications
+  isPublished Boolean  @default(false)
+  scheduledPublishAt DateTime?
+  sourceUrl   String?
+  sourceName  String?
+  confidence  Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([isPublished])
+  @@map("practices")
+}
+
+model ContentEngagement {
+  id          String   @id @default(cuid())
+  userId      String
+  contentId   String
+  
+  completed      Boolean   @default(false)
+  rating         Int?      // 1-5 scale
+  timeSpent      Int?      // seconds
+  moodBefore     String?
+  moodAfter      String?
+  effectiveness  Int?      // 1-10 user-reported effectiveness
+  notes          String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, contentId])
+  @@index([userId])
+  @@index([contentId])
+  @@index([completed])
+  @@map("content_engagements")
+}
+
+// NEW: Chatbot conversation tracking with AI-generated summaries
+model ChatbotConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  
+  // Conversation metadata
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  
+  // Conversation content (JSON array of messages)
+  messages  String   @default("[]") // JSON: [{role, content, timestamp}]
+  
+  // AI-generated summary and insights
+  summary              String?  // AI-generated conversation summary
+  summaryGeneratedAt   DateTime?
+  emotionalState       String?  // e.g., "anxious", "hopeful", "overwhelmed"
+  keyTopics            String   @default("[]") // JSON array: ["work stress", "sleep issues"]
+  urgencyLevel         String?  // "low", "medium", "high"
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, startedAt])
+  @@index([userId, endedAt])
+  @@index([userId])
+  @@map("chatbot_conversations")
+}
+
+// NEW: Cached dashboard insights combining assessments + chatbot data
+model DashboardInsights {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  
+  // Combined insights data (JSON object)
+  insightsData String   // JSON: {assessments: {...}, chatbot: {...}, aiSummary: "..."}
+  aiSummary    String   // AI-generated combined summary
+  
+  // Source tracking
+  assessmentCount    Int       @default(0)
+  chatCount          Int       @default(0)
+  lastAssessmentDate DateTime?
+  lastChatDate       DateTime?
+  
+  // Cache management
+  generatedAt DateTime @default(now())
+  expiresAt   DateTime // Daily expiration (midnight)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, expiresAt])
+  @@index([userId])
+  @@map("dashboard_insights")
+}
+
+// Activity Log for admin actions tracking
+model ActivityLog {
+  id          String   @id @default(cuid())
+  adminEmail  String   // Email of admin who performed action
+  action      String   // 'CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'UNPUBLISH', 'BULK_UPDATE', etc.
+  entityType  String   // 'ASSESSMENT', 'PRACTICE', 'CONTENT', 'USER', etc.
+  entityId    String?  // ID of the affected entity
+  entityName  String?  // Name/title of the affected entity for display
+  details     String?  // JSON string with additional details
+  ipAddress   String?  // IP address of admin
+  userAgent   String?  // Browser/device info
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([adminEmail, createdAt])
+  @@index([entityType, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ========================================
+// HELP & SAFETY SYSTEM MODELS
+// ========================================
+
+// Support Ticket System
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  TECHNICAL
+  ACCOUNT
+  BILLING
+  GENERAL
+  CRISIS
+  FEEDBACK
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  userId      String
+  subject     String
+  message     String
+  category    TicketCategory @default(GENERAL)
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+  
+  // Admin response
+  response    String?
+  respondedBy String?        // Admin email
+  respondedAt DateTime?
+  
+  // Metadata
+  userEmail   String
+  userName    String
+  userAgent   String?
+  ipAddress   String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([userId, status])
+  @@map("support_tickets")
+}
+
+// FAQ System
+enum FAQCategory {
+  GENERAL
+  PRIVACY
+  ASSESSMENTS
+  CHATBOT
+  BILLING
+  TECHNICAL
+  SAFETY
+}
+
+model FAQ {
+  id          String      @id @default(cuid())
+  question    String
+  answer      String
+  category    FAQCategory @default(GENERAL)
+  order       Int         @default(0)
+  isPublished Boolean     @default(true)
+  viewCount   Int         @default(0)
+  helpful     Int         @default(0)    // Upvotes
+  notHelpful  Int         @default(0)    // Downvotes
+  tags        String?     // Comma-separated tags for search
+  
+  createdBy   String?     // Admin email
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([category])
+  @@index([isPublished])
+  @@index([order])
+  @@index([viewCount])
+  @@map("faqs")
+}
+
+// Crisis Resources
+enum ResourceType {
+  HOTLINE
+  TEXT_LINE
+  CHAT_SERVICE
+  EMERGENCY
+  SUPPORT_GROUP
+  WEBSITE
+}
+
+model CrisisResource {
+  id            String       @id @default(cuid())
+  name          String
+  type          ResourceType
+  phoneNumber   String?
+  textNumber    String?
+  website       String?
+  description   String
+  availability  String       // "24/7", "Mon-Fri 9AM-5PM", etc.
+  country       String       @default("US")
+  language      String       @default("English")
+  isActive      Boolean      @default(true)
+  order         Int          @default(0)
+  
+  // Specialty tags
+  tags          String?      // "suicide", "domestic_violence", "substance_abuse", etc.
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([isActive])
+  @@index([country])
+  @@index([type])
+  @@index([order])
+  @@map("crisis_resources")
+}
+
+// User Safety Plans
+model SafetyPlan {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  
+  // Warning Signs
+  warningSignsJson    String   @default("[]") // JSON array of warning signs
+  
+  // Coping Strategies
+  copingStrategiesJson String  @default("[]") // JSON array of strategies
+  
+  // Support Contacts
+  contactsJson        String   @default("[]") // JSON array of contacts
+  
+  // Professional Support
+  therapistName       String?
+  therapistPhone      String?
+  psychiatristName    String?
+  psychiatristPhone   String?
+  
+  // Emergency Info
+  emergencyRoom       String?
+  crisisLine          String?  @default("988")
+  
+  // Safe Environment
+  safeEnvironmentJson String   @default("[]") // JSON array of safety measures
+  
+  // Reasons to Live
+  reasonsToLiveJson   String   @default("[]") // JSON array of reasons
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("safety_plans")
+}
+
+// Therapist Directory
+enum TherapistSpecialty {
+  ANXIETY
+  DEPRESSION
+  TRAUMA
+  PTSD
+  RELATIONSHIPS
+  FAMILY_THERAPY
+  ADDICTION
+  EATING_DISORDERS
+  OCD
+  BIPOLAR
+  GRIEF
+  STRESS_MANAGEMENT
+  CBT
+  DBT
+  EMDR
+  MINDFULNESS
+  PSYCHODYNAMIC
+  COUPLES_THERAPY
+}
+
+enum TherapistCredential {
+  PSYCHOLOGIST
+  PSYCHIATRIST
+  LCSW
+  LMFT
+  LPC
+  LMHC
+}
+
+model Therapist {
+  id              String                @id @default(cuid())
+  name            String
+  credential      TherapistCredential
+  title           String                // "Licensed Clinical Psychologist"
+  bio             String
+  
+  // Link to User account (for therapist portal login)
+  userId          String?               @unique
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Specialties (stored as JSON array of TherapistSpecialty values)
+  specialtiesJson String                @default("[]")
+  
+  // Contact & Location
+  email           String?
+  phone           String?
+  website         String?
+  street          String?
+  city            String?
+  state           String?
+  zipCode         String?
+  country         String                @default("US")
+  
+  // Practice Details
+  acceptsInsurance Boolean              @default(false)
+  insurances       String?              // JSON array of accepted insurances
+  sessionFee       Float?
+  offersSliding    Boolean              @default(false) // Sliding scale fees
+  
+  // Availability
+  availabilityJson String               @default("[]") // JSON array of available slots
+  
+  // Profile
+  profileImageUrl String?
+  yearsExperience Int?
+  languages       String?              // Comma-separated
+  rating          Float?               @default(0)
+  reviewCount     Int                  @default(0)
+  
+  // Status
+  isActive        Boolean              @default(true)
+  isVerified      Boolean              @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  bookings TherapistBooking[]
+  notes TherapistNote[]
+  
+  @@index([userId])
+  @@index([isActive])
+  @@index([isVerified])
+  @@index([city, state])
+  @@index([rating])
+  @@map("therapists")
+}
+
+// Therapist Booking Requests
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model TherapistBooking {
+  id           String        @id @default(cuid())
+  userId       String
+  therapistId  String
+  
+  // Request Details
+  preferredDate DateTime?
+  preferredTime String?
+  message      String?
+  
+  // Contact
+  userEmail    String
+  userPhone    String?
+  
+  // Status
+  status       BookingStatus @default(PENDING)
+  
+  // Notes
+  adminNotes      String?
+  therapistNotes  String?
+  processedBy  String?       // Admin email
+  processedAt  DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  notes     TherapistNote[]
+  
+  @@index([userId])
+  @@index([therapistId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("therapist_bookings")
+}
+
+model TherapistNote {
+  id          String   @id @default(cuid())
+  therapistId String
+  therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId   String?
+  booking     TherapistBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  format      String   @default("SOAP")
+  subjective  String?
+  objective   String?
+  assessment  String?
+  plan        String?
+  narrative   String?
+
+  tags        String?
+  isPrivate   Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([therapistId, userId, createdAt])
+  @@index([bookingId])
+  @@map("therapist_notes")
+}
+
+// ========================================
+// ANALYTICS & MONITORING MODELS
+// ========================================
+
+// AI Provider Usage Metrics
+model AIUsageMetric {
+  id                String    @id @default(cuid())
+  provider          String    // 'gemini', 'openai', 'anthropic', 'huggingface', 'ollama'
+  model             String?
+  userId            String?
+  conversationId    String?
+  promptTokens      Int       @default(0)
+  completionTokens  Int       @default(0)
+  totalTokens       Int       @default(0)
+  responseTime      Int       // in milliseconds
+  success           Boolean   @default(true)
+  errorMessage      String?
+  requestedAt       DateTime  @default(now())
+  completedAt       DateTime?
+  
+  @@index([provider])
+  @@index([userId])
+  @@index([requestedAt])
+  @@index([success])
+  @@map("ai_usage_metrics")
+}
+
+// Crisis Detection Events
+model CrisisEvent {
+  id              String    @id @default(cuid())
+  userId          String
+  conversationId  String?
+  crisisLevel     String    // NONE, LOW, MODERATE, HIGH, CRITICAL
+  confidence      Float
+  indicators      String    // JSON array
+  actionTaken     String    // JSON: resources provided, notifications sent
+  followUpResponse String?
+  detectedAt      DateTime  @default(now())
+  responseTime    Int?      // Time to provide resources in ms
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([crisisLevel])
+  @@index([detectedAt])
+  @@index([resolved])
+  @@map("crisis_events")
+}
+
+// System Health Metrics
+model SystemHealthMetric {
+  id          String   @id @default(cuid())
+  metricType  String   // 'api_response', 'db_query', 'memory_usage', 'cpu_usage'
+  endpoint    String?  // for API metrics
+  value       Float
+  unit        String   // 'ms', 'mb', 'percent'
+  tags        String?  // JSON: additional metadata
+  recordedAt  DateTime @default(now())
+  
+  @@index([metricType])
+  @@index([recordedAt])
+  @@map("system_health_metrics")
+}
+
+// User Session Tracking
+model UserSession {
+  id                String    @id @default(cuid())
+  userId            String
+  startedAt         DateTime  @default(now())
+  endedAt           DateTime?
+  duration          Int?      // in seconds
+  pagesViewed       Int       @default(0)
+  actionsPerformed  Int       @default(0)
+  featuresUsed      String?   // JSON array
+  deviceType        String?   // 'mobile', 'tablet', 'desktop'
+  browserInfo       String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([startedAt])
+  @@map("user_sessions")
+}
+
+// Wellness Impact Metrics
+model WellnessSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  wellnessScore    Float
+  assessmentScores String   // JSON: detailed scores
+  moodAverage      String?  // average mood over period
+  engagementLevel  String?  // 'low', 'medium', 'high'
+  recordedAt       DateTime @default(now())
+  periodStart      DateTime
+  periodEnd        DateTime
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([recordedAt])
+  @@map("wellness_snapshots")
+}
+

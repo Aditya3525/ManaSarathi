@@ -119,7 +119,7 @@ export function ResponsiveStack({
   );
 }
 
-interface CollapsibleSectionProps {
+interface ResponsiveCollapsibleSectionProps {
   children: React.ReactNode;
   title: string;
   icon?: React.ReactNode;
@@ -130,13 +130,13 @@ interface CollapsibleSectionProps {
 /**
  * Collapsible section for progressive disclosure on mobile
  */
-export function CollapsibleSection({
+export function ResponsiveCollapsibleSection({
   children,
   title,
   icon,
   defaultOpen = true,
   summary
-}: CollapsibleSectionProps) {
+}: ResponsiveCollapsibleSectionProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const { isMobile } = useDevice();
 
@@ -187,6 +187,9 @@ export function CollapsibleSection({
     </div>
   );
 }
+
+// Backward-compatible alias for existing imports.
+export const CollapsibleSection = ResponsiveCollapsibleSection;
 
 interface HorizontalScrollContainerProps {
   children: React.ReactNode;

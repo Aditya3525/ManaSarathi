@@ -14,7 +14,7 @@ interface AdminAuthContextType {
   admin: Admin | null;
   adminLogin: (credentials: { email: string; password: string }) => Promise<void>;
   adminAutoLogin: () => Promise<boolean>;
-  checkIsUserAdmin: () => Promise<boolean>;
+  checkIsUserAdmin: (tokenOverride?: string) => Promise<boolean>;
   adminLogout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -92,9 +92,9 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
     }
   };
 
-  const checkIsUserAdmin = async (): Promise<boolean> => {
+  const checkIsUserAdmin = async (tokenOverride?: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenOverride || localStorage.getItem('token');
       if (!token) {
         return false;
       }

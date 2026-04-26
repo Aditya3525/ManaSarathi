@@ -24,19 +24,28 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '../components/ui/dialog';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Skeleton } from '../components/ui/skeleton';
-import { getApiBaseUrl } from '../config/apiConfig';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { adminApi, type ApiResponse } from '../services/api';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { ActivityLog } from './ActivityLog';
-import { adminFetch } from './adminApi';
+import { AdminOverview } from './AdminOverview';
 import { AdminSectionCard } from './AdminSectionCard';
 import { AdminShell } from './AdminShell';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
@@ -53,10 +62,7 @@ import { SupportTicketManagement } from './SupportTicketManagement';
 import { SystemDiagnostics } from './SystemDiagnostics';
 import { TherapistManagement } from './TherapistManagement';
 import { UserManagement } from './UserManagement';
-
-type ToastPush = (toast: { title: string; description?: string; type: 'success' | 'error' | 'warning' | 'info'; duration?: number }) => void;
-
-type AdminUser = { id: string; email: string; role: string; name?: string } | null;
+import { useAdminContent, useAdminPractices } from './hooks/useAdminQueries';
 
 const PRACTICE_LEVELS: Practice['level'][] = ['Beginner', 'Intermediate', 'Advanced'];
 
@@ -82,7 +88,8 @@ const normalizeTags = (raw?: string[] | string | null): string[] => {
 };
 
 const mapPractice = (rec: PracticeRecord): Practice => {
-  const levelOrDifficulty = rec.level ?? rec.difficulty;
+  const maybeDifficulty = (rec as unknown as { difficulty?: string | null }).difficulty;
+  const levelOrDifficulty = rec.level ?? maybeDifficulty;
   return {
     id: rec.id,
     title: rec.title,
@@ -101,6 +108,7 @@ const mapPractice = (rec: PracticeRecord): Practice => {
     thumbnailUrl: rec.thumbnailUrl,
     tags: normalizeTags(rec.tags),
     isPublished: rec.isPublished,
+    scheduledPublishAt: rec.scheduledPublishAt ?? null,
     createdAt:
       typeof (rec as unknown as { createdAt?: string }).createdAt === 'string'
         ? (rec as unknown as { createdAt?: string }).createdAt!
@@ -123,146 +131,90 @@ const mapContent = (rec: ContentRecord): ContentItem => {
         : new Date().toISOString(),
     description: rec.description || undefined,
     thumbnailUrl: rec.thumbnailUrl || undefined,
-    tags: normalizeTags(rec.tags)
+    tags: normalizeTags(rec.tags),
+    scheduledPublishAt: rec.scheduledPublishAt ?? null
   };
 };
 
-const ADMIN_API_BASE = `${getApiBaseUrl()}/admin`;
+type Tab =
+  | 'overview'
+  | 'practices'
+  | 'content'
+  | 'assessments'
+  | 'therapists'
+  | 'faqs'
+  | 'crisis-resources'
+  | 'support-tickets'
+  | 'analytics'
+  | 'advanced-analytics'
+  | 'diagnostics'
+  | 'users'
+  | 'activity';
 
-const fetchAdminCollection = async <TItem, TMapped>(
-  endpoint: string,
-  mapFn: (item: TItem) => TMapped,
-  signal?: AbortSignal
-): Promise<TMapped[]> => {
-  const response = await adminFetch(`${ADMIN_API_BASE}${endpoint}`, {
-    credentials: 'include',
-    signal
-  });
+export const AdminDashboard: React.FC = () => {
+  const { admin, adminLogout } = useAdminAuth();
+  const { push } = useNotificationStore();
+  const [tab, setTab] = useState<Tab>('overview');
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to load ${endpoint}`);
-  }
-
-  const json = await response.json();
-  
-  // Handle both direct array and {success, data} format
-  let data: unknown;
-  if (json.success === true && json.data) {
-    data = json.data;
-  } else if (Array.isArray(json)) {
-    data = json;
-  } else if (json.data) {
-    data = json.data;
-  } else {
-    data = json;
-  }
-  
-  if (!Array.isArray(data)) {
-    console.error('Invalid data format from', endpoint, ':', json);
-    return [];
-  }
-
-  return (data as TItem[]).map(mapFn);
-};
-
-interface UseAdminDashboardDataResult {
-  practices: Practice[];
-  contentItems: ContentItem[];
-  isLoading: boolean;
-  error: string | null;
-  lastUpdated: string | null;
-  refreshAll: () => Promise<void>;
-  setPractices: React.Dispatch<React.SetStateAction<Practice[]>>;
-  setContentItems: React.Dispatch<React.SetStateAction<ContentItem[]>>;
-  markUpdated: () => void;
-}
-
-const useAdminDashboardData = (
-  admin: AdminUser,
-  push: ToastPush
-): UseAdminDashboardDataResult => {
   const [practices, setPractices] = useState<Practice[]>([]);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const loadAll = useCallback(async (signal?: AbortSignal) => {
+  const practicesQuery = useAdminPractices(Boolean(admin));
+  const contentQuery = useAdminContent(Boolean(admin));
+
+  const isLoading = practicesQuery.isLoading || contentQuery.isLoading;
+  const isSyncing = practicesQuery.isFetching || contentQuery.isFetching;
+  const queryError = practicesQuery.error ?? contentQuery.error;
+  const error = queryError instanceof Error ? queryError.message : null;
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([practicesQuery.refetch(), contentQuery.refetch()]);
+    setLastUpdated(new Date().toISOString());
+  }, [contentQuery, practicesQuery]);
+
+  const markUpdated = useCallback(() => {
+    setLastUpdated(new Date().toISOString());
+  }, []);
+
+  useEffect(() => {
     if (!admin) {
       setPractices([]);
       setContentItems([]);
-      setIsLoading(false);
-      setError(null);
       setLastUpdated(null);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [practiceResults, contentResults] = await Promise.all([
-        fetchAdminCollection<PracticeRecord, Practice>('/practices', mapPractice, signal),
-        fetchAdminCollection<ContentRecord, ContentItem>('/content', mapContent, signal)
-      ]);
-      setPractices(practiceResults);
-      setContentItems(contentResults);
+    if (practicesQuery.data) {
+      setPractices(
+        practicesQuery.data.map((record) => mapPractice(record as unknown as PracticeRecord))
+      );
       setLastUpdated(new Date().toISOString());
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return;
-      }
-      console.error('Error loading dashboard data:', err);
-      const message = err instanceof Error ? err.message : 'Failed to load dashboard data';
-      setError(message);
+    }
+  }, [admin, practicesQuery.data]);
+
+  useEffect(() => {
+    if (!admin) {
+      return;
+    }
+
+    if (contentQuery.data) {
+      setContentItems(
+        contentQuery.data.map((record) => mapContent(record as unknown as ContentRecord))
+      );
+      setLastUpdated(new Date().toISOString());
+    }
+  }, [admin, contentQuery.data]);
+
+  useEffect(() => {
+    if (queryError instanceof Error) {
       push({
         type: 'error',
         title: 'Error',
-        description: message
+        description: queryError.message
       });
-    } finally {
-      setIsLoading(false);
     }
-  }, [admin, push]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadAll(controller.signal);
-    return () => controller.abort();
-  }, [loadAll]);
-
-  return {
-    practices,
-    contentItems,
-    isLoading,
-    error,
-    lastUpdated,
-    refreshAll: () => loadAll(),
-    setPractices,
-    setContentItems,
-    markUpdated: () => setLastUpdated(new Date().toISOString())
-  };
-};
-
-type Tab = 'practices' | 'content' | 'assessments' | 'therapists' | 'faqs' | 'crisis-resources' | 'support-tickets' | 'analytics' | 'advanced-analytics' | 'diagnostics' | 'users' | 'activity';
-
-export const AdminDashboard: React.FC = () => {
-  console.log('🎯 AdminDashboard loaded with Assessments tab support');
-  const { admin, adminLogout } = useAdminAuth();
-  const { push } = useNotificationStore();
-  const [tab, setTab] = useState<Tab>('practices');
-
-  const {
-    practices,
-    contentItems,
-    isLoading,
-    error,
-    lastUpdated,
-    refreshAll,
-    setPractices,
-    setContentItems,
-    markUpdated
-  } = useAdminDashboardData(admin, push);
+  }, [push, queryError]);
 
   const [selectedContentType, setSelectedContentType] = useState<string | null>(null);
   type EditablePractice = PracticeRecord | Practice;
@@ -273,6 +225,7 @@ export const AdminDashboard: React.FC = () => {
   const [assessmentBuilderOpen, setAssessmentBuilderOpen] = useState(false);
   const [assessmentRefreshToken, setAssessmentRefreshToken] = useState(0);
   const [activeModal, setActiveModal] = useState<'form' | 'add-practice' | 'add-content' | null>(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [assessmentCount, setAssessmentCount] = useState<number | null>(null);
   const [isLoadingAssessments, setIsLoadingAssessments] = useState(false);
 
@@ -346,10 +299,22 @@ export const AdminDashboard: React.FC = () => {
     setAssessmentRefreshToken((prev) => prev + 1);
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    if (window.confirm('Are you sure you want to logout?')) {
+  const handleLogout = useCallback(() => {
+    setLogoutDialogOpen(true);
+  }, []);
+
+  const handleConfirmLogout = useCallback(async () => {
+    try {
       await adminLogout();
       push({ type: 'success', title: 'Success', description: 'Successfully logged out' });
+    } catch (error) {
+      push({
+        type: 'error',
+        title: 'Logout failed',
+        description: error instanceof Error ? error.message : 'Unable to log out right now'
+      });
+    } finally {
+      setLogoutDialogOpen(false);
     }
   }, [adminLogout, push]);
 
@@ -437,16 +402,24 @@ export const AdminDashboard: React.FC = () => {
   const navItems = useMemo(
     () => [
       {
+        value: 'overview' as const,
+        label: 'Overview',
+        icon: Activity,
+        group: 'General'
+      },
+      {
         value: 'practices' as const,
         label: 'Practices',
         icon: Brain,
-        badge: practices.length.toString()
+        badge: practices.length.toString(),
+        group: 'Content'
       },
       {
         value: 'content' as const,
         label: 'Content',
         icon: BookOpen,
-        badge: contentItems.length.toString()
+        badge: contentItems.length.toString(),
+        group: 'Content'
       },
       {
         value: 'assessments' as const,
@@ -456,52 +429,62 @@ export const AdminDashboard: React.FC = () => {
           ? '…'
           : typeof assessmentCount === 'number'
             ? assessmentCount.toString()
-            : undefined
+            : undefined,
+        group: 'Content'
       },
       {
         value: 'therapists' as const,
         label: 'Therapists',
-        icon: Stethoscope
+        icon: Stethoscope,
+        group: 'People'
       },
       {
         value: 'faqs' as const,
         label: 'FAQs',
-        icon: HelpCircle
+        icon: HelpCircle,
+        group: 'Support'
       },
       {
         value: 'crisis-resources' as const,
         label: 'Crisis Resources',
-        icon: AlertTriangle
+        icon: AlertTriangle,
+        group: 'Support'
       },
       {
         value: 'support-tickets' as const,
         label: 'Support Tickets',
-        icon: Inbox
+        icon: Inbox,
+        group: 'Support'
       },
       {
         value: 'analytics' as const,
         label: 'Analytics',
-        icon: BarChart3
+        icon: BarChart3,
+        group: 'Analytics'
       },
       {
         value: 'advanced-analytics' as const,
         label: 'Advanced Analytics',
-        icon: Brain
+        icon: Brain,
+        group: 'Analytics'
       },
       {
         value: 'diagnostics' as const,
         label: 'System Diagnostics',
-        icon: Activity
+        icon: Activity,
+        group: 'System'
       },
       {
         value: 'users' as const,
         label: 'Users',
-        icon: Users
+        icon: Users,
+        group: 'People'
       },
       {
         value: 'activity' as const,
         label: 'Activity Log',
-        icon: Shield
+        icon: Shield,
+        group: 'System'
       }
     ],
     [practices.length, contentItems.length, isLoadingAssessments, assessmentCount]
@@ -512,11 +495,11 @@ export const AdminDashboard: React.FC = () => {
       <Button
         variant="outline"
         onClick={handleRefresh}
-        disabled={isLoading}
+        disabled={isSyncing}
         className="flex items-center gap-2"
         size="sm"
       >
-        <Loader2 className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        <Loader2 className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
         <span className="hidden sm:inline">Refresh</span>
         <span className="sm:hidden">Sync</span>
       </Button>
@@ -587,6 +570,10 @@ export const AdminDashboard: React.FC = () => {
         : 'Add Content';
 
   const renderActiveSection = () => {
+    if (tab === 'overview') {
+      return <AdminOverview onNavigate={(value) => setTab(value as Tab)} />;
+    }
+
     if (tab === 'practices') {
       return (
         <AdminSectionCard
@@ -708,9 +695,9 @@ export const AdminDashboard: React.FC = () => {
           lastUpdatedLabel={lastUpdatedLabel}
         >
           <div className="space-y-6" aria-busy={isLoading}>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {isInitialLoading
-                ? Array.from({ length: 3 }).map((_, index) => (
+                ? Array.from({ length: 4 }).map((_, index) => (
                     <Card key={`stat-skeleton-${index}`}>
                       <CardContent className="p-4 sm:p-6">
                         <div className="flex items-center space-x-4">
@@ -744,43 +731,45 @@ export const AdminDashboard: React.FC = () => {
                   ))}
             </div>
 
-            <Card className="border-dashed border-teal-200 bg-teal-50/30">
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <ClipboardList className="h-5 w-5 text-teal-600" />
-                    Assessment Tools
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Build, review, and assign dynamic assessments without leaving the dashboard.
-                  </p>
-                </div>
-                <Badge variant="outline" className="px-3 py-1 text-sm">
-                  {isLoadingAssessments
-                    ? 'Syncing…'
-                    : typeof assessmentCount === 'number'
-                      ? `${assessmentCount} active`
-                      : '—'}
-                </Badge>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Access the assessment builder or browse the full catalogue.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button variant="outline" onClick={goToAssessments} className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Manage Assessments
-                  </Button>
-                  <Button onClick={openAssessmentBuilder} className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    New Assessment
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {tab !== 'assessments' && (
+              <Card className="border-dashed border-teal-200 bg-teal-50/30">
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <ClipboardList className="h-5 w-5 text-teal-600" />
+                      Assessment Tools
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Build, review, and assign dynamic assessments without leaving the dashboard.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="px-3 py-1 text-sm">
+                    {isLoadingAssessments
+                      ? 'Syncing…'
+                      : typeof assessmentCount === 'number'
+                        ? `${assessmentCount} active`
+                        : '—'}
+                  </Badge>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Access the assessment builder or browse the full catalogue.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" onClick={goToAssessments} className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Manage Assessments
+                    </Button>
+                    <Button onClick={openAssessmentBuilder} className="flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      New Assessment
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {error && (
               <div
@@ -803,7 +792,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {isLoading && (
+            {isSyncing && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Syncing latest data…
@@ -1077,6 +1066,23 @@ export const AdminDashboard: React.FC = () => {
           triggerAssessmentRefresh();
         }}
       />
+
+      <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of the admin console?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { void handleConfirmLogout(); }}>
+              Logout
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

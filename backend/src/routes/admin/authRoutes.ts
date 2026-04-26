@@ -83,7 +83,10 @@ export const createAdminAuthRoutes = ({ prisma, jwtSecret, adminEmails }: AuthRo
       });
 
       if (!user || !adminEmails.includes(String(user.email).toLowerCase())) {
-        return res.status(403).json({ isAdmin: false, error: 'Not an admin user' });
+        // Non-admin is an expected outcome for most authenticated users.
+        // Return 200 with isAdmin=false to avoid surfacing noisy console/network errors
+        // in regular user and therapist flows.
+        return res.json({ isAdmin: false });
       }
 
       return res.json({ isAdmin: true, user: { ...user, role: 'Admin' } });

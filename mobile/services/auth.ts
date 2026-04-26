@@ -31,7 +31,7 @@ export const checkBiometricAvailability = async (): Promise<{
  * Authenticate using biometrics
  */
 export const authenticateWithBiometrics = async (
-  promptMessage = 'Authenticate to access MaanSarathi'
+  promptMessage = 'Authenticate to access ManaSarathi'
 ): Promise<boolean> => {
   try {
     const result = await LocalAuthentication.authenticateAsync({

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 
 interface MarkdownMessageProps {
@@ -67,7 +66,6 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
   return (
     <div className={`markdown-content text-sm leading-relaxed ${className}`}>
       <ReactMarkdown
-        rehypePlugins={[rehypeRaw]}
         remarkPlugins={[remarkGfm]}
         components={{
           // Code blocks with syntax highlighting

@@ -223,10 +223,10 @@ export default function ChatScreen() {
 
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const fileName = `MaanSarathi-chat-${timestamp}`;
+      const fileName = `ManaSarathi-chat-${timestamp}`;
 
       if (format === 'text') {
-        const text = `MaanSarathi Conversation\nExported: ${new Date().toLocaleString()}\n${'─'.repeat(40)}\n\n` +
+        const text = `ManaSarathi Conversation\nExported: ${new Date().toLocaleString()}\n${'─'.repeat(40)}\n\n` +
           messages.map((m: any) => `[${m.role === 'user' ? 'You' : 'AI Companion'}] ${new Date(m.timestamp || m.createdAt || '').toLocaleString()}\n${m.content}`).join('\n\n' + '─'.repeat(40) + '\n\n');
 
         const fileUri = FileSystem.documentDirectory + `${fileName}.txt`;
@@ -235,11 +235,11 @@ export default function ChatScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Export Conversation' });
         } else {
-          await Share.share({ message: text, title: 'MaanSarathi Chat' });
+          await Share.share({ message: text, title: 'ManaSarathi Chat' });
         }
       } else if (format === 'json') {
         const jsonData = {
-          appName: 'MaanSarathi',
+          appName: 'ManaSarathi',
           exportDate: new Date().toISOString(),
           conversationId: conversationId,
           messageCount: messages.length,
@@ -264,7 +264,7 @@ export default function ChatScreen() {
         // Generate HTML for PDF-like sharing
         const htmlContent = `
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>MaanSarathi Conversation</title>
+<html><head><meta charset="utf-8"><title>ManaSarathi Conversation</title>
 <style>
   body { font-family: -apple-system, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; background: #fafafa; }
   h1 { color: #6366f1; font-size: 22px; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }
@@ -278,7 +278,7 @@ export default function ChatScreen() {
   .time { font-size: 10px; margin-top: 6px; opacity: 0.6; }
   .content { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 </style></head><body>
-<h1>🧠 MaanSarathi Conversation</h1>
+<h1>🧠 ManaSarathi Conversation</h1>
 <p class="meta">Exported on ${new Date().toLocaleString()} • ${messages.length} messages</p>
 ${messages.map((m: any) => `
 <div class="msg ${m.role === 'user' ? 'user' : 'ai'}">

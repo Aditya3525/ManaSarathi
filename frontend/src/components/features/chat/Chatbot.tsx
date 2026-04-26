@@ -2,7 +2,6 @@ import {
   Send,
   ArrowLeft,
   MessageCircle,
-  Bot,
   User,
   Loader2,
   AlertTriangle,
@@ -17,8 +16,19 @@ import {
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useConversationMessages } from '../../../hooks/useConversations';
-import { chatApi, conversationsApi } from '../../../services/api';
+import { useAccessibility } from '../../../contexts/AccessibilityContext';
+import { chatApi, conversationsApi, type ChatSendMessageResponse } from '../../../services/api';
+import {
+  parseAssessmentPromptMeta,
+  parseExerciseCardMeta,
+  type AssessmentPromptMeta,
+  type ExerciseCardMeta,
+} from '../../../types/chat';
+import {
+  clearAssessmentShareContext,
+  readAssessmentShareContext,
+  type AssessmentShareContext,
+} from '../../../utils/assessmentSharingContext';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../ui/dropdown-menu';
@@ -27,7 +37,9 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../../ui/shee
 
 import { ConversationHistorySidebar } from './ConversationHistorySidebar';
 import { EmptyState } from './EmptyState';
+import { BreathingAnimation, CBTThoughtRecord, GroundingChecklist } from './exercises';
 import { ExportDialog } from './ExportDialog';
+import { InlineFeedback } from './InlineFeedback';
 import { MarkdownMessage } from './MarkdownMessage';
 import { MessageActions } from './MessageActions';
 import { QuickActionsBar } from './QuickActionsBar';
@@ -48,20 +60,85 @@ interface Message {
   type: 'user' | 'bot' | 'system';
   content: string;
   timestamp: Date;
+  metadata?: Record<string, unknown> | string | null;
   suggestions?: string[];
   isTyping?: boolean;
   feedback?: 'liked' | 'disliked' | null;
   enableTypewriter?: boolean;
+  assessmentPrompt?: AssessmentPromptMeta | null;
 }
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+type SpeechWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+};
+
+type SendMessageContentFn = (
+  content: string,
+  options?: { showUserMessage?: boolean; conversationId?: string }
+) => Promise<void>;
+
+const EMPTY_ASSISTANT_FALLBACK = 'I am here with you. Could you share a little more so I can support you better?';
+
+const resolveNonEmptyContent = (value: unknown, fallback = EMPTY_ASSISTANT_FALLBACK): string => {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
+
+const buildAssessmentDiscussPrompt = (context: AssessmentShareContext): string => {
+  const lines: string[] = [
+    `I want to discuss my latest ${context.assessmentLabel} assessment results.`,
+  ];
+
+  if (typeof context.latestScore === 'number') {
+    lines.push(`Latest score: ${Math.round(context.latestScore)}%.`);
+  }
+
+  if (typeof context.wellnessScore === 'number') {
+    lines.push(`Overall wellness score: ${Math.round(context.wellnessScore)}%.`);
+  }
+
+  if (context.trend) {
+    lines.push(`Trend: ${context.trend}.`);
+  }
+
+  if (context.interpretation) {
+    lines.push(`Interpretation: ${context.interpretation}`);
+  }
+
+  if (Array.isArray(context.recommendations) && context.recommendations.length > 0) {
+    lines.push(`Recommendations provided: ${context.recommendations.slice(0, 4).join('; ')}`);
+  }
+
+  lines.push('Please explain what this means and give me a practical plan I can follow today.');
+  return lines.join('\n');
+};
 
 export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotProps) {
   const { t } = useTranslation();
+  const { settings: accessibilitySettings } = useAccessibility();
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationStarters, setConversationStarters] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showCrisisWarning, setShowCrisisWarning] = useState(false);
-  const [isLoadingStarters, setIsLoadingStarters] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false); // Manual voice control - off by default
@@ -70,9 +147,20 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null);
+  const [voiceInputSupported, setVoiceInputSupported] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const initializedForUserRef = useRef<string | null>(null);
+  const isRequestInFlightRef = useRef(false);
+  const pendingDiscussContextRef = useRef<AssessmentShareContext | null>(null);
+  const autoDiscussInjectedRef = useRef(false);
+  const sendMessageContentRef = useRef<SendMessageContentFn | null>(null);
+
+  const userSignature = [user?.firstName, user?.lastName, user?.name]
+    .filter(Boolean)
+    .join('|') || 'anonymous';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,11 +172,16 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
 
   // Load conversation starters and initial greeting
   useEffect(() => {
+    if (initializedForUserRef.current === userSignature) {
+      return;
+    }
+    initializedForUserRef.current = userSignature;
+
     const loadInitialData = async () => {
       try {
         // Load personalized greeting
         const greetingResponse = await chatApi.getMoodBasedGreeting();
-        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm MaanSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
+        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm ManaSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
         
         if (greetingResponse.success && greetingResponse.data?.greeting) {
           greetingText = greetingResponse.data.greeting;
@@ -137,30 +230,42 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           suggestions: []
         };
         setMessages([fallbackGreeting]);
-      } finally {
-        setIsLoadingStarters(false);
       }
     };
 
     loadInitialData();
-  }, [user]);
+  }, [user, userSignature]);
+
+  useEffect(() => {
+    autoDiscussInjectedRef.current = false;
+    pendingDiscussContextRef.current = null;
+
+    const context = readAssessmentShareContext();
+    if (context?.source === 'insights-discuss') {
+      pendingDiscussContextRef.current = context;
+      clearAssessmentShareContext();
+    }
+  }, [userSignature]);
 
   // Initialize speech recognition
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as SpeechWindow;
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      setVoiceInputSupported(true);
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onresult = (event: any) => {
+      recognitionRef.current.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        setInputValue(transcript);
+        setInputValue((prev) => (prev ? `${prev} ${transcript}` : transcript));
         setIsListening(false);
       };
 
-      recognitionRef.current.onerror = (event: any) => {
+      recognitionRef.current.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
       };
@@ -168,6 +273,8 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       recognitionRef.current.onend = () => {
         setIsListening(false);
       };
+    } else {
+      setVoiceInputSupported(false);
     }
 
     // Initialize speech synthesis
@@ -186,8 +293,8 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   }, []);
 
   const toggleVoiceInput = () => {
-    if (!recognitionRef.current) {
-      alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
+    if (!recognitionRef.current || !voiceInputSupported) {
+      console.warn('Voice input is not supported in this browser');
       return;
     }
 
@@ -195,8 +302,16 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
-      recognitionRef.current.start();
-      setIsListening(true);
+      try {
+        if (isSpeaking) {
+          stopSpeaking();
+        }
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (error) {
+        console.error('Failed to start speech recognition:', error);
+        setIsListening(false);
+      }
     }
   };
 
@@ -228,106 +343,199 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
     }
   };
 
-  const detectCrisisLanguage = (text: string): boolean => {
-    const crisisKeywords = [
-      'suicide', 'kill myself', 'end it all', 'don\'t want to live',
-      'hurt myself', 'self harm', 'cutting', 'overdose',
-      'hopeless', 'no point', 'better off dead'
-    ];
-    
-    return crisisKeywords.some(keyword => 
-      text.toLowerCase().includes(keyword.toLowerCase())
-    );
-  };
-
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputValue,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    const messageContent = inputValue;
-    setInputValue('');
-
-    // Check for crisis language
-    if (detectCrisisLanguage(messageContent)) {
-      setShowCrisisWarning(true);
-      const crisisMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'system',
-        content: 'I\'m concerned about your safety. If you\'re having thoughts of hurting yourself, please reach out for immediate help.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, crisisMessage]);
-      return;
+  const applyChatPayload = (
+    messagePayload: ChatSendMessageResponse,
+    options?: {
+      enableTypewriter?: boolean;
+      replaceMessageId?: string;
+      streamedContent?: string;
+    }
+  ) => {
+    if (messagePayload.conversationId && messagePayload.conversationId !== currentConversationId) {
+      console.log('📝 Setting conversation ID:', messagePayload.conversationId);
+      setCurrentConversationId(messagePayload.conversationId);
     }
 
-    // Show typing indicator
+    const structuredMessage =
+      typeof messagePayload.message === 'object' && messagePayload.message !== null
+        ? (messagePayload.message as Record<string, unknown>)
+        : null;
+    const structuredContent =
+      structuredMessage && typeof structuredMessage.content === 'string'
+        ? structuredMessage.content
+        : undefined;
+    const structuredMetadata =
+      structuredMessage && 'metadata' in structuredMessage
+        ? ((structuredMessage.metadata as Record<string, unknown> | string | null) ?? null)
+        : null;
+    const assessmentPrompt = parseAssessmentPromptMeta(
+      (messagePayload.assessmentPrompt as Record<string, unknown> | null | undefined) ?? structuredMetadata
+    );
+    const resolvedContent =
+      options?.streamedContent && options.streamedContent.trim().length > 0
+        ? options.streamedContent
+        : resolveNonEmptyContent(
+            structuredContent,
+            'I apologize, but I encountered an issue generating a response.'
+          );
+
+    const smartReplies = messagePayload.smartReplies || [];
+    const persistedBotMessageId =
+      typeof messagePayload.message === 'object' &&
+      messagePayload.message !== null &&
+      'id' in messagePayload.message &&
+      messagePayload.message.id
+        ? String(messagePayload.message.id)
+        : (Date.now() + 2).toString();
+
+    const botResponse: Message = {
+      id: persistedBotMessageId,
+      type: 'bot',
+      content: resolvedContent,
+      metadata: structuredMetadata,
+      timestamp: new Date(),
+      suggestions: smartReplies,
+      enableTypewriter: options?.enableTypewriter ?? true,
+      assessmentPrompt,
+    };
+
+    setCurrentlyTypingMessageId((options?.enableTypewriter ?? true) ? persistedBotMessageId : null);
+    setMessages((prev) => {
+      const withoutStreamingPlaceholder = options?.replaceMessageId
+        ? prev.filter((msg) => msg.id !== options.replaceMessageId)
+        : prev;
+      return [...withoutStreamingPlaceholder, botResponse];
+    });
+
+    if (messagePayload.crisis) {
+      setShowCrisisWarning(true);
+    }
+
+    if (voiceEnabled) {
+      speakText(resolvedContent);
+    }
+  };
+
+  const sendMessageContent = async (
+    content: string,
+    options?: { showUserMessage?: boolean; conversationId?: string }
+  ) => {
+    const messageContent = content.trim();
+    if (!messageContent) return;
+    if (isRequestInFlightRef.current) return;
+
+    isRequestInFlightRef.current = true;
+
+    const shouldShowUserMessage = options?.showUserMessage !== false;
+    if (shouldShowUserMessage) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: messageContent,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputValue('');
+    }
+
     setIsTyping(true);
-    
+
     try {
-      // Call the real backend API with Gemini, passing conversationId
-      console.log('🤖 Sending message to chat API:', messageContent, 'conversationId:', currentConversationId);
-      const response = await chatApi.sendMessage(messageContent, currentConversationId || undefined);
-      console.log('📥 Chat API response:', response);
-      
-      if (response.success && response.data) {
-        const messagePayload = response.data;
-        
-        // Update conversationId if returned from API
-        if (messagePayload.conversationId && messagePayload.conversationId !== currentConversationId) {
-          console.log('📝 Setting conversation ID:', messagePayload.conversationId);
-          setCurrentConversationId(messagePayload.conversationId);
+      const targetConversationId = options?.conversationId ?? currentConversationId ?? undefined;
+      console.log('🤖 Sending message to chat API:', messageContent, 'conversationId:', targetConversationId);
+
+      const sendWithLegacyEndpoint = async () => {
+        const response = await chatApi.sendMessage(messageContent, targetConversationId, {
+          simpleLanguage: accessibilitySettings.simpleLanguage,
+        });
+        console.log('📥 Chat API response:', response);
+
+        if (response.success && response.data) {
+          applyChatPayload(response.data, { enableTypewriter: true });
+          return;
         }
-        
-        const structuredContent =
-          typeof messagePayload.message === 'object' && messagePayload.message !== null
-            ? messagePayload.message.content
-            : undefined;
-        const resolvedContent =
-          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
 
-        // Use smart replies from backend if available
-        const smartReplies = messagePayload.smartReplies || [];
-
-        const botMessageId = (Date.now() + 2).toString();
-        const botResponse: Message = {
-          id: botMessageId,
-          type: 'bot',
-          content: resolvedContent,
-          timestamp: new Date(),
-          suggestions: smartReplies,
-          enableTypewriter: true
-        };
-
-        setCurrentlyTypingMessageId(botMessageId);
-
-        setMessages(prev => [...prev, botResponse]);
-        
-        // Speak the bot response only if voice is enabled
-        if (voiceEnabled) {
-          speakText(resolvedContent);
-        }
-      } else {
         console.error('❌ Chat API failed:', response.error);
-        // Fallback to local response if API fails
         const fallbackMessage: Message = {
           id: (Date.now() + 2).toString(),
           type: 'bot',
           content: 'I\'m having trouble connecting right now, but I\'m here to listen. Could you tell me more about how you\'re feeling?',
           timestamp: new Date()
         };
-        setMessages(prev => [...prev, fallbackMessage]);
+        setMessages((prev) => [...prev, fallbackMessage]);
+      };
+
+      const streamingMessageId = `stream-${Date.now()}`;
+      let streamStarted = false;
+      let streamReceivedToken = false;
+      let streamedContent = '';
+
+      try {
+        const streamPayload = await chatApi.streamMessage(
+          messageContent,
+          targetConversationId,
+          { simpleLanguage: accessibilitySettings.simpleLanguage },
+          (event) => {
+            if (event.type === 'token') {
+              streamReceivedToken = true;
+              streamedContent += event.token;
+
+              if (!streamStarted) {
+                streamStarted = true;
+                setIsTyping(false);
+                setCurrentlyTypingMessageId(null);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: streamingMessageId,
+                    type: 'bot',
+                    content: '',
+                    timestamp: new Date(),
+                    suggestions: [],
+                    enableTypewriter: false,
+                  }
+                ]);
+              }
+
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === streamingMessageId
+                    ? {
+                        ...msg,
+                        content: streamedContent,
+                      }
+                    : msg
+                )
+              );
+            }
+          }
+        );
+
+        applyChatPayload(streamPayload, {
+          enableTypewriter: false,
+          replaceMessageId: streamStarted ? streamingMessageId : undefined,
+          streamedContent,
+        });
+      } catch (streamError) {
+        console.error('❌ Chat stream error:', streamError);
+
+        if (!streamReceivedToken) {
+          await sendWithLegacyEndpoint();
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `stream-warning-${Date.now()}`,
+              type: 'system',
+              content: 'The response stream was interrupted. You can ask me to continue from where we left off.',
+              timestamp: new Date(),
+            }
+          ]);
+        }
       }
     } catch (error) {
       console.error('❌ Chat API error:', error);
-      
-      // Fallback to local response on error
+
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
         type: 'bot',
@@ -337,25 +545,95 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+      isRequestInFlightRef.current = false;
     }
   };
+
+  const handleSendMessage = async () => {
+    if (isTyping || isRequestInFlightRef.current) {
+      return;
+    }
+    await sendMessageContent(inputValue);
+  };
+
+  sendMessageContentRef.current = sendMessageContent;
+
+  useEffect(() => {
+    if (autoDiscussInjectedRef.current) {
+      return;
+    }
+
+    const context = pendingDiscussContextRef.current;
+    if (!context) {
+      return;
+    }
+
+    if (messages.length === 0 || isTyping || isRequestInFlightRef.current) {
+      return;
+    }
+
+    autoDiscussInjectedRef.current = true;
+    void sendMessageContentRef.current?.(buildAssessmentDiscussPrompt(context));
+  }, [messages.length, isTyping]);
 
   const handleSuggestionClick = (suggestion: string) => {
     setInputValue(suggestion);
   };
 
-  const handleLike = (messageId: string) => {
+  const handleLike = async (messageId: string) => {
     setMessageFeedback(prev => ({
       ...prev,
       [messageId]: 'liked'
     }));
+
+    try {
+      await chatApi.submitMessageFeedback(messageId, 'liked');
+    } catch (error) {
+      console.error('Failed to submit like feedback:', error);
+      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
+    }
   };
 
-  const handleDislike = (messageId: string) => {
+  const handleFeedbackSubmit = async (
+    messageId: string,
+    rating: 'positive' | 'negative',
+    notes?: string,
+  ) => {
+    if (rating === 'positive') {
+      await handleLike(messageId);
+      setFeedbackMessageId(null);
+      return;
+    }
+
     setMessageFeedback(prev => ({
       ...prev,
       [messageId]: 'disliked'
     }));
+
+    try {
+      const feedbackResponse = await chatApi.submitMessageFeedback(messageId, 'disliked', notes);
+
+      if (feedbackResponse.success && feedbackResponse.data?.repairPrompt) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `repair-${Date.now()}`,
+            type: 'system',
+            content: feedbackResponse.data?.repairPrompt || 'Thanks for the feedback. What would feel most helpful right now?',
+            timestamp: new Date()
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to submit dislike feedback:', error);
+      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
+    } finally {
+      setFeedbackMessageId(null);
+    }
+  };
+
+  const handleDislike = (messageId: string) => {
+    setFeedbackMessageId((prev) => (prev === messageId ? null : messageId));
   };
 
   const handleRegenerate = async (messageId: string) => {
@@ -372,37 +650,11 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
     // Remove the old bot message
     setMessages(prev => prev.filter(m => m.id !== messageId));
 
-    // Resend the user message to get a new response
-    setIsTyping(true);
-    try {
-      const response = await chatApi.sendMessage(lastUserMessage.content);
-      
-      if (response.success && response.data) {
-        const messagePayload = response.data;
-        const structuredContent =
-          typeof messagePayload.message === 'object' && messagePayload.message !== null
-            ? messagePayload.message.content
-            : undefined;
-        const resolvedContent =
-          structuredContent ?? 'I apologize, but I encountered an issue generating a response.';
-
-        const smartReplies = messagePayload.smartReplies || [];
-
-        const botResponse: Message = {
-          id: Date.now().toString(),
-          type: 'bot',
-          content: resolvedContent,
-          timestamp: new Date(),
-          suggestions: smartReplies
-        };
-
-        setMessages(prev => [...prev, botResponse]);
-      }
-    } catch (error) {
-      console.error('Error regenerating response:', error);
-    } finally {
-      setIsTyping(false);
-    }
+    // Resend the user message in the same conversation to regenerate assistant output.
+    await sendMessageContent(lastUserMessage.content, {
+      showUserMessage: false,
+      conversationId: currentConversationId || undefined
+    });
   };
 
   const handleGetExercises = () => {
@@ -413,8 +665,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   const handleGetSummary = async () => {
     // Request a conversation summary from the AI
     const summaryRequest = 'Can you provide a brief summary of our conversation so far and any key insights or recommendations?';
-    setInputValue(summaryRequest);
-    await handleSendMessage();
+    await sendMessageContent(summaryRequest);
   };
 
   const handleBookmark = () => {
@@ -460,11 +711,14 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (isTyping || isRequestInFlightRef.current) {
+        return;
+      }
       handleSendMessage();
     }
   };
 
-  const handleTypewriterComplete = (_messageId: string) => {
+  const handleTypewriterComplete = () => {
     setCurrentlyTypingMessageId(null);
     // Optionally trigger voice output here if needed
   };
@@ -506,8 +760,13 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           const loadedMessages: Message[] = response.data.messages.map((msg) => ({
             id: msg.id,
             type: msg.type as 'user' | 'bot' | 'system',
-            content: msg.content,
+            content:
+              msg.type === 'bot' || msg.type === 'system'
+                ? resolveNonEmptyContent(msg.content)
+                : String(msg.content ?? ''),
             timestamp: new Date(msg.createdAt),
+            metadata: msg.metadata ?? null,
+            assessmentPrompt: parseAssessmentPromptMeta(msg.metadata ?? null),
             suggestions: [],
           }));
           
@@ -538,9 +797,49 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   const MessageBubble = ({ message }: { message: Message }) => {
     const isUser = message.type === 'user';
     const isSystem = message.type === 'system';
+    const exerciseMeta = !isUser && !isSystem ? parseExerciseCardMeta(message.metadata) : null;
+    const assessmentPrompt = !isUser && !isSystem
+      ? (message.assessmentPrompt ?? parseAssessmentPromptMeta(message.metadata))
+      : null;
+
+    const renderExerciseCard = (meta: ExerciseCardMeta) => {
+      switch (meta.exerciseCard) {
+        case 'breathing-animation':
+          return (
+            <BreathingAnimation
+              title={meta.title}
+              pattern={meta.pattern}
+              rounds={meta.rounds}
+            />
+          );
+        case 'grounding-checklist':
+          return <GroundingChecklist title={meta.title} steps={meta.steps} />;
+        case 'cbt-thought-record':
+          return <CBTThoughtRecord title={meta.title} steps={meta.cbtSteps} />;
+        case 'body-scan-visual':
+        case 'worry-dump-timer':
+          return (
+            <MarkdownMessage
+              content={message.content}
+              enableTypewriter={message.enableTypewriter && message.id === currentlyTypingMessageId}
+              typewriterSpeed={20}
+              onTypewriterComplete={handleTypewriterComplete}
+            />
+          );
+        default:
+          return (
+            <MarkdownMessage
+              content={message.content}
+              enableTypewriter={message.enableTypewriter && message.id === currentlyTypingMessageId}
+              typewriterSpeed={20}
+              onTypewriterComplete={handleTypewriterComplete}
+            />
+          );
+      }
+    };
 
     return (
-      <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}>
+      <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} mb-4 group message-enter`}>
         {!isUser && (
           <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
             isSystem ? 'bg-amber-100' : 'bg-primary/10'
@@ -548,28 +847,51 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
             {isSystem ? (
               <AlertTriangle className="h-4 w-4 text-amber-600" />
             ) : (
-              <Bot className="h-4 w-4 text-primary" />
+              <span className="text-xl" role="img" aria-label="Manasarathi">🪷</span>
             )}
           </div>
         )}
         
         <div className={`max-w-[80%] ${isUser ? 'order-1' : 'order-2'}`}>
           <div
-            className={`rounded-2xl px-4 py-3 ${
-              isUser
-                ? 'bg-primary text-primary-foreground ml-auto'
-                : isSystem
-                ? 'bg-amber-50 border border-amber-200 text-amber-800'
-                : 'bg-muted'
-            }`}
+            className={exerciseMeta
+              ? 'rounded-2xl p-0 overflow-hidden'
+              : `rounded-2xl px-4 py-3 ${
+                isUser
+                  ? 'bg-primary text-primary-foreground ml-auto'
+                  : isSystem
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : 'bg-muted'
+              }`
+            }
           >
-            <MarkdownMessage 
-              content={message.content} 
-              enableTypewriter={message.enableTypewriter && message.id === currentlyTypingMessageId}
-              typewriterSpeed={20}
-              onTypewriterComplete={() => handleTypewriterComplete(message.id)}
-            />
+            {exerciseMeta ? (
+              <div className="min-w-[280px] max-w-[420px]">
+                {renderExerciseCard(exerciseMeta)}
+              </div>
+            ) : (
+              <MarkdownMessage
+                content={message.content}
+                enableTypewriter={message.enableTypewriter && message.id === currentlyTypingMessageId}
+                typewriterSpeed={20}
+                onTypewriterComplete={handleTypewriterComplete}
+              />
+            )}
           </div>
+
+          {assessmentPrompt && (
+            <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-sm text-foreground">{assessmentPrompt.prompt}</p>
+              {typeof assessmentPrompt.daysSinceLastAssessment === 'number' && (
+                <p className="text-xs text-muted-foreground">
+                  Last anxiety assessment was {assessmentPrompt.daysSinceLastAssessment} day(s) ago.
+                </p>
+              )}
+              <Button size="sm" onClick={() => onNavigate('assessments')}>
+                {assessmentPrompt.ctaLabel}
+              </Button>
+            </div>
+          )}
           
           <div className={`flex items-center gap-2 mt-1 text-xs text-muted-foreground ${
             isUser ? 'justify-end' : 'justify-start'
@@ -589,6 +911,16 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
               />
             )}
           </div>
+
+          {!isUser && !isSystem && feedbackMessageId === message.id && (
+            <InlineFeedback
+              messageId={message.id}
+              onSubmit={(messageId, rating, notes) => {
+                void handleFeedbackSubmit(messageId, rating, notes);
+              }}
+              onDismiss={() => setFeedbackMessageId(null)}
+            />
+          )}
 
           {/* Suggestions */}
           {message.suggestions && (
@@ -702,10 +1034,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <EmptyState 
-            onStarterClick={(starter) => {
-              setInputValue(starter);
-              handleSendMessage();
-            }}
+            onStarterClick={(starter) => void sendMessageContent(starter)}
             starters={conversationStarters.length > 0 ? conversationStarters : undefined}
           />
         ) : (
@@ -739,17 +1068,11 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
         
         {/* Typing Indicator */}
         {isTyping && (
-          <div className="flex gap-3 justify-start">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-primary" />
-            </div>
-            <div className="bg-muted rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </div>
+          <div className="flex items-center gap-2 px-3 py-2 message-enter">
+            <span className="text-lg animate-breathe" role="img" aria-label="Thinking">🪷</span>
+            <span className="text-sm text-muted-foreground italic">
+              Manasarathi is reflecting...
+            </span>
           </div>
         )}
         
@@ -771,7 +1094,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder={t('chat.placeholder')}
               className="pr-20"
             />
@@ -810,6 +1133,7 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
                 className={`h-6 w-6 p-0 ${isListening ? 'bg-red-100 text-red-600' : ''}`}
                 onClick={toggleVoiceInput}
                 title={isListening ? "Stop listening" : "Voice input"}
+                disabled={!voiceInputSupported}
               >
                 <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
               </Button>
@@ -855,8 +1179,13 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           </SheetDescription>
           <ConversationHistorySidebar
             activeConversationId={currentConversationId}
-            onSelectConversation={handleSelectConversation}
+            onSelectConversation={(conversationId) => {
+              handleSelectConversation(conversationId);
+              setShowMobileSidebar(false);
+            }}
             className="h-full"
+            showCloseButton
+            onCloseSidebar={() => setShowMobileSidebar(false)}
           />
         </SheetContent>
       </Sheet>

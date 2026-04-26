@@ -37,9 +37,61 @@ export interface UserContext {
   lastName?: string;
   age?: number;
   ageGroup?: 'teen' | 'young-adult' | 'adult' | 'middle-aged' | 'senior';
+  region?: string;
+  language?: string;
+  simpleLanguage?: boolean;
   approach?: 'western' | 'eastern' | 'hybrid';
   approachEngine?: 'western' | 'eastern' | 'hybrid';
   recentAssessments?: any[];
+  recentCheckins?: Array<{
+    id: string;
+    type: string;
+    responses: Record<string, unknown>;
+    mood?: string | null;
+    createdAt: Date;
+  }>;
+  recentJournals?: Array<{
+    id: string;
+    prompt?: string | null;
+    mood?: string | null;
+    tags: string[];
+    createdAt: Date;
+  }>;
+  recentMoodEntries?: Array<{
+    mood: string;
+    emotion?: string | null;
+    emotionGroup?: string | null;
+    intensity?: number | null;
+    trigger?: string | null;
+    createdAt: Date;
+  }>;
+  todayIntention?: {
+    id: string;
+    intention: string;
+    isCustom: boolean;
+    completed: boolean | null;
+    reflection?: string | null;
+    createdAt: Date;
+  };
+  recentGratitudeEntries?: Array<{
+    id: string;
+    items: string[];
+    note?: string | null;
+    createdAt: Date;
+  }>;
+  recentSleepLogs?: Array<{
+    id: string;
+    bedTime: Date;
+    wakeTime: Date;
+    quality: number;
+    duration?: number | null;
+    factors: string[];
+    createdAt: Date;
+  }>;
+  sleepAverages?: {
+    weeklyDuration: number | null;
+    weeklyQuality: number | null;
+  };
   chatHistory?: any[];
   currentMood?: string;
   moodTrend?: string;
@@ -98,6 +150,7 @@ export enum AIProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   GEMINI = 'gemini',
+  NVIDIA = 'nvidia',
   GROQ = 'groq',
   HUGGINGFACE = 'huggingface',
   OLLAMA = 'ollama'

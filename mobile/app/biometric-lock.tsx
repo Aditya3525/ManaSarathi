@@ -54,7 +54,7 @@ export default function BiometricLockScreen() {
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: t('biometric.prompt', 'Authenticate to access MaanSarathi'),
+        promptMessage: t('biometric.prompt', 'Authenticate to access ManaSarathi'),
         fallbackLabel: t('biometric.fallback', 'Use passcode'),
         disableDeviceFallback: false,
       });

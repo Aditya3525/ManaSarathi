@@ -20,15 +20,28 @@ router.get('/', async (req, res) => {
         id: true,
         title: true,
         type: true,
+        contentType: true,
         category: true,
         approach: true,
         description: true,
         youtubeUrl: true,
         thumbnailUrl: true,
         difficulty: true,
+        intensityLevel: true,
+        focusAreas: true,
+        immediateRelief: true,
+        crisisEligible: true,
+        timeOfDay: true,
+        environment: true,
+        culturalContext: true,
+        sourceUrl: true,
+        sourceName: true,
         duration: true,
         tags: true,
-        content: true // May contain url or body depending on creation
+        content: true, // May contain url or body depending on creation
+        averageRating: true,
+        completions: true,
+        effectiveness: true,
       }
     });
 

@@ -47,11 +47,11 @@ export const GOOGLE_CLIENT_ID =
 export const APP_NAME = 
   Constants.expoConfig?.extra?.appName ||
   process.env.EXPO_PUBLIC_APP_NAME ||
-  'MaanSarathi';
+  'ManaSarathi';
 
 // App Configuration
 export const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
-export const APP_SCHEME = 'MaanSarathi';
+export const APP_SCHEME = 'ManaSarathi';
 
 // Storage Keys
 export const STORAGE_KEYS = {

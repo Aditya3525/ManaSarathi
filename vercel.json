@@ -1,5 +1,5 @@
 {
-  "name": "maansarathi",
+  "name": "manasarthi",
   "framework": "vite",
   "installCommand": "npm install",
   "buildCommand": "npm run build --workspace frontend",

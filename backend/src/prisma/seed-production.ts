@@ -63,8 +63,7 @@ async function seedPractices() {
         duration: 12, type: "meditation", category: "MEDITATION",
         difficulty: "intermediate", approach: "eastern", format: "Audio", isPublished: true
       }
-    ],
-    skipDuplicates: true
+    ]
   });
   console.log(`  ✅ Created ${result.count} practices`);
 }
@@ -109,8 +108,7 @@ async function seedContent() {
         content: "Good sleep hygiene involves consistent routines, comfortable environment, and relaxation techniques. Learn about optimal sleep temperature, light exposure, and pre-bed rituals.",
         tags: "sleep,hygiene,tips", isPublished: true
       }
-    ],
-    skipDuplicates: true
+    ]
   });
   console.log(`  ✅ Created ${result.count} content items`);
 }
@@ -132,8 +130,7 @@ async function seedFAQs() {
       { question: 'How much does the app cost?', answer: 'We offer both free and premium plans. The free plan includes basic assessments, mood tracking, and limited content access. Premium plans unlock personalized recommendations, unlimited AI chatbot conversations, advanced analytics, and priority support.', category: 'BILLING', order: 6, tags: 'pricing, subscription, premium', createdBy: 'system' },
       { question: 'The app is not loading properly. What should I do?', answer: 'Try these steps: 1) Clear your browser cache and cookies, 2) Make sure you\'re using an updated browser, 3) Check your internet connection, 4) Try logging out and back in. If issues persist, contact support.', category: 'TECHNICAL', order: 7, tags: 'troubleshooting, loading issues, technical', createdBy: 'system' },
       { question: 'Can I delete my account and data?', answer: 'Yes, you have full control over your data. Go to Settings > Account > Delete Account. This will permanently remove all your personal information, assessment results, and activity history. This action cannot be undone.', category: 'PRIVACY', order: 8, tags: 'account deletion, data removal, GDPR', createdBy: 'system' }
-    ],
-    skipDuplicates: true
+    ]
   });
   console.log(`  ✅ Created ${result.count} FAQs`);
 }
@@ -168,8 +165,7 @@ async function seedCrisisResources() {
       { name: 'Lifeline Australia', type: 'HOTLINE', phoneNumber: '13 11 14', textNumber: '0477 13 11 14', website: 'https://www.lifeline.org.au/', description: 'Free, 24-hour crisis support and suicide prevention.', availability: '24/7', country: 'AU', language: 'English', order: 1, tags: 'crisis support, suicide prevention, 24/7' },
       { name: 'Beyond Blue', type: 'HOTLINE', phoneNumber: '1300 22 4636', website: 'https://www.beyondblue.org.au/', description: 'Support for anxiety, depression, and suicide prevention 24/7.', availability: '24/7', country: 'AU', language: 'English', order: 2, tags: 'anxiety, depression, mental health, 24/7' },
       { name: '000 Emergency Services', type: 'EMERGENCY', phoneNumber: '000', description: 'For immediate life-threatening emergencies in Australia.', availability: '24/7', country: 'AU', language: 'English', order: 4, tags: 'emergency, 000, immediate danger' },
-    ],
-    skipDuplicates: true
+    ]
   });
   console.log(`  ✅ Created ${result.count} crisis resources`);
 }
@@ -228,8 +224,7 @@ async function seedTherapists() {
         acceptsInsurance: true, sessionFee: 160, offersSliding: false,
         yearsExperience: 18, languages: 'English', isVerified: true, isActive: true
       }
-    ],
-    skipDuplicates: true
+    ]
   });
   console.log(`  ✅ Created ${result.count} therapists`);
 }

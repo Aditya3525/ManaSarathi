@@ -87,7 +87,7 @@ export function BottomNavigation({
       )}
       aria-label="Primary navigation"
     >
-      <div className="grid grid-cols-4 gap-1 px-2 py-1 max-w-md mx-auto">
+      <div className="grid grid-cols-5 gap-1 px-2 py-1 max-w-md mx-auto">
         {getNavItems(t).map((item) => {
           const isActive = currentPage === item.id;
           

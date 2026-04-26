@@ -1,13 +1,14 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
+import { updateProfileSchema } from '../api/validators';
 import { logMoodSchema, getMoodHistorySchema } from '../api/validators/mood.validator';
 import { getUserProfile, updateProfile, completeOnboarding, logMood, getMoodHistory } from '../controllers/userController';
+import { prisma } from '../config/database';
+import { STRONG_PASSWORD_MESSAGE, isStrongPassword } from '../shared/auth/passwordPolicy';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // All routes require authentication
 router.use(authenticate as any);
@@ -17,55 +18,9 @@ router.post('/complete-onboarding', completeOnboarding as any);
 
 // Profile route (alias for mobile app compatibility)  
 // Mobile calls PUT /users/profile, this maps to the same updateProfile logic as PUT /auth/profile
-router.put('/profile', async (req: any, res) => {
-  try {
-    const {
-      birthday, gender, region, language, emergencyContact, emergencyPhone,
-      approach, firstName, lastName, isOnboarded, dateOfBirth, preferredApproach,
-      primaryConcern, dataConsent, clinicianSharing
-    } = req.body;
-
-    const updatedUser = await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        ...(birthday && {
-          birthday: (() => {
-            let b: any = birthday;
-            if (typeof b === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(b)) {
-              const [dd, mm, yyyy] = b.split('-');
-              b = `${yyyy}-${mm}-${dd}`;
-            }
-            const d = new Date(b);
-            return isNaN(d.getTime()) ? undefined : d;
-          })()
-        }),
-        ...(dateOfBirth && {
-          birthday: (() => {
-            const d = new Date(dateOfBirth);
-            return isNaN(d.getTime()) ? undefined : d;
-          })()
-        }),
-        ...(gender && { gender }),
-        ...(region && { region }),
-        ...(language && { language }),
-        ...(emergencyContact && { emergencyContact }),
-        ...(emergencyPhone && { emergencyPhone }),
-        ...(approach && { approach }),
-        ...(preferredApproach && { approach: preferredApproach }),
-        ...(firstName && { firstName }),
-        ...(lastName && { lastName }),
-        ...(isOnboarded !== undefined && { isOnboarded }),
-        ...(dataConsent !== undefined && { dataConsent }),
-        ...(clinicianSharing !== undefined && { clinicianSharing }),
-      },
-    });
-
-    const { password: _password, securityAnswerHash: _answerHash, ...user } = updatedUser as any;
-    res.json({ success: true, data: { user } });
-  } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update profile' });
-  }
+router.put('/profile', validate(updateProfileSchema), (req: any, res, next) => {
+  req.params = { ...req.params, userId: req.user?.id };
+  return (updateProfile as any)(req, res, next);
 });
 
 // Change password (for mobile app - authenticated users)
@@ -82,8 +37,8 @@ router.post('/change-password', async (req: any, res) => {
       return res.status(400).json({ success: false, error: 'Current password and new password are required' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ success: false, error: STRONG_PASSWORD_MESSAGE });
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });

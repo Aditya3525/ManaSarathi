@@ -10,7 +10,7 @@ const normalizeLevel = (value?: string | null): pino.LevelWithSilent => {
 export const logger = pino({
   level: normalizeLevel(process.env.LOG_LEVEL),
   base: {
-    service: 'maansarathi-api'
+    service: 'manasarthi-api'
   },
   timestamp: pino.stdTimeFunctions.isoTime
 });

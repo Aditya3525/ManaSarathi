@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   User,
@@ -19,12 +20,10 @@ import {
   FileDown,
   CheckCircle2
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useDevice } from '../../../hooks/use-device';
-import { LanguageSelector } from '../LanguageSelector';
 import { authApi, usersApi, privacyApi } from '../../../services/api';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
@@ -45,6 +44,7 @@ import {
 } from '../../ui/sheet';
 import { Switch } from '../../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { LanguageSelector } from '../LanguageSelector';
 
 interface ProfileUser {
   id: string;
@@ -274,6 +274,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     password: '',
     approach: (user?.approach as 'western' | 'eastern' | 'hybrid' | undefined) || 'hybrid'
   });
+
+  const profileDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'ManaSarathi User';
+  const avatarInitials = profileDisplayName
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase())
+    .slice(0, 2)
+    .join('') || 'MS';
 
   const validateBirthday = (dateStr: string | undefined) => {
     if (!dateStr) return true;
@@ -592,7 +600,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background page-enter">
       {/* Mobile/Tablet/Desktop Header - Responsive */}
       <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
@@ -611,12 +619,12 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </Button>
 
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User className="h-6 w-6 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground flex items-center justify-center flex-shrink-0 text-sm font-semibold shadow-sm">
+                  {avatarInitials}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-semibold truncate">
-                    {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}
+                    {profileDisplayName}
                   </h1>
                   <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
                 </div>
@@ -637,11 +645,11 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-primary" />
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground flex items-center justify-center text-lg font-semibold shadow-sm">
+                  {avatarInitials}
                 </div>
                 <div>
-                  <h1 className="text-3xl">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}</h1>
+                  <h1 className="text-3xl">{profileDisplayName}</h1>
                   <p className="text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
@@ -733,9 +741,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   </Alert>
                 )}
                 {saveSuccess && (
-                  <Alert className="border-green-300 bg-green-50">
-                    <AlertDescription>Profile updated successfully.</AlertDescription>
-                  </Alert>
+                  <div
+                    className="flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-green-800 animate-in fade-in zoom-in-95 duration-300"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <CheckCircle2 className="h-4 w-4 animate-pulse" />
+                    <span className="text-sm font-medium">Profile updated successfully.</span>
+                  </div>
                 )}
                 
                 {/* Mobile: Single column / Tablet+: Two columns */}
@@ -824,10 +837,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     <Input
                       id="emergencyPhone"
                       type="tel"
+                      maxLength={10}
                       value={editedProfile.emergencyPhone}
-                      onChange={(e) => setEditedProfile(prev => ({ ...prev, emergencyPhone: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setEditedProfile(prev => ({ ...prev, emergencyPhone: val }));
+                      }}
                       disabled={!isEditing}
-                      placeholder="e.g., +1 (555) 123-4567"
+                      placeholder="e.g. 9876543210"
                       inputMode="tel"
                       className={device.isMobile ? "min-h-[44px]" : ""}
                     />
@@ -1314,6 +1331,25 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                       onCheckedChange={(checked) =>
                         setAccessibilitySetting('reducedMotion', checked, {
                           announce: 'Reduced motion {state}'
+                        })
+                      }
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label>Simple Language Mode</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Use easier words and shorter guidance in AI chat responses
+                      </p>
+                    </div>
+                    <Switch
+                      checked={accessibilitySettings.simpleLanguage}
+                      onCheckedChange={(checked) =>
+                        setAccessibilitySetting('simpleLanguage', checked, {
+                          announce: 'Simple language mode {state}'
                         })
                       }
                     />

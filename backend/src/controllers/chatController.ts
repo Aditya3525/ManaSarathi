@@ -2,13 +2,95 @@ import { Request, Response } from 'express';
 import Joi from 'joi';
 import { chatService } from '../services/chatService';
 import { conversationMemoryService } from '../services/conversationMemoryService';
+import { sessionContinuityService } from '../services/sessionContinuityService';
 import { createRequestLogger } from '../utils/logger';
 import { prisma } from '../config/database';
 
 const messageSchema = Joi.object({
   content: Joi.string().min(1).max(2000).required(),
-  conversationId: Joi.string().optional()
+  conversationId: Joi.string().optional(),
+  simpleLanguage: Joi.boolean().optional(),
+  context: Joi.object({
+    conversationId: Joi.string().optional(),
+    simpleLanguage: Joi.boolean().optional(),
+    metadata: Joi.object().optional()
+  }).optional()
 });
+
+const parseApproachFromMetadata = (metadata?: string | null): string | undefined => {
+  if (!metadata) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed?.approach;
+  } catch {
+    return undefined;
+  }
+};
+
+const buildChatPayload = (result: any, incomingContent: string): any => {
+  const sentiment = result.botMessage?.metadata?.sentiment || null;
+  const smartReplies = chatService.generateSmartReplies(
+    incomingContent,
+    result.response || result.botMessage?.content || '',
+    sentiment
+  );
+
+  const payload: any = {
+    message: result.botMessage,
+    conversationId: result.conversationId,
+    conversationTitle: result.conversationTitle,
+    ai_metadata: {
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
+      context: result.context,
+      approach: parseApproachFromMetadata(result.botMessage?.metadata)
+    },
+    smartReplies
+  };
+
+  if (result.recommendations) {
+    payload.recommendations = result.recommendations.items;
+  }
+  if (result.assessmentPrompt) {
+    payload.assessmentPrompt = result.assessmentPrompt;
+  }
+  if (result.recommendationsMeta) {
+    payload.recommendationsMeta = result.recommendationsMeta;
+  }
+  if (result.fallbackMeta || result.provider === 'fallback') {
+    payload.fallback = {
+      ...result.fallbackMeta,
+      providerFallback: result.provider === 'fallback'
+    };
+  }
+
+  return payload;
+};
+
+const resolvePayloadMessageContent = (payload: any): string => {
+  const message = payload?.message;
+  if (typeof message === 'string') {
+    return message;
+  }
+
+  if (message && typeof message === 'object' && typeof message.content === 'string') {
+    return message.content;
+  }
+
+  return '';
+};
+
+const tokenizeResponseForStream = (content: string): string[] => {
+  if (!content) {
+    return [];
+  }
+
+  return content.match(/\S+\s*/g) ?? [content];
+};
 
 export const sendMessage = async (req: any, res: Response) => {
   try {
@@ -19,14 +101,24 @@ export const sendMessage = async (req: any, res: Response) => {
     }
 
     const userId = req.user.id;
-    const { content, conversationId } = req.body;
+    const { content, conversationId, simpleLanguage, context } = req.body;
+    const resolvedConversationId = conversationId ?? context?.conversationId;
+    const resolvedSimpleLanguage = typeof simpleLanguage === 'boolean'
+      ? simpleLanguage
+      : Boolean(context?.simpleLanguage);
     const requestId = (req as any).id ?? res.locals.requestId;
     const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'sendMessage', userId });
 
     // Check for crisis language first
     if (chatService.detectCrisisLanguage(content)) {
       // Generate crisis response directly through chatService
-      const result = await chatService.generateAIResponse(userId, content, undefined, conversationId);
+      const result = await chatService.generateAIResponse(
+        userId,
+        content,
+        undefined,
+        resolvedConversationId,
+        { simpleLanguage: resolvedSimpleLanguage }
+      );
       log.warn({ crisis: true }, 'Crisis response triggered for incoming message');
 
       res.status(201).json({
@@ -45,36 +137,16 @@ export const sendMessage = async (req: any, res: Response) => {
     }
 
     // Generate AI response (this handles saving messages automatically)
-    const result = await chatService.generateAIResponse(userId, content, undefined, conversationId);
-
-    // Generate smart replies based on bot response
-    const sentiment = result.botMessage?.metadata?.sentiment || null;
-    const smartReplies = chatService.generateSmartReplies(
+    const result = await chatService.generateAIResponse(
+      userId,
       content,
-      result.response || result.botMessage?.content || '',
-      sentiment
+      undefined,
+      resolvedConversationId,
+      { simpleLanguage: resolvedSimpleLanguage }
     );
 
-    const payload: any = {
-      message: result.botMessage,
-      conversationId: result.conversationId,
-      conversationTitle: result.conversationTitle,
-      ai_metadata: {
-        provider: result.provider,
-        model: result.model,
-        usage: result.usage,
-        context: result.context,
-        approach: result.botMessage?.metadata ? (() => { try { return JSON.parse(result.botMessage.metadata)?.approach; } catch { return undefined; } })() : undefined
-      },
-      smartReplies // Add smart reply suggestions
-    };
+    const payload = buildChatPayload(result, content);
 
-    if (result.recommendations) {
-      payload.recommendations = result.recommendations.items;
-    }
-    if (result.recommendationsMeta) {
-      payload.recommendationsMeta = result.recommendationsMeta;
-    }
     if (result.fallbackMeta || result.provider === 'fallback') {
       payload.fallback = {
         ...result.fallbackMeta,
@@ -94,6 +166,90 @@ export const sendMessage = async (req: any, res: Response) => {
     const requestId = (req as any).id ?? res.locals.requestId;
     const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'sendMessage', userId: req.user?.id });
     log.error({ err: e }, 'Failed to send chat message');
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+export const streamMessage = async (req: any, res: Response) => {
+  try {
+    const { error } = messageSchema.validate(req.body);
+    if (error) {
+      res.status(400).json({ success: false, error: error.details[0].message });
+      return;
+    }
+
+    const userId = req.user.id;
+    const { content, conversationId, simpleLanguage, context } = req.body;
+    const resolvedConversationId = conversationId ?? context?.conversationId;
+    const resolvedSimpleLanguage = typeof simpleLanguage === 'boolean'
+      ? simpleLanguage
+      : Boolean(context?.simpleLanguage);
+
+    const requestId = (req as any).id ?? res.locals.requestId;
+    const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'streamMessage', userId });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const sendEvent = (event: Record<string, unknown>) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    sendEvent({ type: 'status', stage: 'processing' });
+
+    const crisis = chatService.detectCrisisLanguage(content);
+    const result = await chatService.generateAIResponse(
+      userId,
+      content,
+      undefined,
+      resolvedConversationId,
+      { simpleLanguage: resolvedSimpleLanguage }
+    );
+
+    const payload = crisis
+      ? {
+          message: result.botMessage,
+          conversationId: result.conversationId,
+          conversationTitle: result.conversationTitle,
+          crisis: true,
+          context: result.context,
+          recommendationsMeta: result.recommendationsMeta,
+          fallback: result.fallbackMeta ?? null
+        }
+      : buildChatPayload(result, content);
+
+    const streamContent = resolvePayloadMessageContent(payload);
+    sendEvent({ type: 'status', stage: 'streaming' });
+
+    for (const token of tokenizeResponseForStream(streamContent)) {
+      sendEvent({ type: 'token', token });
+    }
+
+    if (result.fallbackMeta || result.provider === 'fallback') {
+      log.warn({ provider: result.provider, fallback: payload.fallback ?? null }, 'Streamed fallback chat response');
+    } else if (crisis) {
+      log.warn({ crisis: true }, 'Streamed crisis chat response');
+    } else {
+      log.info({ provider: result.provider }, 'Streamed AI chat response');
+    }
+
+    sendEvent({ type: 'done', payload });
+    sendEvent({ type: 'status', stage: 'completed' });
+    res.end();
+  } catch (e) {
+    const requestId = (req as any).id ?? res.locals.requestId;
+    const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'streamMessage', userId: req.user?.id });
+    log.error({ err: e }, 'Failed to stream chat message');
+
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Server error' })}\n\n`);
+      res.end();
+      return;
+    }
+
     res.status(500).json({ success: false, error: 'Server error' });
   }
 };
@@ -336,11 +492,16 @@ export const getMoodBasedGreeting = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
 
-    const greeting = await chatService.getMoodBasedGreeting(userId);
+    const opener = await sessionContinuityService.buildSessionOpener(userId);
 
     res.json({
       success: true,
-      data: { greeting }
+      data: {
+        greeting: opener.greeting,
+        hasContext: opener.hasContext,
+        actionItems: opener.actionItems,
+        progressSummary: opener.progressSummary,
+      }
     });
   } catch (e) {
     const requestId = (req as any).id ?? res.locals.requestId;
@@ -381,7 +542,7 @@ export const submitFeedback = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
     const { messageId } = req.params;
-    const { feedback } = req.body;
+    const { feedback, note } = req.body;
     const requestId = (req as any).id ?? res.locals.requestId;
     const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'submitFeedback', userId, messageId });
 
@@ -389,6 +550,15 @@ export const submitFeedback = async (req: any, res: Response) => {
       res.status(400).json({ success: false, error: 'Feedback must be "liked" or "disliked"' });
       return;
     }
+
+    if (note !== undefined && typeof note !== 'string') {
+      res.status(400).json({ success: false, error: 'Feedback note must be a string' });
+      return;
+    }
+
+    const normalizedNote = typeof note === 'string'
+      ? note.trim().slice(0, 500)
+      : undefined;
 
     // Find the message and verify ownership
     const message = await prisma.chatMessage.findFirst({
@@ -400,17 +570,74 @@ export const submitFeedback = async (req: any, res: Response) => {
       return;
     }
 
+    if (message.type !== 'bot') {
+      res.status(400).json({ success: false, error: 'Feedback can only be submitted for assistant messages' });
+      return;
+    }
+
+    const helpful = feedback === 'liked';
+
     // Update metadata with feedback
-    const existingMetadata = message.metadata ? JSON.parse(message.metadata) : {};
-    const updatedMetadata = { ...existingMetadata, feedback };
+    let existingMetadata: Record<string, unknown> = {};
+    if (message.metadata) {
+      try {
+        const parsedMetadata = JSON.parse(message.metadata);
+        if (parsedMetadata && typeof parsedMetadata === 'object' && !Array.isArray(parsedMetadata)) {
+          existingMetadata = parsedMetadata as Record<string, unknown>;
+        }
+      } catch {
+        // Keep existing metadata empty if legacy rows contain non-JSON payloads.
+        existingMetadata = {};
+      }
+    }
+    const updatedMetadata = {
+      ...existingMetadata,
+      feedback,
+      ...(normalizedNote ? { feedbackNote: normalizedNote } : {})
+    };
 
     await prisma.chatMessage.update({
       where: { id: messageId },
       data: { metadata: JSON.stringify(updatedMetadata) }
     });
 
-    log.info({ feedback }, 'Message feedback recorded');
-    res.json({ success: true, data: { messageId, feedback } });
+    await prisma.chatFeedback.upsert({
+      where: {
+        userId_messageId: {
+          userId,
+          messageId
+        }
+      },
+      update: {
+        helpful,
+        note: normalizedNote || null,
+        resolvedAt: helpful ? new Date() : null
+      },
+      create: {
+        userId,
+        messageId,
+        helpful,
+        note: normalizedNote || null,
+        resolvedAt: helpful ? new Date() : null
+      }
+    });
+
+    const repairPrompt = !helpful
+      ? normalizedNote
+        ? `Thanks for the feedback. I heard you say: "${normalizedNote}". I want to adjust. What would feel most helpful right now?`
+        : 'Thanks for the feedback. I want to adjust my support. What would feel most helpful right now?'
+      : null;
+
+    log.info({ feedback, hasNote: Boolean(normalizedNote) }, 'Message feedback recorded');
+    res.json({
+      success: true,
+      data: {
+        messageId,
+        feedback,
+        note: normalizedNote || null,
+        repairPrompt
+      }
+    });
   } catch (e) {
     const requestId = (req as any).id ?? res.locals.requestId;
     const log = createRequestLogger(requestId).child({ controller: 'chat', action: 'submitFeedback', userId: req.user?.id });

@@ -26,3 +26,13 @@ export const getSessionSecret = (): string => {
 
   return DEV_SESSION_SECRET;
 };
+
+export const getEmailVerificationSecret = (): string => {
+  const secret = process.env.EMAIL_VERIFICATION_SECRET;
+  if (secret && secret.trim()) {
+    return secret;
+  }
+
+  // Reuse JWT secret when a dedicated verification secret is not provided.
+  return getJwtSecret();
+};

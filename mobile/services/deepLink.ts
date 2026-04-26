@@ -8,9 +8,9 @@ import { TokenManager } from '../utils/storage';
  */
 export const DEEP_LINK_CONFIG = {
   prefixes: [
-    'maansarathi://',
-    'https://maansarathi.app',
-    'https://*.maansarathi.app',
+    'manasarthi://',
+    'https://manasarthi.app',
+    'https://*.manasarthi.app',
   ],
   config: {
     screens: {
@@ -193,7 +193,7 @@ class DeepLinkService {
    * Create web URL for sharing
    */
   createWebUrl(path: string, params?: Record<string, any>): string {
-    const baseUrl = 'https://maansarathi.app';
+    const baseUrl = 'https://manasarthi.app';
     const queryString = params
       ? '?' + new URLSearchParams(params as any).toString()
       : '';
@@ -209,9 +209,9 @@ class DeepLinkService {
     
     try {
       await Share.share({
-        message: `Check this out on MaanSarathi: ${webUrl}`,
+        message: `Check this out on ManaSarathi: ${webUrl}`,
         url: webUrl,
-        title: 'MaanSarathi',
+        title: 'ManaSarathi',
       });
     } catch {
       // User cancelled share

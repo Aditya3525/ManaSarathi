@@ -40,6 +40,7 @@ export interface ContentItem {
   duration?: number;
   tags?: string[];
   isPublished: boolean;
+  scheduledPublishAt?: string | null;
   createdAt: string;
 }
 
@@ -100,7 +101,7 @@ export const ContentList: React.FC<ContentListProps> = ({
       const raw = data.data || [];
       interface RawContent {
         id: string; title: string; type: string; approach: string; category?: string; difficulty?: string;
-        description?: string; thumbnailUrl?: string; youtubeUrl?: string; duration?: number | string; tags?: string | string[]; isPublished: boolean; createdAt?: string;
+        description?: string; thumbnailUrl?: string; youtubeUrl?: string; duration?: number | string; tags?: string | string[]; isPublished: boolean; scheduledPublishAt?: string | null; createdAt?: string;
       }
       const normalized: ContentItem[] = (raw as RawContent[]).map((c) => ({
         id: c.id,
@@ -119,6 +120,7 @@ export const ContentList: React.FC<ContentListProps> = ({
               ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
               : []),
         isPublished: !!c.isPublished,
+        scheduledPublishAt: c.scheduledPublishAt ?? null,
         createdAt: c.createdAt || new Date().toISOString()
       }));
       setItems(normalized);

@@ -43,7 +43,7 @@ const updateProfileSchema = Joi.object({
 });
 
 const onboardingSchema = Joi.object({
-  firstName: Joi.string().min(1).max(50).optional(),
+  firstName: Joi.string().min(1).max(50).required(),
   lastName: Joi.string().min(1).max(50).optional(),
   birthday: birthdayField,
   gender: Joi.string().optional(),
@@ -51,13 +51,70 @@ const onboardingSchema = Joi.object({
   language: Joi.string().optional(),
   emergencyContact: Joi.string().optional(),
   emergencyPhone: Joi.string().optional(),
+  dataConsent: Joi.boolean().optional(),
+  clinicianSharing: Joi.boolean().optional(),
   approach: Joi.string().valid('western', 'eastern', 'hybrid').required(),
 });
 
 const moodSchema = Joi.object({
-  mood: Joi.string().required(),
-  notes: Joi.string().optional(),
-});
+  mood: Joi.string().trim().max(50).optional(),
+  emotion: Joi.string().trim().max(50).optional(),
+  emotionGroup: Joi.string().trim().max(50).optional(),
+  intensity: Joi.number().integer().min(1).max(10).optional(),
+  trigger: Joi.string().trim().max(250).optional(),
+  notes: Joi.string().trim().max(500).optional(),
+}).or('mood', 'emotion');
+
+const LEGACY_MOOD_BY_GROUP: Record<string, string> = {
+  joy: 'Great',
+  surprise: 'Good',
+  fear: 'Anxious',
+  anger: 'Struggling',
+  sadness: 'Struggling',
+  disgust: 'Okay'
+};
+
+const LEGACY_MOOD_BY_EMOTION: Record<string, string> = {
+  anxious: 'Anxious',
+  nervous: 'Anxious',
+  worried: 'Anxious',
+  overwhelmed: 'Struggling',
+  insecure: 'Struggling',
+  hopeless: 'Struggling',
+  lonely: 'Struggling',
+  grieving: 'Struggling',
+  frustrated: 'Struggling',
+  irritated: 'Struggling',
+  resentful: 'Struggling',
+  jealous: 'Struggling',
+  calm: 'Good',
+  grateful: 'Great',
+  excited: 'Great',
+  happy: 'Great',
+  proud: 'Great'
+};
+
+const normalizeLegacyMood = (
+  mood: unknown,
+  emotionGroup: unknown,
+  emotion: unknown
+): string | null => {
+  if (typeof mood === 'string' && mood.trim().length > 0) {
+    return mood.trim();
+  }
+
+  const normalizedGroup = typeof emotionGroup === 'string' ? emotionGroup.trim().toLowerCase() : '';
+  if (normalizedGroup && LEGACY_MOOD_BY_GROUP[normalizedGroup]) {
+    return LEGACY_MOOD_BY_GROUP[normalizedGroup];
+  }
+
+  const normalizedEmotion = typeof emotion === 'string' ? emotion.trim().toLowerCase() : '';
+  if (normalizedEmotion && LEGACY_MOOD_BY_EMOTION[normalizedEmotion]) {
+    return LEGACY_MOOD_BY_EMOTION[normalizedEmotion];
+  }
+
+  return null;
+};
 
 // Get user profile
 export const getUserProfile = async (req: AuthRequest, res: Response) => {
@@ -209,12 +266,8 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 // Complete onboarding
 export const completeOnboarding = async (req: AuthRequest, res: Response) => {
   try {
-    console.log('completeOnboarding called with req.body:', req.body);
-    console.log('Authenticated user:', req.user);
-    
     const { error } = onboardingSchema.validate(req.body);
     if (error) {
-      console.log('Validation error:', error.details[0].message);
       res.status(400).json({
         success: false,
         error: error.details[0].message,
@@ -231,17 +284,37 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
       region,
       language,
       emergencyContact,
-      emergencyPhone
+      emergencyPhone,
+      dataConsent,
+      clinicianSharing,
     } = req.body;
     const userId = req.user?.id;
 
-    console.log('Processing onboarding for userId:', userId, 'with approach:', approach);
-
     if (!userId) {
-      console.log('No user ID found');
       res.status(401).json({
         success: false,
         error: 'User not authenticated',
+      });
+      return;
+    }
+
+    const userRecord = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true }
+    });
+
+    if (!userRecord) {
+      res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+      return;
+    }
+
+    if (!userRecord.password) {
+      res.status(403).json({
+        success: false,
+        error: 'Please set up a password before completing onboarding.',
       });
       return;
     }
@@ -271,6 +344,8 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
     if (language) updateData.language = language;
     if (emergencyContact) updateData.emergencyContact = emergencyContact;
     if (emergencyPhone) updateData.emergencyPhone = emergencyPhone;
+    if (typeof dataConsent === 'boolean') updateData.dataConsent = dataConsent;
+    if (typeof clinicianSharing === 'boolean') updateData.clinicianSharing = clinicianSharing;
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -295,8 +370,6 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
         updatedAt: true,
       },
     });
-
-    console.log('Onboarding completed successfully for user:', userId, 'updated user:', user);
 
     res.json({
       success: true,
@@ -323,7 +396,7 @@ export const logMood = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { mood, notes } = req.body;
+    const { mood, emotion, emotionGroup, intensity, trigger, notes } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -334,11 +407,24 @@ export const logMood = async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const resolvedMood = normalizeLegacyMood(mood, emotionGroup, emotion);
+    if (!resolvedMood) {
+      res.status(400).json({
+        success: false,
+        error: 'Mood is required (directly or derived from emotion/emotionGroup)',
+      });
+      return;
+    }
+
     const moodEntry = await prisma.moodEntry.create({
       data: {
         userId,
-        mood,
-        notes,
+        mood: resolvedMood,
+        emotion: typeof emotion === 'string' ? emotion.trim().toLowerCase() : null,
+        emotionGroup: typeof emotionGroup === 'string' ? emotionGroup.trim().toLowerCase() : null,
+        intensity: typeof intensity === 'number' ? Math.max(1, Math.min(10, Math.round(intensity))) : null,
+        trigger: typeof trigger === 'string' && trigger.trim().length > 0 ? trigger.trim() : null,
+        notes: typeof notes === 'string' && notes.trim().length > 0 ? notes.trim() : null,
       },
     });
 

@@ -1,4 +1,4 @@
-import { Bell, X, CheckCircle, MessageCircle } from 'lucide-react';
+import { Bell, X, MessageCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 import { chatApi } from '../../../services/api';
@@ -100,7 +100,7 @@ export function ProactiveCheckInNotification({ user, onStartChat }: ProactiveChe
                   className="flex-1 gap-1"
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
-                  Let's Talk
+                  Let&apos;s Talk
                 </Button>
                 <Button
                   size="sm"

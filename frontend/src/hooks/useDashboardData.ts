@@ -70,6 +70,10 @@ export interface ProgressMetric {
 
 export interface MoodEntry {
   mood: string;
+  emotion?: string | null;
+  emotionGroup?: string | null;
+  intensity?: number | null;
+  trigger?: string | null;
   notes: string | null;
   createdAt: string;
 }
@@ -236,6 +240,7 @@ export function useDashboardData() {
     queryFn: () => fetchDashboardSummary(token!),
     enabled: !!token && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // retain cached summary for 10 minutes
     refetchOnWindowFocus: true,
   });
 }

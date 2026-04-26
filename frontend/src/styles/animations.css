@@ -1,0 +1,95 @@
+/* ===== THERAPEUTIC ANIMATIONS ===== */
+
+/* Page transitions */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: page-fade-in var(--transition-calm) forwards;
+}
+
+/* Message entrance (for chat) */
+@keyframes message-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message-enter {
+  animation: message-slide-up 250ms ease-out forwards;
+}
+
+/* Gentle breathing pulse (for bot avatar, loading states) */
+@keyframes breathe-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+.animate-breathe {
+  animation: breathe-pulse var(--transition-breathe) infinite;
+}
+
+/* Score ring fill */
+@keyframes ring-fill {
+  from { stroke-dashoffset: 283; }
+}
+
+/* Celebration confetti */
+@keyframes confetti-fall {
+  0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Card expand */
+@keyframes card-expand {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: 500px; opacity: 1; }
+}
+
+.card-expand-enter {
+  animation: card-expand var(--transition-calm) forwards;
+  overflow: hidden;
+}
+
+/* Stat counter increment */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gentle glow for active states */
+@keyframes gentle-glow {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  50% { box-shadow: 0 0 16px 4px hsl(var(--primary) / 0.15); }
+}
+
+.animate-glow {
+  animation: gentle-glow 3s ease-in-out infinite;
+}
+
+/* Mood selection feedback */
+@keyframes mood-select {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1.05); }
+}
+
+/* Streak increment */
+@keyframes streak-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Reduced motion override */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .message-enter,
+  .animate-breathe,
+  .card-expand-enter,
+  .animate-glow {
+    animation: none !important;
+    transition: none !important;
+  }
+}

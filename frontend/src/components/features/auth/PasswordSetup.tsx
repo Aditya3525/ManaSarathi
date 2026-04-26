@@ -28,7 +28,15 @@ export function PasswordSetup({ user, onComplete, onSkip, isLoading, error }: Pa
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const isPasswordValid = password.length >= 6;
+  const passwordChecks = {
+    minLength: password.length >= 8,
+    lower: /[a-z]/.test(password),
+    upper: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z\d]/.test(password),
+  };
+
+  const isPasswordValid = Object.values(passwordChecks).every(Boolean);
   const passwordsMatch = password === confirmPassword;
   const canSubmit = isPasswordValid && passwordsMatch && !isLoading;
 
@@ -41,12 +49,10 @@ export function PasswordSetup({ user, onComplete, onSkip, isLoading, error }: Pa
 
   const getPasswordStrength = () => {
     if (password.length === 0) return { strength: 0, label: '', color: '' };
-    if (password.length < 6) return { strength: 25, label: 'Too short', color: 'text-red-600' };
-    if (password.length < 8) return { strength: 50, label: 'Fair', color: 'text-yellow-600' };
-    if (password.length >= 8 && /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      return { strength: 100, label: 'Strong', color: 'text-green-600' };
-    }
-    return { strength: 75, label: 'Good', color: 'text-blue-600' };
+    const score = Object.values(passwordChecks).filter(Boolean).length;
+    if (score <= 2) return { strength: 40, label: 'Weak', color: 'text-red-600' };
+    if (score <= 4) return { strength: 75, label: 'Good', color: 'text-blue-600' };
+    return { strength: 100, label: 'Strong', color: 'text-green-600' };
   };
 
   const passwordStrength = getPasswordStrength();
@@ -191,28 +197,44 @@ export function PasswordSetup({ user, onComplete, onSkip, isLoading, error }: Pa
               <p className="font-medium text-foreground">Password requirements:</p>
               <ul className="space-y-1 text-muted-foreground">
                 <li className="flex items-center gap-2">
-                  {password.length >= 6 ? (
+                  {passwordChecks.minLength ? (
                     <CheckCircle className="h-3 w-3 text-green-600" />
                   ) : (
                     <div className="h-3 w-3 rounded-full border border-muted-foreground" />
                   )}
-                  At least 6 characters
+                  At least 8 characters
                 </li>
                 <li className="flex items-center gap-2">
-                  {/(?=.*[a-z])(?=.*[A-Z])/.test(password) ? (
+                  {passwordChecks.upper ? (
                     <CheckCircle className="h-3 w-3 text-green-600" />
                   ) : (
                     <div className="h-3 w-3 rounded-full border border-muted-foreground" />
                   )}
-                  Mix of uppercase and lowercase (recommended)
+                  At least one uppercase letter
                 </li>
                 <li className="flex items-center gap-2">
-                  {/(?=.*\d)/.test(password) ? (
+                  {passwordChecks.lower ? (
                     <CheckCircle className="h-3 w-3 text-green-600" />
                   ) : (
                     <div className="h-3 w-3 rounded-full border border-muted-foreground" />
                   )}
-                  At least one number (recommended)
+                  At least one lowercase letter
+                </li>
+                <li className="flex items-center gap-2">
+                  {passwordChecks.number ? (
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                  ) : (
+                    <div className="h-3 w-3 rounded-full border border-muted-foreground" />
+                  )}
+                  At least one number
+                </li>
+                <li className="flex items-center gap-2">
+                  {passwordChecks.special ? (
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                  ) : (
+                    <div className="h-3 w-3 rounded-full border border-muted-foreground" />
+                  )}
+                  At least one special character
                 </li>
               </ul>
             </div>

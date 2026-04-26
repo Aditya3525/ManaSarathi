@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MaanSarathi",
-    "slug": "MaanSarathi",
+    "name": "ManaSarathi",
+    "slug": "ManaSarathi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "maansarathi",
+    "scheme": "manasarthi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.maansarathi.app",
+      "bundleIdentifier": "com.manasarthi.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to securely access your mental wellbeing data",
         "NSCameraUsageDescription": "Take photos for your profile",
@@ -28,7 +28,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0ea5e9"
       },
-      "package": "com.maansarathi.app",
+      "package": "com.manasarthi.app",
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -53,14 +53,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow MaanSarathi to access your photos",
-          "cameraPermission": "Allow MaanSarathi to access your camera"
+          "photosPermission": "Allow ManaSarathi to access your photos",
+          "cameraPermission": "Allow ManaSarathi to access your camera"
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Allow MaanSarathi to access your microphone for audio practices"
+          "microphonePermission": "Allow ManaSarathi to access your microphone for audio practices"
         }
       ],
       "@react-native-community/datetimepicker"
@@ -70,7 +70,7 @@
     },
     "extra": {
       "router": {
-        "origin": "https://maansarathi.app"
+        "origin": "https://manasarthi.app"
       },
       "eas": {
         "projectId": "your-project-id-here"

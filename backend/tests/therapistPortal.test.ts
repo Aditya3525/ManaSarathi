@@ -16,6 +16,10 @@ const {
   therapistBookingFindManyMock,
   therapistBookingCountMock,
   therapistBookingGroupByMock,
+  therapistNoteCreateMock,
+  therapistNoteFindManyMock,
+  therapistNoteFindFirstMock,
+  therapistNoteUpdateMock,
   prismaMock,
 } = vi.hoisted(() => {
   const bcryptCompareMock = vi.fn();
@@ -32,6 +36,10 @@ const {
   const therapistBookingFindManyMock = vi.fn();
   const therapistBookingCountMock = vi.fn();
   const therapistBookingGroupByMock = vi.fn();
+  const therapistNoteCreateMock = vi.fn();
+  const therapistNoteFindManyMock = vi.fn();
+  const therapistNoteFindFirstMock = vi.fn();
+  const therapistNoteUpdateMock = vi.fn();
 
   const prismaMock = {
     user: {
@@ -50,6 +58,12 @@ const {
       count: therapistBookingCountMock,
       groupBy: therapistBookingGroupByMock,
     },
+    therapistNote: {
+      create: therapistNoteCreateMock,
+      findMany: therapistNoteFindManyMock,
+      findFirst: therapistNoteFindFirstMock,
+      update: therapistNoteUpdateMock,
+    },
   };
 
   return {
@@ -66,6 +80,10 @@ const {
     therapistBookingFindManyMock,
     therapistBookingCountMock,
     therapistBookingGroupByMock,
+    therapistNoteCreateMock,
+    therapistNoteFindManyMock,
+    therapistNoteFindFirstMock,
+    therapistNoteUpdateMock,
     prismaMock,
   };
 });
@@ -106,6 +124,9 @@ describe('Therapist Portal API', () => {
     jwtVerifyMock.mockImplementation((token: string) => {
       if (token === 'therapist-jwt-token') {
         return { userId: 'user1', therapistId: 'therapist-1' };
+      }
+      if (token === 'user-jwt-token') {
+        return { id: 'regular-user' };
       }
       throw new Error('Invalid token');
     });
@@ -156,6 +177,18 @@ describe('Therapist Portal API', () => {
     therapistBookingFindManyMock.mockResolvedValue([]);
     therapistBookingCountMock.mockResolvedValue(0);
     therapistBookingGroupByMock.mockResolvedValue([]);
+    therapistNoteCreateMock.mockResolvedValue({
+      id: 'note-1',
+      therapistId: 'therapist-1',
+      userId: 'client-1',
+      format: 'SOAP',
+      subjective: 'progress',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    therapistNoteFindManyMock.mockResolvedValue([]);
+    therapistNoteFindFirstMock.mockResolvedValue({ id: 'note-1' });
+    therapistNoteUpdateMock.mockResolvedValue({ id: 'note-1' });
   });
 
   it('logs in therapist and returns auth token', async () => {
@@ -173,6 +206,16 @@ describe('Therapist Portal API', () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error).toContain('No therapist session');
+  });
+
+  it('returns 401 for session check with a non-therapist JWT', async () => {
+    const response = await request(app)
+      .get('/api/therapist-portal/session')
+      .set('Authorization', 'Bearer user-jwt-token');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toContain('Invalid therapist session');
+    expect(therapistFindFirstMock).not.toHaveBeenCalled();
   });
 
   it('returns therapist profile when authenticated', async () => {
@@ -194,5 +237,54 @@ describe('Therapist Portal API', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.error).toContain('Booking not found');
+  });
+
+  it('returns 400 when creating a note with an invalid linked booking id', async () => {
+    therapistBookingFindFirstMock
+      .mockResolvedValueOnce({ id: 'relationship-booking' })
+      .mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post('/api/therapist-portal/clients/client-1/notes')
+      .set('Authorization', 'Bearer therapist-jwt-token')
+      .send({
+        format: 'SOAP',
+        subjective: 'Client shared progress',
+        bookingId: 'invalid-booking-id',
+        tags: ['progress'],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Invalid linked booking ID');
+    expect(therapistNoteCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('creates a client note when no booking id is linked', async () => {
+    therapistBookingFindFirstMock.mockResolvedValueOnce({ id: 'relationship-booking' });
+
+    const response = await request(app)
+      .post('/api/therapist-portal/clients/client-1/notes')
+      .set('Authorization', 'Bearer therapist-jwt-token')
+      .send({
+        format: 'SOAP',
+        subjective: 'Client reported better sleep',
+        assessment: 'Improved baseline mood',
+        plan: 'Continue grounding exercises',
+        tags: ['progress', 'sleep'],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.success).toBe(true);
+    expect(therapistNoteCreateMock).toHaveBeenCalledTimes(1);
+    expect(therapistNoteCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          therapistId: 'therapist-1',
+          userId: 'client-1',
+          bookingId: null,
+          format: 'SOAP',
+        })
+      })
+    );
   });
 });

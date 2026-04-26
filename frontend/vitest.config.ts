@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react-swc';
+// eslint-disable-next-line import/no-unresolved
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({

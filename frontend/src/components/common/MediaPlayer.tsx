@@ -123,7 +123,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isVideo = !!videoUrl;
-  const isAudio = !!audioUrl && !videoUrl;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   
   // Use controlled playing state if provided
@@ -339,46 +338,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     );
   }
 
-  // Keyboard navigation handler
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const el = mediaRef.current;
-    if (!el) return;
-    
-    switch (e.key) {
-      case ' ':
-      case 'k':
-        e.preventDefault();
-        togglePlayback();
-        break;
-      case 'ArrowLeft':
-      case 'j':
-        e.preventDefault();
-        skip(-10);
-        break;
-      case 'ArrowRight':
-      case 'l':
-        e.preventDefault();
-        skip(10);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        handleVolumeChange([Math.min(1, volume + 0.1)]);
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        handleVolumeChange([Math.max(0, volume - 0.1)]);
-        break;
-      case 'm':
-        e.preventDefault();
-        toggleMute();
-        break;
-      case 'f':
-        e.preventDefault();
-        toggleFullscreen();
-        break;
-    }
-  }, [volume]);
-
   // Video Player
   if (videoUrl) {
     return (
@@ -392,10 +351,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onMouseMove={handleMouseMove}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        onKeyDown={handleKeyDown}
-        tabIndex={0}
-        role="application"
-        aria-label={`Video player: ${title || 'Video'}. Press space to play/pause, arrow keys to seek and adjust volume.`}
+        aria-label={`Video player: ${title || 'Video'}`}
       >
         <video
           ref={mediaRef as React.RefObject<HTMLVideoElement>}
@@ -568,10 +524,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           isMinimal && "bg-transparent",
           className
         )}
-        onKeyDown={handleKeyDown}
-        tabIndex={0}
-        role="application"
-        aria-label={`Audio player: ${title || 'Audio'}. Press space to play/pause, arrow keys to seek and adjust volume.`}
+        aria-label={`Audio player: ${title || 'Audio'}`}
       >
         <audio
           ref={mediaRef as React.RefObject<HTMLAudioElement>}

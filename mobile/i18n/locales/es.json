@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MaanSarathi",
+    "name": "ManaSarathi",
     "tagline": "Tu Compañero de Bienestar con IA",
     "loading": "Cargando...",
     "error": "Error",
@@ -227,7 +227,7 @@
     "signingIn": "Iniciando Sesión..."
   },  "onboarding": {
     "title": "Bienvenido",
-    "welcome": "Bienvenido a MaanSarathi",
+    "welcome": "Bienvenido a ManaSarathi",
     "getStarted": "Comenzar",
     "skip": "Saltar",
     "setupPassword": "Configura tu contraseña",
@@ -407,7 +407,7 @@
     "dataProtected": "Tus datos están protegidos con la seguridad del dispositivo",
     "notAvailableDevice": "Autenticación biométrica no disponible en este dispositivo",
     "noCredentials": "No hay datos biométricos registrados",
-    "authPrompt": "Autentícate para acceder a MaanSarathi",
+    "authPrompt": "Autentícate para acceder a ManaSarathi",
     "usePasscode": "Usar código",
     "authFailed": "Autenticación fallida. Por favor, inténtalo de nuevo.",
     "authError": "Ocurrió un error. Por favor, inténtalo de nuevo."

@@ -1,6 +1,6 @@
-# MaanSarathi - Frontend
+# ManaSarathi - Frontend
 
-React + Vite frontend application for the MaanSarathi wellbeing platform.
+React + Vite frontend application for the ManaSarathi wellbeing platform.
 
 ## Tech Stack
 
@@ -70,7 +70,7 @@ npm run lint             # Run ESLint
 npm run lint:fix         # Auto-fix ESLint issues
 npm run format           # Format with Prettier
 npm run typecheck        # TypeScript type checking
-npm run check            # Run typecheck + lint
+npm run check            # Run typecheck + lint + test
 ```
 
 ## Development Guidelines
@@ -118,7 +118,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id
 For production on Vercel, set:
 
 ```env
-VITE_API_URL=https://maansarathi-backend.onrender.com/api
+VITE_API_URL=https://manasarthi-backend.onrender.com/api
 ```
 
 ## Contributing

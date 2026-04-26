@@ -16,10 +16,15 @@ export const sendMessageSchema = z.object({
       .min(1, 'Message cannot be empty')
       .max(2000, 'Message must not exceed 2000 characters')
       .trim(),
+
+    conversationId: z.string().min(1).optional(),
+
+    simpleLanguage: z.boolean().optional(),
     
     context: z
       .object({
-        conversationId: z.string().uuid().optional(),
+        conversationId: z.string().min(1).optional(),
+        simpleLanguage: z.boolean().optional(),
         metadata: z.record(z.unknown()).optional(),
       })
       .optional(),

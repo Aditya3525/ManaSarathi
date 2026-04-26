@@ -3,6 +3,7 @@ import { AnthropicProvider } from './providers/AnthropicProvider';
 import { GeminiProvider } from './providers/GeminiProvider';
 import { OllamaProvider } from './providers/OllamaProvider';
 import { HuggingFaceProvider } from './providers/HuggingFaceProvider';
+import { NvidiaProvider } from './providers/NvidiaProvider';
 import { AIProvider, AIMessage, AIResponse, AIConfig, ConversationContext, AIProviderConfig, AIProviderType } from '../types/ai';
 import { logger } from '../utils/logger';
 import { advancedAnalyticsService } from './advancedAnalyticsService';
@@ -13,6 +14,11 @@ type ProviderState = {
   lastError?: string;
 };
 
+type ProviderAvailabilityState = {
+  available: boolean;
+  checkedAt: number;
+};
+
 const serviceLogger = logger.child({ module: 'LLMService' });
 
 export class LLMService {
@@ -21,8 +27,10 @@ export class LLMService {
   private lastWorkingProvider: AIProviderType | null = null;
   private fallbackEnabled = true;
   private providerState: Map<AIProviderType, ProviderState> = new Map();
+  private providerAvailability: Map<AIProviderType, ProviderAvailabilityState> = new Map();
   private maxFailuresBeforeCooldown = 10; // INCREASED from 3 to 10
   private providerCooldownMs = 180000; // DECREASED from 300000 (5 min) to 180000 (3 min)
+  private availabilityCacheMs = 60000;
   private usageLoggingEnabled = true;
 
   constructor() {
@@ -34,6 +42,10 @@ export class LLMService {
     this.providerCooldownMs = Math.max(
       1000,
       this.parseNumber(process.env.AI_PROVIDER_COOLDOWN_MS, 180000) // Changed default from 300000 to 180000
+    );
+    this.availabilityCacheMs = Math.max(
+      1000,
+      Math.floor(this.parseNumber(process.env.AI_PROVIDER_AVAILABILITY_CACHE_MS, 60000))
     );
     this.initializeProviders();
   }
@@ -61,6 +73,11 @@ export class LLMService {
           case 'gemini':
             if (config.apiKeys && config.apiKeys.length > 0) {
               provider = new GeminiProvider(config);
+            }
+            break;
+          case 'nvidia':
+            if (config.apiKeys && config.apiKeys.length > 0) {
+              provider = new NvidiaProvider(config);
             }
             break;
           case 'huggingface':
@@ -165,12 +182,33 @@ export class LLMService {
       };
     }
 
+    // NVIDIA Configuration
+    const nvidiaKeys = sanitizeKeys([
+      process.env.NVIDIA_API_KEY,
+      process.env.NVIDIA_API_KEY_1,
+      process.env.NVIDIA_API_KEY_2,
+      process.env.NVIDIA_API_KEY_3
+    ]);
+
+    if (nvidiaKeys.length > 0) {
+      const nvidiaModel = process.env.NVIDIA_MODEL?.trim() || 'moonshotai/kimi-k2.5';
+      configs.nvidia = {
+        apiKeys: nvidiaKeys,
+        baseURL: process.env.NVIDIA_INVOKE_URL?.trim() || 'https://integrate.api.nvidia.com/v1/chat/completions',
+        model: nvidiaModel,
+        maxTokens: this.parseNumber(process.env.NVIDIA_MAX_TOKENS, defaultMaxTokens),
+        temperature: this.parseNumber(process.env.NVIDIA_TEMPERATURE, defaultTemperature),
+        timeout: this.parseNumber(process.env.NVIDIA_TIMEOUT, defaultTimeout),
+        priority: 2
+      };
+    }
+
     // HuggingFace Configuration
     const huggingfaceKeys = sanitizeKeys([
-      process.env.HUGGINGFACE_API_KEY_1,
-      process.env.HUGGINGFACE_API_KEY_2,
+      process.env.HF_TOKEN,
       process.env.HUGGINGFACE_API_KEY,
-      process.env.HF_TOKEN
+      process.env.HUGGINGFACE_API_KEY_1,
+      process.env.HUGGINGFACE_API_KEY_2
     ]);
 
     if (huggingfaceKeys.length > 0) {
@@ -228,6 +266,7 @@ export class LLMService {
   private markProviderSuccess(providerType: AIProviderType): void {
     if (!this.providerState.has(providerType)) return;
     this.providerState.set(providerType, { failureCount: 0, cooldownUntil: null });
+    this.setProviderAvailability(providerType, true);
   }
 
   private recordProviderFailure(providerType: AIProviderType, error?: any): void {
@@ -253,9 +292,43 @@ export class LLMService {
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
+  private setProviderAvailability(providerType: AIProviderType, available: boolean, checkedAt = Date.now()): void {
+    this.providerAvailability.set(providerType, { available, checkedAt });
+  }
+
+  private getCachedProviderAvailability(providerType: AIProviderType, referenceTime = Date.now()): boolean | null {
+    const cached = this.providerAvailability.get(providerType);
+    if (!cached) return null;
+
+    const ageMs = referenceTime - cached.checkedAt;
+    if (ageMs <= this.availabilityCacheMs) {
+      return cached.available;
+    }
+
+    this.providerAvailability.delete(providerType);
+    return null;
+  }
+
+  private async isProviderAvailableWithCache(providerType: AIProviderType, provider: AIProvider): Promise<boolean> {
+    const cached = this.getCachedProviderAvailability(providerType);
+    if (cached !== null) {
+      return cached;
+    }
+
+    try {
+      const available = await provider.isAvailable();
+      this.setProviderAvailability(providerType, available);
+      return available;
+    } catch (error: any) {
+      this.setProviderAvailability(providerType, false);
+      serviceLogger.warn({ providerType, err: error }, 'Provider availability check failed');
+      return false;
+    }
+  }
+
   private getProviderPriority(): AIProviderType[] {
     // Default excludes 'ollama' so it is only used if explicitly configured and enabled
-    const priorityString = process.env.AI_PROVIDER_PRIORITY || 'gemini,huggingface,openai,anthropic';
+    const priorityString = process.env.AI_PROVIDER_PRIORITY || 'gemini,huggingface,nvidia,openai,anthropic';
     const priority = priorityString.split(',').map(p => p.trim() as AIProviderType);
 
     // Filter to only include providers that are actually initialized
@@ -278,6 +351,35 @@ export class LLMService {
     return !(normalized === 'false' || normalized === '0' || normalized === 'off');
   }
 
+  private isLocalAiFallbackEnabled(): boolean {
+    if (process.env.NODE_ENV === 'production') return false;
+    const flag = process.env.AI_LOCAL_FALLBACK_ENABLED;
+    if (typeof flag !== 'string') return true;
+    const normalized = flag.trim().toLowerCase();
+    return !(normalized === 'false' || normalized === '0' || normalized === 'off');
+  }
+
+  private buildLocalFallbackResponse(messages: AIMessage[]): AIResponse {
+    const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content?.trim();
+    const content = latestUserMessage
+      ? `Local development mode is active, so AI provider keys are not configured. I can still help you think through this:\n\n${latestUserMessage}`
+      : 'Local development mode is active. Configure AI provider keys to enable live model responses.';
+
+    return {
+      content,
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0
+      },
+      model: 'local-dev-fallback',
+      provider: 'local-dev-fallback',
+      finish_reason: 'stop',
+      success: true,
+      processingTime: 0
+    };
+  }
+
   /**
    * Generate AI response using the best available provider
    */
@@ -287,6 +389,10 @@ export class LLMService {
     context?: ConversationContext
   ): Promise<AIResponse> {
     if (this.providers.size === 0) {
+      if (this.isLocalAiFallbackEnabled()) {
+        serviceLogger.warn('No AI providers configured; using local development fallback response');
+        return this.buildLocalFallbackResponse(messages);
+      }
       throw new Error('No AI providers available. Please configure at least one API key or run Ollama locally.');
     }
 
@@ -304,6 +410,11 @@ export class LLMService {
       const coolingProviders = Array.from(this.providerState.entries())
         .filter(([type]) => this.isProviderCoolingDown(type))
         .map(([type, state]) => `${type} (retry at ${state.cooldownUntil ? new Date(state.cooldownUntil).toISOString() : 'unknown'})`);
+
+      if (this.isLocalAiFallbackEnabled()) {
+        serviceLogger.warn({ coolingProviders }, 'No eligible AI providers available; using local development fallback response');
+        return this.buildLocalFallbackResponse(messages);
+      }
 
       throw new Error(
         coolingProviders.length > 0
@@ -349,7 +460,7 @@ export class LLMService {
         serviceLogger.info({ provider: provider.name, providerType }, 'Attempting AI provider response');
 
         // Check if provider is available
-        if (!(await provider.isAvailable())) {
+        if (!(await this.isProviderAvailableWithCache(providerType, provider))) {
           const availabilityError = new Error(`${provider.name} is not available`);
           this.recordProviderFailure(providerType, availabilityError);
           serviceLogger.warn({ provider: provider.name, providerType }, 'Provider reported unavailable, trying next');
@@ -447,6 +558,18 @@ export class LLMService {
       serviceLogger.warn({ coolingProviders }, 'All providers failed; some are cooling down');
     }
 
+    if (this.isLocalAiFallbackEnabled()) {
+      serviceLogger.warn(
+        {
+          lastError: lastError?.message,
+          availableProviders,
+          coolingProviders
+        },
+        'All AI providers failed; using local development fallback response'
+      );
+      return this.buildLocalFallbackResponse(messages);
+    }
+
     throw new Error(
       `All AI providers failed. Last error: ${lastError?.message || 'Unknown'}. ` +
       `Available providers: ${availableProviders}. ` +
@@ -540,6 +663,7 @@ export class LLMService {
         this.clearCooldownIfExpired(type, now);
         const coolingDown = this.isProviderCoolingDown(type, now);
         const availableFlag = await provider.isAvailable();
+        this.setProviderAvailability(type, availableFlag, now);
         const state = this.providerState.get(type) ?? { failureCount: 0, cooldownUntil: null };
 
         status[type] = {
@@ -550,6 +674,7 @@ export class LLMService {
           lastError: state.lastError
         };
       } catch (error: any) {
+        this.setProviderAvailability(type, false, now);
         const state = this.providerState.get(type) ?? { failureCount: 0, cooldownUntil: null };
         status[type] = {
           available: false,
@@ -573,8 +698,17 @@ export class LLMService {
     for (const [type, provider] of this.providers) {
       try {
         const startTime = Date.now();
-        await provider.testConnection();
+        const ok = await provider.testConnection();
         const responseTime = Date.now() - startTime;
+
+        if (!ok) {
+          results[type] = {
+            success: false,
+            error: `${provider.name} testConnection returned false`,
+            responseTime
+          };
+          continue;
+        }
 
         results[type] = { success: true, responseTime };
       } catch (error: any) {

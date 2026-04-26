@@ -1,0 +1,9 @@
+node_modules/
+dist/
+vendor/
+*.generated.py
+.next/
+build/
+android/
+ios/
+.expo/

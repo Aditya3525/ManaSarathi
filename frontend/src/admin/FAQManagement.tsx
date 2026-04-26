@@ -44,6 +44,7 @@ import {
 } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
+import { getServerBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
 import { adminFetch } from './adminApi';
@@ -84,8 +85,6 @@ const FAQ_CATEGORIES = [
   'TECHNICAL',
   'SAFETY'
 ];
-
-import { getServerBaseUrl } from '../config/apiConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || getServerBaseUrl();
 

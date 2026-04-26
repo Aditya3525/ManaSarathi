@@ -1,4 +1,8 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Lato:wght@400;600;700&family=Inter:wght@400;600;700&family=Poppins:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Work+Sans:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap");
+@import './design-tokens.css';
+@import './typography.css';
+@import './grid.css';
+@import './tokens.css';
+@import './animations.css';
 
 /*! tailwindcss v4.1.3 | MIT License | https://tailwindcss.com */
 @layer properties {
@@ -489,45 +493,47 @@
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h1 {
-    font-size: var(--text-2xl);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    font-size: var(--text-4xl);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.02em;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h2 {
-    font-size: var(--text-xl);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -.01em;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h3 {
-    font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    line-height: 1.25;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h4 {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    font-size: var(--text-xl);
+    font-weight: 500;
+    line-height: 1.3;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) p {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) label, :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) button {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
-    line-height: 1.5;
+    line-height: 1.6;
   }
 }
 
@@ -5008,43 +5014,6 @@
 
 :root {
   --font-size: 16px;
-  --background: #fafafa;
-  --foreground: #2d3748;
-  --card: #fff;
-  --card-foreground: #2d3748;
-  --popover: #fff;
-  --popover-foreground: #2d3748;
-  --primary: #319795;
-  --primary-foreground: #fff;
-  --secondary: #e2e8f0;
-  --secondary-foreground: #4a5568;
-  --muted: #f7fafc;
-  --muted-foreground: #718096;
-  --accent: #81e6d9;
-  --accent-foreground: #2d3748;
-  --destructive: #e53e3e;
-  --destructive-foreground: #fff;
-  --border: #71809633;
-  --input: transparent;
-  --input-background: #f7fafc;
-  --switch-background: #cbd5e0;
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --ring: #319795;
-  --chart-1: #319795;
-  --chart-2: #81e6d9;
-  --chart-3: #bee3f8;
-  --chart-4: #e6fffa;
-  --chart-5: #f0fff4;
-  --radius: .75rem;
-  --sidebar: #f7fafc;
-  --sidebar-foreground: #2d3748;
-  --sidebar-primary: #319795;
-  --sidebar-primary-foreground: #fff;
-  --sidebar-accent: #e2e8f0;
-  --sidebar-accent-foreground: #4a5568;
-  --sidebar-border: #71809633;
-  --sidebar-ring: #319795;
 }
 
 :root.a11y-large-text {
@@ -5123,56 +5092,11 @@
   animation: none !important;
 }
 
-.dark {
-  --background: #121416;
-  --foreground: #F5F6F7;
-  --card: #1C1F22;
-  --card-foreground: #F5F6F7;
-  --popover: #1C1F22;
-  --popover-foreground: #F5F6F7;
-  --primary: #4BA3C3;
-  --primary-foreground: #08151D;
-  --primary-hover: #357C93;
-  --secondary: #6EE7B7;
-  --secondary-foreground: #0F2E20;
-  --tertiary: #A78BFA;
-  --tertiary-foreground: #140C2C;
-  --muted: #1A1D20;
-  --muted-foreground: #A0A4A8;
-  --accent: #A78BFA;
-  --accent-foreground: #F5F6F7;
-  --destructive: #F87171;
-  --destructive-foreground: #2F0C0C;
-  --success: #22C55E;
-  --success-foreground: #05140A;
-  --info: #38BDF8;
-  --info-foreground: #04111A;
-  --border: #2B2E31;
-  --input: #2B2E31;
-  --input-background: #1A1D20;
-  --ring: #7DD3FC;
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --chart-1: #4BA3C3;
-  --chart-2: #6EE7B7;
-  --chart-3: #A78BFA;
-  --chart-4: #38BDF8;
-  --chart-5: #F87171;
-  --sidebar: #16191C;
-  --sidebar-foreground: #F5F6F7;
-  --sidebar-primary: #4BA3C3;
-  --sidebar-primary-foreground: #08151D;
-  --sidebar-accent: #6EE7B7;
-  --sidebar-accent-foreground: #10251A;
-  --sidebar-border: #2B2E31;
-  --sidebar-ring: #7DD3FC;
-  --gradient-calm-sky: linear-gradient(135deg, #4BA3C3, #6EE7B7);
-  --gradient-healing-glow: linear-gradient(135deg, #4BA3C3, #A78BFA);
-  --gradient-ai-aura: linear-gradient(135deg, #6EE7B7, #38BDF8);
-}
-
 /* Improve native selects/options in dark mode for readability */
 @layer base {
+  :root[data-theme="dark"] select,
+  :root[data-theme="dark"] option,
+  :root[data-theme="dark"] optgroup,
   .dark select,
   .dark option,
   .dark optgroup {
@@ -5180,6 +5104,7 @@
     color: var(--foreground);
   }
 
+  :root[data-theme="dark"] select:focus,
   .dark select:focus {
     background-color: var(--input);
   }
@@ -5207,6 +5132,7 @@
   --chart-5: #f0f9ff;
 }
 
+:root[data-color-palette="ocean"][data-theme="dark"],
 :root[data-color-palette="ocean"].dark {
   --background: #0f172a;
   --foreground: #f0f9ff;
@@ -5243,6 +5169,7 @@
   --chart-5: #f0fdf4;
 }
 
+:root[data-color-palette="forest"][data-theme="dark"],
 :root[data-color-palette="forest"].dark {
   --background: #0a1e14;
   --foreground: #ecfdf5;
@@ -5279,6 +5206,7 @@
   --chart-5: #fff7ed;
 }
 
+:root[data-color-palette="sunset"][data-theme="dark"],
 :root[data-color-palette="sunset"].dark {
   --background: #1c0f0a;
   --foreground: #fff7ed;
@@ -5315,6 +5243,7 @@
   --chart-5: #faf5ff;
 }
 
+:root[data-color-palette="lavender"][data-theme="dark"],
 :root[data-color-palette="lavender"].dark {
   --background: #1a0f25;
   --foreground: #faf5ff;
@@ -5351,6 +5280,7 @@
   --chart-5: #fafaf9;
 }
 
+:root[data-color-palette="neutral"][data-theme="dark"],
 :root[data-color-palette="neutral"].dark {
   --background: #1a1a1a;
   --foreground: #fafaf9;
@@ -5997,25 +5927,6 @@ a:focus-visible {
   }
 }
 
-/* Fluid typography for responsive scaling */
-@media (min-width: 768px) {
-  :root {
-    --text-base: 1rem;
-    --text-lg: 1.125rem;
-    --text-xl: 1.25rem;
-    --text-2xl: 1.5rem;
-  }
-}
-
-@media (max-width: 767px) {
-  :root {
-    --text-base: 0.9375rem; /* 15px */
-    --text-lg: 1rem;
-    --text-xl: 1.125rem;
-    --text-2xl: 1.25rem;
-  }
-}
-
 /* Horizontal scroll container optimizations */
 .-mx-4 {
   margin-left: -1rem;
@@ -6370,13 +6281,13 @@ button:focus-visible, [role="button"]:focus-visible {
 /* Page Transition */
 .page-enter {
   opacity: 0;
-  transform: translateY(20px);
+  transform: translateY(8px);
 }
 
 .page-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 300ms ease-out, transform 300ms ease-out;
+  transition: opacity 250ms cubic-bezier(0.4, 0, 0.2, 1), transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .page-exit {

@@ -15,8 +15,21 @@ import { Label } from '../../ui/label';
 import { Switch } from '../../ui/switch';
 
 export type DashboardWidget = 
+	| 'greeting-header'
 	| 'mood-check'
+	| 'one-thing-today'
+	| 'stats-row'
+	| 'adaptive-mode-banner'
+	| 'crisis-follow-up'
+	| 'checkins'
+	| 'smart-nudges'
+	| 'community-insights'
+	| 'assessment-reminder'
+	| 'gratitude'
+	| 'habits'
+	| 'intentions-sleep'
 	| 'assessment-scores'
+	| 'recommended-next-step'
 	| 'today-practice'
 	| 'quick-actions'
 	| 'recent-insights'
@@ -24,8 +37,21 @@ export type DashboardWidget =
 	| 'navigation-shortcuts';
 
 export interface WidgetVisibility {
+	'greeting-header': boolean;
 	'mood-check': boolean;
+	'one-thing-today': boolean;
+	'stats-row': boolean;
+	'adaptive-mode-banner': boolean;
+	'crisis-follow-up': boolean;
+	'checkins': boolean;
+	'smart-nudges': boolean;
+	'community-insights': boolean;
+	'assessment-reminder': boolean;
+	'gratitude': boolean;
+	'habits': boolean;
+	'intentions-sleep': boolean;
 	'assessment-scores': boolean;
+	'recommended-next-step': boolean;
 	'today-practice': boolean;
 	'quick-actions': boolean;
 	'recent-insights': boolean;
@@ -34,8 +60,21 @@ export interface WidgetVisibility {
 }
 
 const DEFAULT_VISIBILITY: WidgetVisibility = {
+	'greeting-header': true,
 	'mood-check': true,
+	'one-thing-today': true,
+	'stats-row': true,
+	'adaptive-mode-banner': true,
+	'crisis-follow-up': true,
+	'checkins': true,
+	'smart-nudges': true,
+	'community-insights': true,
+	'assessment-reminder': true,
+	'gratitude': true,
+	'habits': true,
+	'intentions-sleep': true,
 	'assessment-scores': true,
+	'recommended-next-step': true,
 	'today-practice': true,
 	'quick-actions': true,
 	'recent-insights': true,
@@ -44,8 +83,21 @@ const DEFAULT_VISIBILITY: WidgetVisibility = {
 };
 
 const WIDGET_LABELS: Record<DashboardWidget, string> = {
+	'greeting-header': 'Greeting Header',
 	'mood-check': 'Quick Mood Check',
+	'one-thing-today': 'One Thing Today',
+	'stats-row': 'Weekly Snapshot',
+	'adaptive-mode-banner': 'Adaptive Mode Banner',
+	'crisis-follow-up': 'Crisis Follow-up',
+	'checkins': 'Morning/Evening Check-ins',
+	'smart-nudges': 'Smart Nudges',
+	'community-insights': 'Community Insights',
+	'assessment-reminder': 'Assessment Reminder',
+	'gratitude': 'Daily Gratitude Prompt',
+	'habits': 'Habit Loops',
+	'intentions-sleep': 'Intentions & Sleep',
 	'assessment-scores': 'Assessment Scores',
+	'recommended-next-step': 'Recommended Next Step',
 	'today-practice': "Today's Practice",
 	'quick-actions': 'Quick Actions',
 	'recent-insights': 'Recent Insights',
@@ -53,11 +105,43 @@ const WIDGET_LABELS: Record<DashboardWidget, string> = {
 	'navigation-shortcuts': 'Navigation Shortcuts'
 };
 
-const CORE_WIDGETS: DashboardWidget[] = ['mood-check', 'assessment-scores', 'today-practice', 'quick-actions'];
-const INSIGHT_WIDGETS: DashboardWidget[] = ['recent-insights', 'this-week'];
-const SUPPORT_WIDGETS: DashboardWidget[] = ['navigation-shortcuts'];
+const WIDGET_GROUPS: Array<{ id: string; title: string; widgets: DashboardWidget[] }> = [
+	{
+		id: 'foundational',
+		title: 'Foundation',
+		widgets: ['greeting-header', 'mood-check', 'one-thing-today', 'stats-row']
+	},
+	{
+		id: 'adaptive-support',
+		title: 'Adaptive Support',
+		widgets: ['adaptive-mode-banner', 'crisis-follow-up', 'checkins', 'smart-nudges', 'community-insights', 'assessment-reminder']
+	},
+	{
+		id: 'growth',
+		title: 'Growth & Habits',
+		widgets: ['gratitude', 'habits', 'intentions-sleep', 'recommended-next-step', 'today-practice']
+	},
+	{
+		id: 'insights',
+		title: 'Insights & Progress',
+		widgets: ['assessment-scores', 'recent-insights', 'this-week']
+	},
+	{
+		id: 'navigation',
+		title: 'Navigation',
+		widgets: ['quick-actions', 'navigation-shortcuts']
+	}
+];
 
 const STORAGE_KEY = 'mw-dashboard-widget-visibility';
+
+const resolveStorageKey = (userId?: string | null): string => {
+	if (!userId) {
+		return STORAGE_KEY;
+	}
+
+	return `${STORAGE_KEY}:${userId}`;
+};
 
 export interface DashboardCustomizerProps {
 	visibility: WidgetVisibility;
@@ -107,7 +191,7 @@ export const DashboardCustomizer: React.FC<DashboardCustomizerProps> = ({
 					Customize Dashboard
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+			<DialogContent className="max-w-2xl overflow-y-auto" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
 				<DialogHeader>
 					<DialogTitle>Customize Your Dashboard</DialogTitle>
 					<DialogDescription>
@@ -129,68 +213,28 @@ export const DashboardCustomizer: React.FC<DashboardCustomizerProps> = ({
 					</div>
 
 					<div className="space-y-4">
-						<div className="space-y-3">
-							<h4 className="text-sm font-semibold text-muted-foreground">Core Widgets</h4>
-							{CORE_WIDGETS.map(widget => (
-								<div key={widget} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
-									<Label htmlFor={widget} className="flex items-center gap-3 cursor-pointer flex-1">
-										{localVisibility[widget] ? (
-											<Eye className="h-4 w-4 text-primary" />
-										) : (
-											<EyeOff className="h-4 w-4 text-muted-foreground" />
-										)}
-										<span>{WIDGET_LABELS[widget]}</span>
-									</Label>
-									<Switch
-										id={widget}
-										checked={localVisibility[widget]}
-										onCheckedChange={() => handleToggle(widget)}
-									/>
-								</div>
-							))}
-						</div>
-
-						<div className="space-y-3">
-							<h4 className="text-sm font-semibold text-muted-foreground">Insights & Progress</h4>
-							{INSIGHT_WIDGETS.map(widget => (
-								<div key={widget} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
-									<Label htmlFor={widget} className="flex items-center gap-3 cursor-pointer flex-1">
-										{localVisibility[widget] ? (
-											<Eye className="h-4 w-4 text-primary" />
-										) : (
-											<EyeOff className="h-4 w-4 text-muted-foreground" />
-										)}
-										<span>{WIDGET_LABELS[widget]}</span>
-									</Label>
-									<Switch
-										id={widget}
-										checked={localVisibility[widget]}
-										onCheckedChange={() => handleToggle(widget)}
-									/>
-								</div>
-							))}
-						</div>
-
-						<div className="space-y-3">
-							<h4 className="text-sm font-semibold text-muted-foreground">Tracking & Analytics</h4>
-							{SUPPORT_WIDGETS.map(widget => (
-								<div key={widget} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
-									<Label htmlFor={widget} className="flex items-center gap-3 cursor-pointer flex-1">
-										{localVisibility[widget] ? (
-											<Eye className="h-4 w-4 text-primary" />
-										) : (
-											<EyeOff className="h-4 w-4 text-muted-foreground" />
-										)}
-										<span>{WIDGET_LABELS[widget]}</span>
-									</Label>
-									<Switch
-										id={widget}
-										checked={localVisibility[widget]}
-										onCheckedChange={() => handleToggle(widget)}
-									/>
-								</div>
-							))}
-						</div>
+						{WIDGET_GROUPS.map((group) => (
+							<div key={group.id} className="space-y-3">
+								<h4 className="text-sm font-semibold text-muted-foreground">{group.title}</h4>
+								{group.widgets.map((widget) => (
+									<div key={widget} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
+										<Label htmlFor={widget} className="flex items-center gap-3 cursor-pointer flex-1">
+											{localVisibility[widget] ? (
+												<Eye className="h-4 w-4 text-primary" />
+											) : (
+												<EyeOff className="h-4 w-4 text-muted-foreground" />
+											)}
+											<span>{WIDGET_LABELS[widget]}</span>
+										</Label>
+										<Switch
+											id={widget}
+											checked={localVisibility[widget]}
+											onCheckedChange={() => handleToggle(widget)}
+										/>
+									</div>
+								))}
+							</div>
+						))}
 					</div>
 				</div>
 
@@ -207,13 +251,15 @@ export const DashboardCustomizer: React.FC<DashboardCustomizerProps> = ({
 	);
 };
 
-export const useWidgetVisibility = () => {
-	const [visibility, setVisibility] = useState<WidgetVisibility>(() => {
+export const useWidgetVisibility = (userId?: string | null) => {
+	const storageKey = resolveStorageKey(userId);
+
+	const readVisibilityFromStorage = useCallback((): WidgetVisibility => {
 		if (typeof window === 'undefined') {
 			return DEFAULT_VISIBILITY;
 		}
 		try {
-			const stored = localStorage.getItem(STORAGE_KEY);
+			const stored = localStorage.getItem(storageKey);
 			if (!stored) {
 				return DEFAULT_VISIBILITY;
 			}
@@ -223,16 +269,22 @@ export const useWidgetVisibility = () => {
 			console.warn('Failed to load dashboard widget visibility:', error);
 			return DEFAULT_VISIBILITY;
 		}
-	});
+	}, [storageKey]);
+
+	const [visibility, setVisibility] = useState<WidgetVisibility>(() => readVisibilityFromStorage());
+
+	useEffect(() => {
+		setVisibility(readVisibilityFromStorage());
+	}, [readVisibilityFromStorage]);
 
 	const updateVisibility = useCallback((newVisibility: WidgetVisibility) => {
 		setVisibility(newVisibility);
 		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(newVisibility));
+			localStorage.setItem(storageKey, JSON.stringify(newVisibility));
 		} catch (error) {
 			console.warn('Failed to persist dashboard widget visibility:', error);
 		}
-	}, []);
+	}, [storageKey]);
 
 	return {
 		visibility,

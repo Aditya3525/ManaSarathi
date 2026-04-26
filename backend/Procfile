@@ -1,2 +1,2 @@
 web: npm start
-release: npm run migrate:deploy
+release: npm run db:generate:auto:if-needed && npm run db:push:auto

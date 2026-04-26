@@ -14,6 +14,8 @@ import {
   Moon,
   Sun,
   AlertTriangle,
+  Eye,
+  EyeOff,
   Menu,
   X
 } from 'lucide-react';
@@ -23,6 +25,7 @@ import { getServerBaseUrl } from '../../../config/apiConfig';
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
+import { validateSignupEmail } from '../../../utils/emailValidation';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -42,11 +45,22 @@ interface LandingPageProps {
   onLogin: (credentials: { email: string; password: string }) => void;
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
-  loginError?: { message?: string } | null;
+  loginError?: { message?: string; error?: string; suggestion?: string; verificationUrl?: string } | null;
+  onChooseLoginAsUser?: (rememberChoice?: boolean) => Promise<void> | void;
+  onChooseLoginAsAdmin?: (rememberChoice?: boolean) => Promise<void> | void;
   onNavigate?: (page: string) => void;
 }
 
-export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginError, onNavigate }: LandingPageProps) {
+export function LandingPage({
+  onSignUp,
+  onLogin,
+  onAdminLogin,
+  authError,
+  loginError,
+  onChooseLoginAsUser,
+  onChooseLoginAsAdmin,
+  onNavigate
+}: LandingPageProps) {
   const device = useDevice();
   const analytics = useAnalytics();
   const [email, setEmail] = useState('');
@@ -59,6 +73,21 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
+  const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
+
+  const passwordChecks = {
+    minLength: password.length >= 8,
+    lower: /[a-z]/.test(password),
+    upper: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z\d]/.test(password),
+  };
+  const isStrongSignupPassword = Object.values(passwordChecks).every(Boolean);
+  const signupEmailValidation = validateSignupEmail(email);
+  const isValidSignupEmail = signupEmailValidation.isValid;
 
   // Carousel state for features section
   const [activeFeaturesIndex, setActiveFeaturesIndex] = useState(0);
@@ -70,6 +99,12 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const isSignupOpen = activeModal === 'signup';
   const isLoginOpen = activeModal === 'login';
   const isAdminOpen = activeModal === 'admin';
+
+  useEffect(() => {
+    if (loginError?.suggestion !== 'choose_admin_or_user') {
+      setRememberAdminDestinationChoice(false);
+    }
+  }, [loginError?.suggestion]);
 
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
 
@@ -230,6 +265,17 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && email && password) {
+      if (!isValidSignupEmail) {
+        setSignupValidationError(signupEmailValidation.message || 'Please enter a valid email address.');
+        analytics.trackFormSubmit('signup', false);
+        return;
+      }
+      if (!isStrongSignupPassword) {
+        setSignupValidationError('Use at least 8 characters with uppercase, lowercase, number, and special character.');
+        analytics.trackFormSubmit('signup', false);
+        return;
+      }
+      setSignupValidationError(null);
       analytics.trackFormSubmit('signup', true);
       onSignUp({ name, email, password });
     }
@@ -285,7 +331,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
             <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-primary sm:px-3">
-              MaanSarathi
+              ManaSarathi
             </Badge>
             <span className="hidden text-xs text-muted-foreground sm:text-sm lg:inline-flex">
               Guided support for calmer days
@@ -644,7 +690,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         <section className="bg-muted/20 px-6 py-16 lg:py-24">
           <div className="mx-auto max-w-7xl space-y-12">
             <div className="space-y-3 text-center">
-              <h2 className="text-3xl lg:text-4xl">Why people choose MaanSarathi</h2>
+              <h2 className="text-3xl lg:text-4xl">Why people choose ManaSarathi</h2>
               <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
                 Built alongside psychologists, coaches, and neurodiverse advocates to support modern wellbeing needs.
               </p>
@@ -728,7 +774,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 Frequently asked questions
               </h2>
               <p className="mt-3 text-base font-medium text-foreground/70 sm:text-lg">
-                Still wondering if MaanSarathi is right for you? We&apos;ve got answers.
+                Still wondering if ManaSarathi is right for you? We&apos;ve got answers.
               </p>
             </div>
 
@@ -856,7 +902,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary" />
-                <span className="text-lg font-semibold text-foreground">MaanSarathi</span>
+                <span className="text-lg font-semibold text-foreground">ManaSarathi</span>
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground max-w-xs">
                 Evidence-based wellbeing support, anytime, anywhere.
@@ -1126,7 +1172,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Bottom Bar - Legal & Copyright */}
           <div className="flex flex-col gap-4 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
             <p className="flex items-center gap-1">
-              © {new Date().getFullYear()} MaanSarathi. All rights reserved.
+              © {new Date().getFullYear()} ManaSarathi. All rights reserved.
             </p>
 
             {/* Legal Links */}
@@ -1202,18 +1248,62 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
             <div className="space-y-2">
               <Label htmlFor="signup-email">Email</Label>
-              <Input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" required />
+              <Input
+                id="signup-email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (signupValidationError) setSignupValidationError(null);
+                }}
+                placeholder="Enter your email"
+                required
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="signup-password">Password</Label>
-              <Input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" minLength={6} required />
+              <div className="relative">
+                <Input
+                  id="signup-password"
+                  type={showSignupPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (signupValidationError) setSignupValidationError(null);
+                  }}
+                  placeholder="Create a strong password"
+                  minLength={8}
+                  className="pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowSignupPassword((prev) => !prev)}
+                  aria-label={showSignupPassword ? 'Hide signup password' : 'Show signup password'}
+                >
+                  {showSignupPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                <p className="mb-1 font-medium text-foreground">Password must include:</p>
+                <ul className="space-y-1">
+                  <li className="flex items-center gap-2">{passwordChecks.minLength ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} 8+ characters</li>
+                  <li className="flex items-center gap-2">{passwordChecks.upper ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Uppercase letter</li>
+                  <li className="flex items-center gap-2">{passwordChecks.lower ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Lowercase letter</li>
+                  <li className="flex items-center gap-2">{passwordChecks.number ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Number</li>
+                  <li className="flex items-center gap-2">{passwordChecks.special ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Special character</li>
+                </ul>
+              </div>
             </div>
 
-            {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
+            {(signupValidationError || authError) && <p className="text-sm text-destructive" role="alert">{signupValidationError || authError}</p>}
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={!isStrongSignupPassword || !isValidSignupEmail}>
                 Get started
               </Button>
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>
@@ -1264,17 +1354,71 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             </div>
             <div className="space-y-2">
               <Label htmlFor="login-password">Password</Label>
-              <Input
-                id="login-password"
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="login-password"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  className="pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowLoginPassword((prev) => !prev)}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </div>
             </div>
-            {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
+            {(loginError?.error || loginError?.message || authError) && (
+              <div className="space-y-2 text-sm text-destructive" role="alert">
+                <p>{loginError?.error || loginError?.message || authError}</p>
+                {loginError?.suggestion === 'choose_admin_or_user' && (
+                  <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
+                    <p className="text-sm font-semibold text-foreground">Choose your destination</p>
+                    <p className="text-xs text-muted-foreground">
+                      {loginError?.message || 'This account can access both user and admin areas. Select where to continue.'}
+                    </p>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={rememberAdminDestinationChoice}
+                        onChange={(event) => setRememberAdminDestinationChoice(event.target.checked)}
+                      />
+                      Remember my choice on this device
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onChooseLoginAsUser?.(rememberAdminDestinationChoice)}
+                        disabled={!onChooseLoginAsUser}
+                      >
+                        Login as User
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onChooseLoginAsAdmin?.(rememberAdminDestinationChoice)}
+                        disabled={!onChooseLoginAsAdmin}
+                      >
+                        Open Admin Dashboard
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button type="submit" className="flex-1">
                 Log in

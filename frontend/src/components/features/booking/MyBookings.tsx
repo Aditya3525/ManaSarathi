@@ -15,7 +15,7 @@ import {
 import React from 'react';
 
 import { useToast } from '../../../contexts/ToastContext';
-import { therapistApi, type TherapistBooking } from '../../../services/helpSafetyApi';
+import { therapistApi } from '../../../services/helpSafetyApi';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -142,7 +142,7 @@ export function MyBookings() {
                 </div>
                 <h3 className="text-lg font-semibold mb-1">No Bookings Yet</h3>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    You haven't booked any consultations yet. Browse therapists and request a session to get started.
+                    You haven&apos;t booked any consultations yet. Browse therapists and request a session to get started.
                 </p>
             </div>
         );

@@ -7,6 +7,7 @@ import {
   CheckCircle,
   Flame,
   Heart,
+  RefreshCw,
   Smile,
   Star,
   Target,
@@ -14,7 +15,7 @@ import {
   Trophy,
   Zap
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { assessmentsApi, moodApi, plansApi, progressApi } from '../../../services/api';
 import type {
@@ -47,6 +48,8 @@ import {
   WellnessScoreTrend,
   type WellnessDataPoint
 } from '../dashboard';
+
+import { ProgressNarrative } from './ProgressNarrative';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -529,6 +532,13 @@ const getTimeRangeLabel = (range: TimeRange) => {
   }
 };
 
+const clampPercent = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, value));
+};
+
 interface ProgressProps {
   user: User | null;
   onNavigate: (page: string) => void;
@@ -538,7 +548,10 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('30d');
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const [progressEntries, setProgressEntries] = useState<ProgressEntry[]>([]);
@@ -546,16 +559,61 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   const [planModules, setPlanModules] = useState<PlanModuleWithState[]>([]);
   const [assessmentHistory, setAssessmentHistory] = useState<AssessmentHistoryEntry[]>([]);
   const [assessmentInsights, setAssessmentInsights] = useState<AssessmentInsights | null>(null);
+  const previousUserIdRef = useRef<string | number | null>(null);
+  const hasSyncedRef = useRef(false);
+  const inFlightCountRef = useRef(0);
+
+  const requestRefresh = useCallback(() => {
+    if (inFlightCountRef.current > 0) {
+      return;
+    }
+    setRefreshIndex((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
+    const currentUserId = user?.id ?? null;
+
+    if (!currentUserId) {
+      previousUserIdRef.current = null;
+      hasSyncedRef.current = false;
+      inFlightCountRef.current = 0;
+      setLoading(false);
+      setIsRefreshing(false);
+      setLastSyncedAt(null);
+      setError('Please sign in to view progress.');
+      setSyncWarning(null);
+      setProgressEntries([]);
+      setMoodEntries([]);
+      setPlanModules([]);
+      setAssessmentHistory([]);
+      setAssessmentInsights(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const userChanged = previousUserIdRef.current !== currentUserId;
+    if (userChanged) {
+      previousUserIdRef.current = currentUserId;
+      hasSyncedRef.current = false;
+      setLastSyncedAt(null);
+      setProgressEntries([]);
+      setMoodEntries([]);
+      setPlanModules([]);
+      setAssessmentHistory([]);
+      setAssessmentInsights(null);
+    }
 
     const fetchData = async () => {
-      setLoading(true);
+      inFlightCountRef.current += 1;
+      setLoading(!hasSyncedRef.current || userChanged);
+      setIsRefreshing(true);
       setError(null);
+      setSyncWarning(null);
 
       try {
-        const [progressRes, moodRes, planRes, assessmentsRes] = await Promise.all([
+        const [progressResult, moodResult, planResult, assessmentsResult] = await Promise.allSettled([
           progressApi.getProgressHistory(),
           moodApi.getMoodHistory(),
           plansApi.getPersonalizedPlan(),
@@ -564,31 +622,57 @@ export function Progress({ user, onNavigate }: ProgressProps) {
 
         if (!isMounted) return;
 
+        const progressRes =
+          progressResult.status === 'fulfilled'
+            ? progressResult.value
+            : { success: false, data: null, error: 'Progress metrics are temporarily unavailable.' };
+        const moodRes =
+          moodResult.status === 'fulfilled'
+            ? moodResult.value
+            : { success: false, data: null, error: 'Mood history is temporarily unavailable.' };
+        const planRes =
+          planResult.status === 'fulfilled'
+            ? planResult.value
+            : { success: false, data: null, error: 'Plan modules are temporarily unavailable.' };
+        const assessmentsRes =
+          assessmentsResult.status === 'fulfilled'
+            ? assessmentsResult.value
+            : { success: false, data: null, error: 'Assessment insights are temporarily unavailable.' };
+
+        if (progressResult.status === 'rejected') {
+          console.error('Failed to fetch progress metrics', progressResult.reason);
+        }
+        if (moodResult.status === 'rejected') {
+          console.error('Failed to fetch mood history', moodResult.reason);
+        }
+        if (planResult.status === 'rejected') {
+          console.error('Failed to fetch plan modules', planResult.reason);
+        }
+        if (assessmentsResult.status === 'rejected') {
+          console.error('Failed to fetch assessment insights', assessmentsResult.reason);
+        }
+
+        const failedSources: string[] = [];
+
         if (progressRes.success && Array.isArray(progressRes.data)) {
           setProgressEntries(progressRes.data.map((entry) => ({ ...entry, notes: entry.notes ?? undefined })));
         } else {
           setProgressEntries([]);
-          if (progressRes.error) {
-            setError((prev) => prev ?? progressRes.error);
-          }
+          failedSources.push('progress metrics');
         }
 
         if (moodRes.success && moodRes.data) {
           setMoodEntries(moodRes.data ?? []);
         } else {
           setMoodEntries([]);
-          if (moodRes.error) {
-            setError((prev) => prev ?? moodRes.error);
-          }
+          failedSources.push('mood history');
         }
 
         if (planRes.success && Array.isArray(planRes.data)) {
           setPlanModules(planRes.data);
         } else {
           setPlanModules([]);
-          if (planRes.error) {
-            setError((prev) => prev ?? planRes.error);
-          }
+          failedSources.push('plan modules');
         }
 
         if (assessmentsRes.success && assessmentsRes.data) {
@@ -597,22 +681,32 @@ export function Progress({ user, onNavigate }: ProgressProps) {
         } else {
           setAssessmentHistory([]);
           setAssessmentInsights(null);
-          if (assessmentsRes.error) {
-            setError((prev) => prev ?? assessmentsRes.error);
-          }
+          failedSources.push('assessment insights');
         }
+
+        if (failedSources.length === 4) {
+          setError('Unable to load your progress right now. Please try again.');
+        } else if (failedSources.length > 0) {
+          setSyncWarning(`Some sections are temporarily unavailable: ${failedSources.join(', ')}.`);
+        }
+
+        hasSyncedRef.current = true;
+        setLastSyncedAt(new Date());
       } catch (fetchError) {
         if (!isMounted) return;
         console.error('Failed to load progress data', fetchError);
         setError('Unable to load your progress right now. Please try again.');
+        setSyncWarning(null);
         setProgressEntries([]);
         setMoodEntries([]);
         setPlanModules([]);
         setAssessmentHistory([]);
         setAssessmentInsights(null);
       } finally {
-        if (isMounted) {
+        inFlightCountRef.current = Math.max(0, inFlightCountRef.current - 1);
+        if (isMounted && inFlightCountRef.current === 0) {
           setLoading(false);
+          setIsRefreshing(false);
         }
       }
     };
@@ -622,7 +716,35 @@ export function Progress({ user, onNavigate }: ProgressProps) {
     return () => {
       isMounted = false;
     };
-  }, [refreshIndex]);
+  }, [refreshIndex, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const handleFocus = () => requestRefresh();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestRefresh();
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        requestRefresh();
+      }
+    }, 2 * 60 * 1000);
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [requestRefresh, user?.id]);
 
   const sortedAssessmentHistory = useMemo(
     () =>
@@ -760,7 +882,9 @@ export function Progress({ user, onNavigate }: ProgressProps) {
     return assessmentHistory.filter((entry) => new Date(entry.completedAt).getTime() >= cutoff).length;
   }, [assessmentHistory]);
 
-  const handleRetry = () => setRefreshIndex((prev) => prev + 1);
+  const handleRetry = useCallback(() => {
+    requestRefresh();
+  }, [requestRefresh]);
 
   const renderLoadingState = () => (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -800,8 +924,59 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   );
 
   const averageMoodDisplay = averageMoodScore ? `${averageMoodScore.toFixed(1)}/5` : '—';
-  const averageMoodPercent = Math.min(100, Math.max(0, averageMoodScore * 20));
-  const planProgressPercent = Math.round(planAverageProgress);
+  const averageMoodPercent = clampPercent(averageMoodScore * 20);
+  const planProgressPercent = clampPercent(Math.round(planAverageProgress));
+  const currentStreakPercent = clampPercent((currentStreak / 7) * 100);
+  const weekCheckinsPercent = clampPercent((moodCheckinsWeek / 7) * 100);
+  const modulesCompletionPercent = clampPercent(
+    totalModules > 0 ? (modulesCompleted / totalModules) * 100 : 0
+  );
+
+  const latestMoodByRecentDay = useMemo(() => {
+    const cutoff = Date.now() - 7 * DAY_IN_MS;
+    const recentMap = new Map<string, { mood: string; timestamp: number }>();
+
+    moodEntries.forEach((entry) => {
+      const timestamp = new Date(entry.createdAt).getTime();
+      if (timestamp < cutoff) {
+        return;
+      }
+
+      const dateKey = new Date(entry.createdAt).toISOString().split('T')[0];
+      const existing = recentMap.get(dateKey);
+      if (!existing || timestamp > existing.timestamp) {
+        recentMap.set(dateKey, { mood: entry.mood, timestamp });
+      }
+    });
+
+    return Array.from(recentMap.values()).map((item) => item.mood);
+  }, [moodEntries]);
+
+  const dominantMoodSummary = useMemo(() => {
+    if (!latestMoodByRecentDay.length) {
+      return { mood: 'Okay', count: 0 };
+    }
+
+    const frequency = latestMoodByRecentDay.reduce<Record<string, number>>((acc, mood) => {
+      acc[mood] = (acc[mood] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    const [mood, count] = Object.entries(frequency).sort((a, b) => b[1] - a[1])[0];
+    return { mood, count };
+  }, [latestMoodByRecentDay]);
+
+  const anxietyAssessmentChange = useMemo(() => {
+    const anxietyAssessments = sortedAssessmentHistory.filter((entry) =>
+      normalizeMetricKey(entry.assessmentType).includes('anxiety')
+    );
+
+    if (anxietyAssessments.length < 2) {
+      return null;
+    }
+
+    return anxietyAssessments[0].score - anxietyAssessments[1].score;
+  }, [sortedAssessmentHistory]);
 
   const userGreeting = useMemo(() => {
     const name = user?.firstName || user?.name;
@@ -809,7 +984,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/5">
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/5 page-enter">
       <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-accent/20 border-b border-primary/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="flex items-center justify-between mb-6">
@@ -855,6 +1030,37 @@ export function Progress({ user, onNavigate }: ProgressProps) {
         renderErrorState()
       ) : (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="mb-4 sm:mb-6 rounded-xl border bg-card/60 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Progress data sync</p>
+                <p className="text-xs text-muted-foreground">
+                  {lastSyncedAt
+                    ? `Last synced at ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : 'Syncing your latest progress data...'}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-w-[128px]"
+                onClick={requestRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Syncing...' : 'Refresh'}
+              </Button>
+            </div>
+          </div>
+
+          {syncWarning && (
+            <Card className="mb-4 sm:mb-6 border-amber-200 bg-amber-50/60">
+              <CardContent className="p-4">
+                <p className="text-sm text-amber-900">{syncWarning}</p>
+              </CardContent>
+            </Card>
+          )}
+
           <Tabs defaultValue="overview" className="space-y-8">
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-muted/50 p-1 rounded-xl h-auto gap-1 sm:gap-0">
               <TabsTrigger
@@ -904,7 +1110,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     <div className="text-2xl font-bold text-orange-600 mb-1">{currentStreak}</div>
                     <div className="text-xs text-muted-foreground mb-2">Day Streak</div>
                     <ProgressBar
-                      value={Math.min((currentStreak / 7) * 100, 100)}
+                      value={currentStreakPercent}
                       className="h-1"
                       indicatorClassName="bg-orange-500"
                     />
@@ -922,7 +1128,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     <div className="text-2xl font-bold text-primary mb-1">{moodCheckinsWeek}</div>
                     <div className="text-xs text-muted-foreground mb-2">Check-ins</div>
                     <ProgressBar
-                      value={(moodCheckinsWeek / 7) * 100}
+                      value={weekCheckinsPercent}
                       className="h-1"
                       indicatorClassName="bg-primary"
                     />
@@ -936,7 +1142,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                         <Target className="h-5 w-5 text-green-500" />
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        {totalModules > 0 ? `${Math.round((modulesCompleted / totalModules) * 100)}%` : '0%'}
+                        {`${Math.round(modulesCompletionPercent)}%`}
                       </Badge>
                     </div>
                     <div className="text-2xl font-bold text-green-600 mb-1">
@@ -944,7 +1150,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                     </div>
                     <div className="text-xs text-muted-foreground mb-2">Modules Done</div>
                     <ProgressBar
-                      value={totalModules > 0 ? (modulesCompleted / totalModules) * 100 : 0}
+                      value={modulesCompletionPercent}
                       className="h-1"
                       indicatorClassName="bg-green-500"
                     />
@@ -971,6 +1177,15 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                   </CardContent>
                 </Card>
               </div>
+
+              <ProgressNarrative
+                dominantMood={dominantMoodSummary.mood}
+                moodDaysCount={dominantMoodSummary.count}
+                totalDays={7}
+                anxietyChange={anxietyAssessmentChange}
+                streakDays={currentStreak}
+                assessmentsCompleted={assessmentsCompletedLast30Days}
+              />
 
               {/* Flexible content grid - auto-adjusts based on content */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 auto-rows-max">
@@ -1219,7 +1434,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                       <div className="relative h-2 bg-muted/30 rounded-full overflow-hidden">
                         <div
                           className="absolute h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500 rounded-full shadow-sm"
-                          style={{ width: `${Math.min(100, assessmentsCompletedLast30Days * 25)}%` }}
+                          style={{ width: `${clampPercent(assessmentsCompletedLast30Days * 25)}%` }}
                         />
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MaanSarathi",
+    "name": "ManaSarathi",
     "tagline": "Ihr KI-Wellbeing-Begleiter",
     "loading": "Laden...",
     "error": "Fehler",
@@ -165,7 +165,7 @@
     "resetPassword": "Passwort Zurücksetzen"
   },
   "onboarding": {
-    "welcome": "Willkommen bei MaanSarathi",
+    "welcome": "Willkommen bei ManaSarathi",
     "getStarted": "Loslegen",
     "skip": "Überspringen",
     "setupPassword": "Passwort einrichten",
@@ -348,7 +348,7 @@
     "dataProtected": "Ihre Daten sind durch die Gerätesicherheit geschützt",
     "notAvailableDevice": "Biometrische Authentifizierung nicht verfügbar auf diesem Gerät",
     "noCredentials": "Keine biometrischen Daten registriert",
-    "authPrompt": "Authentifizieren Sie sich, um auf MaanSarathi zuzugreifen",
+    "authPrompt": "Authentifizieren Sie sich, um auf ManaSarathi zuzugreifen",
     "usePasscode": "Code verwenden",
     "authFailed": "Authentifizierung fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "authError": "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut."

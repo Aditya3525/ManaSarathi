@@ -1,4 +1,5 @@
-import { Award, BookOpen, Brain, Calendar, ChevronRight, Heart, MessageCircle, Moon, MoreVertical, Play, Sparkles, Sun, Target, TrendingUp } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Award, Bell, BookOpen, Brain, Calendar, CheckCircle, ChevronRight, Headphones, Heart, Lightbulb, MessageCircle, Mic, Moon, MoreVertical, Play, Sparkles, Sun, Sunrise, Target, TrendingUp } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,11 +7,25 @@ import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { useDevice } from '../../../hooks/use-device';
 import {
-  useDashboardData,
   usePullToRefresh,
   useSaveMood,
-  useWeeklyProgress
 } from '../../../hooks/useDashboardData';
+import {
+  dashboardApi,
+  gratitudeApi,
+  habitsApi,
+  type AdaptiveNudge,
+  type AssessmentReminder,
+  type CommunityInsightsPayload,
+  type DashboardUnifiedData,
+  type DailyIntention,
+  type GratitudeEntry,
+  type MicroCheckin,
+  type OneThingActionType,
+  type SleepLog,
+  type SleepStats,
+  type UserHabit,
+} from '../../../services/api';
 import type { StoredUser } from '../../../services/auth';
 import { Badge } from '../../ui/badge';
 import { BottomNavigation, BottomNavigationSpacer } from '../../ui/bottom-navigation';
@@ -22,15 +37,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
+import { Input } from '../../ui/input';
 import { Progress } from '../../ui/progress';
 import {
-  CollapsibleSection,
   HorizontalScrollContainer,
   ResponsiveContainer,
   ResponsiveGrid,
   ResponsiveStack
 } from '../../ui/responsive-layout';
+import { EveningCheckin, MorningCheckin } from '../checkins';
 
+import { DashboardCollapsibleSection } from './CollapsibleSection';
+import { CrisisFollowUp } from './CrisisFollowUp';
+import { DailyIntentionCard } from './DailyIntentionCard';
 import {
   DashboardLoadingSkeleton,
   ErrorMessage,
@@ -39,6 +58,11 @@ import {
   useOnlineStatus
 } from './DashboardLoadingStates';
 import { EnhancedInsightsCard } from './EnhancedInsightsCard';
+import { GreetingHeader } from './GreetingHeader';
+import { MoodSelector } from './MoodSelector';
+import { OneThingToday } from './OneThingToday';
+import { SleepLogCard } from './SleepLogCard';
+import { StatsRow } from './StatsRow';
 
 import {
   DashboardCustomizer,
@@ -55,19 +79,79 @@ interface DashboardProps {
   onTourComplete?: () => void;
 }
 
+type MoodSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string; message?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type MoodSpeechRecognitionCtor = new () => MoodSpeechRecognition;
+
+type MoodSpeechWindow = Window & {
+  SpeechRecognition?: MoodSpeechRecognitionCtor;
+  webkitSpeechRecognition?: MoodSpeechRecognitionCtor;
+};
+
 export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = false, onTourDismiss, onTourComplete }: DashboardProps) {
   const [todayMood, setTodayMood] = useState<string>('');
+  const [isMoodListening, setIsMoodListening] = useState(false);
+  const [isMoodVoiceSupported, setIsMoodVoiceSupported] = useState(false);
+  const [moodVoiceStatus, setMoodVoiceStatus] = useState('');
+  const [moodVoiceFallbackPrompt, setMoodVoiceFallbackPrompt] = useState('');
+  const [gratitudeInput, setGratitudeInput] = useState<string>('');
+  const [gratitudeNote, setGratitudeNote] = useState<string>('');
+  const [isSavingGratitude, setIsSavingGratitude] = useState(false);
+  const [habitTitleInput, setHabitTitleInput] = useState<string>('');
+  const [habitCueInput, setHabitCueInput] = useState<string>('');
+  const [isSavingHabit, setIsSavingHabit] = useState(false);
+  const [isCompletingHabitId, setIsCompletingHabitId] = useState<string | null>(null);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
+  const [showCollapsedModeWidgets, setShowCollapsedModeWidgets] = useState(false);
   const moodCheckRef = useRef<HTMLDivElement>(null);
+  const habitsSectionRef = useRef<HTMLDivElement>(null);
+  const moodRecognitionRef = useRef<MoodSpeechRecognition | null>(null);
+  const activeUserId = userProp?.id ?? null;
   const { t } = useTranslation();
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
   const { checkIsUserAdmin } = useAdminAuth();
-  const { visibility, updateVisibility, isVisible } = useWidgetVisibility();
+  const { visibility, updateVisibility, isVisible } = useWidgetVisibility(activeUserId);
   const device = useDevice();
 
   // Fetch dashboard data
-  const { data: dashboardData, isLoading, error, refetch } = useDashboardData();
-  const { data: weeklyData } = useWeeklyProgress();
+  const {
+    data: unifiedDashboardResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['dashboard', 'unified', activeUserId],
+    queryFn: () => dashboardApi.getUnified(),
+    enabled: Boolean(activeUserId),
+    staleTime: 60 * 1000,
+  });
+
+  const unifiedDashboardData: DashboardUnifiedData | null = unifiedDashboardResponse?.success
+    ? (unifiedDashboardResponse.data ?? null)
+    : null;
+  const dashboardData = unifiedDashboardData?.summary ?? null;
+  const weeklyData = unifiedDashboardData?.weeklyProgress ?? null;
+  const dashboardLoadError = useMemo(() => {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (unifiedDashboardResponse && !unifiedDashboardResponse.success) {
+      return unifiedDashboardResponse.error || 'Failed to load dashboard data';
+    }
+
+    return null;
+  }, [error, unifiedDashboardResponse]);
+
   const saveMood = useSaveMood();
   const isOnline = useOnlineStatus();
 
@@ -94,8 +178,11 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     onTourDismiss?.();
   }, [onTourComplete, onTourDismiss]);
 
-  // Use dashboard data or fallback to prop
-  const user = dashboardData?.user || userProp;
+  // Guard against cross-user cache bleed if stale summary payload doesn't match active session.
+  const summaryUser = dashboardData?.user;
+  const user = summaryUser && userProp && summaryUser.id !== userProp.id
+    ? userProp
+    : (summaryUser || userProp);
   const assessmentScores = dashboardData?.assessmentScores;
   const weeklyProgress = weeklyData || dashboardData?.weeklyProgress;
   const recommendedPractice = dashboardData?.recommendedPractice;
@@ -109,42 +196,388 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     return {
       current: weeklyProgress.currentStreak || 0,
       message: weeklyProgress.currentStreak > 0
-        ? `${weeklyProgress.currentStreak} day${weeklyProgress.currentStreak !== 1 ? 's' : ''} strong! 🔥`
+        ? `${weeklyProgress.currentStreak} day${weeklyProgress.currentStreak !== 1 ? 's' : ''} strong! ðŸ”¥`
         : 'Start your journey today!'
     };
   };
 
   const streakInfo = getStreakInfo();
+  const currentHour = new Date().getHours();
+
+  const isHabitCompletedToday = useCallback((lastCompletedAt?: string | null) => {
+    if (!lastCompletedAt) {
+      return false;
+    }
+
+    const completed = new Date(lastCompletedAt);
+    return completed.toDateString() === new Date().toDateString();
+  }, []);
+
+  const checkins = useMemo(
+    () => (unifiedDashboardData?.checkins?.checkins ?? []) as MicroCheckin[],
+    [unifiedDashboardData?.checkins?.checkins]
+  );
+
+  const { hasMorningCheckin, hasEveningCheckin } = useMemo(() => {
+    const today = new Date();
+    const isToday = (input: string | Date): boolean => {
+      const date = new Date(input);
+      return date.toDateString() === today.toDateString();
+    };
+
+    return {
+      hasMorningCheckin: checkins.some((entry) => entry.type === 'morning' && isToday(entry.createdAt)),
+      hasEveningCheckin: checkins.some((entry) => entry.type === 'evening' && isToday(entry.createdAt)),
+    };
+  }, [checkins]);
+
+  const recentCrisisEvent = unifiedDashboardData?.crisisEvents?.[0];
+
+  const todayIntention: DailyIntention | null = unifiedDashboardData?.intention ?? null;
+
+  const latestSleepLog: SleepLog | null = unifiedDashboardData?.sleep?.history?.logs?.[0] ?? null;
+
+  const sleepStats: SleepStats | null = unifiedDashboardData?.sleep?.stats ?? null;
+
+  const gratitudeEntries: GratitudeEntry[] = unifiedDashboardData?.gratitude?.entries ?? [];
+
+  const adaptiveNudges: AdaptiveNudge[] = unifiedDashboardData?.nudges?.nudges ?? [];
+
+  const assessmentReminder: AssessmentReminder | null = unifiedDashboardData?.assessmentReminder ?? null;
+
+  const habits: UserHabit[] = useMemo(
+    () => unifiedDashboardData?.habits?.habits ?? [],
+    [unifiedDashboardData?.habits?.habits]
+  );
+
+  const communityInsights: CommunityInsightsPayload | null = unifiedDashboardData?.communityInsights ?? null;
+
+  const dashboardMode = unifiedDashboardData?.mode ?? null;
+
+  const isModeDefault = !dashboardMode || dashboardMode.mode === 'default';
+
+  const collapsedWidgetIds = useMemo(
+    () => new Set(dashboardMode?.collapsedWidgets ?? []),
+    [dashboardMode]
+  );
+
+  const priorityWidgetIds = useMemo(
+    () => new Set(dashboardMode?.priorityWidgets ?? []),
+    [dashboardMode]
+  );
+
+  useEffect(() => {
+    setShowCollapsedModeWidgets(false);
+  }, [dashboardMode?.mode]);
+
+  const isModeSectionVisible = useCallback((sectionId: string, baseVisible = true) => {
+    if (!baseVisible) {
+      return false;
+    }
+
+    if (isModeDefault) {
+      return true;
+    }
+
+    if (priorityWidgetIds.has(sectionId)) {
+      return true;
+    }
+
+    if (collapsedWidgetIds.has(sectionId)) {
+      return showCollapsedModeWidgets;
+    }
+
+    return true;
+  }, [collapsedWidgetIds, isModeDefault, priorityWidgetIds, showCollapsedModeWidgets]);
+
+  const gratitudeItemsPreview = useMemo(() => {
+    return gratitudeInput
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .slice(0, 3);
+  }, [gratitudeInput]);
+
+  const handleSaveGratitude = useCallback(async () => {
+    if (isSavingGratitude) {
+      return;
+    }
+
+    const items = gratitudeItemsPreview;
+    if (items.length === 0) {
+      return;
+    }
+
+    setIsSavingGratitude(true);
+    try {
+      const response = await gratitudeApi.createEntry({
+        items,
+        note: gratitudeNote.trim().length > 0 ? gratitudeNote.trim() : undefined,
+      });
+
+      if (!response.success) {
+        throw new Error(response.error || 'Unable to save gratitude entry');
+      }
+
+      setGratitudeInput('');
+      setGratitudeNote('');
+
+      await refetch();
+    } catch (error) {
+      console.error('Failed to save gratitude entry:', error);
+    } finally {
+      setIsSavingGratitude(false);
+    }
+  }, [
+    gratitudeItemsPreview,
+    gratitudeNote,
+    isSavingGratitude,
+    refetch,
+  ]);
+
+  const handleCreateHabit = useCallback(async () => {
+    if (isSavingHabit) {
+      return;
+    }
+
+    const title = habitTitleInput.trim();
+    const cue = habitCueInput.trim();
+    if (!title || !cue) {
+      return;
+    }
+
+    setIsSavingHabit(true);
+    try {
+      const response = await habitsApi.createHabit({ title, cue });
+      if (!response.success) {
+        throw new Error(response.error || 'Unable to create habit');
+      }
+
+      setHabitTitleInput('');
+      setHabitCueInput('');
+
+      await refetch();
+    } catch (error) {
+      console.error('Failed to create habit loop:', error);
+    } finally {
+      setIsSavingHabit(false);
+    }
+  }, [
+    habitCueInput,
+    habitTitleInput,
+    isSavingHabit,
+    refetch,
+  ]);
+
+  const handleCompleteHabit = useCallback(async (habitId: string) => {
+    if (isCompletingHabitId) {
+      return;
+    }
+
+    setIsCompletingHabitId(habitId);
+    try {
+      const response = await habitsApi.completeHabit(habitId);
+      if (!response.success) {
+        throw new Error(response.error || 'Unable to complete habit');
+      }
+
+      await refetch();
+    } catch (error) {
+      console.error('Failed to complete habit loop:', error);
+    } finally {
+      setIsCompletingHabitId(null);
+    }
+  }, [isCompletingHabitId, refetch]);
+
+  const handleCheckinComplete = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   // Mood selection handler with API call
-  const handleMoodSelect = async (mood: string) => {
+  const handleMoodSelect = useCallback(async (mood: string) => {
     setTodayMood(mood);
     try {
-      await saveMood.mutateAsync({ mood });
+      await Promise.all([
+        saveMood.mutateAsync({ mood }),
+        refetch(),
+      ]);
     } catch (error) {
       console.error('Failed to save mood:', error);
     }
-  };
+  }, [refetch, saveMood]);
 
-  const moodOptions = [
-    { mood: 'Great', emoji: '😊', color: 'bg-green-100 text-green-800' },
-    { mood: 'Good', emoji: '🙂', color: 'bg-blue-100 text-blue-800' },
-    { mood: 'Okay', emoji: '😐', color: 'bg-yellow-100 text-yellow-800' },
-    { mood: 'Struggling', emoji: '😔', color: 'bg-orange-100 text-orange-800' },
-    { mood: 'Anxious', emoji: '😰', color: 'bg-red-100 text-red-800' },
-  ];
+  const handleOneThingAction = useCallback(async (actionType: OneThingActionType, actionData?: Record<string, unknown>) => {
+    if (actionType === 'mood') {
+      const mood = typeof actionData?.mood === 'string' ? actionData.mood : null;
+      if (mood) {
+        await handleMoodSelect(mood);
+      } else {
+        moodCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
 
-  const getWelcomeMessage = () => {
-    const hour = new Date().getHours();
-    let timeGreeting = '';
-    if (hour < 12) timeGreeting = t('dashboard.goodMorning');
-    else if (hour < 17) timeGreeting = t('dashboard.goodAfternoon');
-    else timeGreeting = t('dashboard.goodEvening');
+    if (actionType === 'habit') {
+      const habitId = typeof actionData?.habitId === 'string' ? actionData.habitId : null;
+      if (habitId) {
+        await handleCompleteHabit(habitId);
+      }
+      habitsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
 
-    // Personalized greeting based on user profile completeness
-    const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there';
-    return `${timeGreeting}, ${fullName}! 👋`;
-  };
+    if (actionType === 'checkin') {
+      moodCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (actionType === 'assessment') {
+      onNavigate('assessments');
+      return;
+    }
+
+    if (actionType === 'chat') {
+      onNavigate('chatbot');
+      return;
+    }
+
+    onNavigate('practices');
+  }, [handleCompleteHabit, handleMoodSelect, onNavigate]);
+
+  const mapTranscriptToMood = useCallback((transcript: string): string | null => {
+    const normalized = transcript.toLowerCase();
+
+    if (/(great|excellent|amazing|awesome|fantastic|happy|joyful|mast|badiya|badhiya|jhakkas|superb|ekdum badhiya)/.test(normalized)) {
+      return 'Great';
+    }
+    if (/(good|fine|okay-ish|all right|alright|pretty well|thik thak|theek thak|theek hai|thik hai|kaafi theek)/.test(normalized)) {
+      return 'Good';
+    }
+    if (/(okay|neutral|so so|soso|average|normal|manageable|just okay|thoda theek|thoda thik)/.test(normalized)) {
+      return 'Okay';
+    }
+    if (/(struggling|low|down|sad|upset|hard day|difficult|mood off|not great|feeling low|thoda low|heavy lag raha)/.test(normalized)) {
+      return 'Struggling';
+    }
+    if (/(anxious|anxiety|panic|worried|nervous|stressed|overwhelmed|tensed|tension|ghabrahat|pareshan|dimag kharab|bahut pressure)/.test(normalized)) {
+      return 'Anxious';
+    }
+
+    return null;
+  }, []);
+
+  const getVoiceErrorMessage = useCallback((errorCode?: string): string => {
+    switch (errorCode) {
+      case 'not-allowed':
+      case 'service-not-allowed':
+        return 'Microphone permission was blocked. Allow mic access in browser settings and try again.';
+      case 'no-speech':
+        return 'No speech was detected. Try again and speak after listening starts.';
+      case 'network':
+        return 'Network issue during voice recognition. Please check your connection and retry.';
+      case 'audio-capture':
+        return 'No microphone input detected. Check your mic device and browser input source.';
+      case 'aborted':
+        return 'Voice check-in was stopped before completion. Tap again to restart.';
+      case 'bad-grammar':
+        return 'Speech could not be interpreted clearly. Try a short phrase like "I feel anxious".';
+      case 'language-not-supported':
+        return 'Current language is not supported for speech recognition. Try English (en-US).';
+      default:
+        return 'Voice check-in failed. You can still set your mood manually below.';
+    }
+  }, []);
+
+  const setVoiceFallbackSuggestion = useCallback((message: string) => {
+    setMoodVoiceFallbackPrompt(`${message} Fallback: type or tap one of these moods: Great, Good, Okay, Struggling, Anxious.`);
+  }, []);
+
+  useEffect(() => {
+    const speechWindow = window as MoodSpeechWindow;
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setIsMoodVoiceSupported(false);
+      moodRecognitionRef.current = null;
+      return;
+    }
+
+    setIsMoodVoiceSupported(true);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = document.documentElement.lang || 'en-US';
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() || '';
+      if (!transcript) {
+        setMoodVoiceStatus('I did not catch that. Please try again.');
+        setVoiceFallbackSuggestion('I could not hear your response.');
+        setIsMoodListening(false);
+        return;
+      }
+
+      const mappedMood = mapTranscriptToMood(transcript);
+      if (mappedMood) {
+        setMoodVoiceStatus(`Heard "${transcript}". Mood logged as ${mappedMood}.`);
+        setMoodVoiceFallbackPrompt('');
+        void handleMoodSelect(mappedMood);
+      } else {
+        setMoodVoiceStatus(
+          `Heard "${transcript}". Try saying words like great, good, okay, struggling, or anxious.`
+        );
+        setVoiceFallbackSuggestion('Voice input was captured but did not match a mood confidently.');
+      }
+
+      setIsMoodListening(false);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Mood voice recognition error:', event.error);
+      const message = getVoiceErrorMessage(event.error);
+      setMoodVoiceStatus(message);
+      setVoiceFallbackSuggestion(message);
+      setIsMoodListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsMoodListening(false);
+    };
+
+    moodRecognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+      moodRecognitionRef.current = null;
+    };
+  }, [getVoiceErrorMessage, handleMoodSelect, mapTranscriptToMood, setVoiceFallbackSuggestion]);
+
+  const handleVoiceMoodCheckIn = useCallback(() => {
+    const recognition = moodRecognitionRef.current;
+    if (!recognition || !isMoodVoiceSupported) {
+      setMoodVoiceStatus('Voice check-in is not available in this browser.');
+      setVoiceFallbackSuggestion('Voice recognition is unavailable in this browser.');
+      return;
+    }
+
+    if (isMoodListening) {
+      recognition.stop();
+      setIsMoodListening(false);
+      return;
+    }
+
+    try {
+      recognition.start();
+      setIsMoodListening(true);
+      setMoodVoiceStatus('Listening... say how you feel.');
+      setMoodVoiceFallbackPrompt('');
+    } catch (error) {
+      console.error('Failed to start mood voice check-in:', error);
+      setIsMoodListening(false);
+      setMoodVoiceStatus('Could not start voice check-in. Please try again.');
+      setVoiceFallbackSuggestion('Voice capture could not start.');
+    }
+  }, [isMoodListening, isMoodVoiceSupported, setVoiceFallbackSuggestion]);
 
   const getProfileCompletion = () => {
     if (!user) return 0;
@@ -205,7 +638,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
   const practiceTags = recommendedPractice?.tags || (() => {
     switch (user?.approach) {
-      case 'western': return ['CBT technique', 'Thought tracking', '5–10 min'];
+      case 'western': return ['CBT technique', 'Thought tracking', '5â€“10 min'];
       case 'eastern': return ['Meditation', 'Breathwork', 'Grounding'];
       case 'hybrid': return ['Mindfulness', 'Cognitive reframing', 'Balanced'];
       default: return ['Anxiety relief', 'Beginner friendly', '10 min'];
@@ -265,17 +698,89 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     };
   }, [todayMood, weeklyProgress, profileCompletion, assessmentScores, onNavigate]);
 
+  const isLoggingMood = saveMood.isPending;
+  const currentStreak = streakInfo.current;
+  const wellnessScore = assessmentScores?.wellnessScore != null
+    ? Math.round(assessmentScores.wellnessScore)
+    : null;
+  const wellnessTrend = useMemo(() => {
+    const trend = assessmentScores?.overallTrend?.toLowerCase();
+    if (!trend) {
+      return null;
+    }
+
+    if (trend.includes('improv') || trend.includes('up')) {
+      return 5;
+    }
+
+    if (trend.includes('declin') || trend.includes('down')) {
+      return -5;
+    }
+
+    return null;
+  }, [assessmentScores?.overallTrend]);
+  const weeklyCheckInCount = weeklyProgress?.moodCheckins?.completed ?? 0;
+  const completedHabitsCount = useMemo(
+    () => habits.filter((habit) => isHabitCompletedToday(habit.lastCompletedAt)).length,
+    [habits, isHabitCompletedToday],
+  );
+  const totalHabitsCount = habits.length;
+  const insightCount = (dashboardData?.recentInsights?.length ?? 0) + adaptiveNudges.length + (communityInsights?.metrics.length ?? 0);
+  const oneThingTitle = dashboardMode?.oneThingToday?.title || recommendedAction.title;
+  const oneThingDescription = dashboardMode?.oneThingToday?.description || recommendedAction.description;
+  const oneThingDuration = useMemo(() => {
+    const value = dashboardMode?.oneThingToday?.actionData?.duration;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return `${value} min`;
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+    return '5 min';
+  }, [dashboardMode?.oneThingToday?.actionData]);
+
+  const handleOneThingStart = useCallback(() => {
+    if (dashboardMode?.oneThingToday) {
+      void handleOneThingAction(
+        dashboardMode.oneThingToday.actionType,
+        dashboardMode.oneThingToday.actionData,
+      );
+      return;
+    }
+    recommendedAction.onAction();
+  }, [dashboardMode, handleOneThingAction, recommendedAction]);
+
+  const handleStatClick = useCallback((stat: string) => {
+    if (stat === 'habits') {
+      habitsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (stat === 'checkins' || stat === 'streak') {
+      moodCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (stat === 'wellness') {
+      onNavigate('assessments');
+    }
+  }, [onNavigate]);
+
+  const showInsightsWidget = isModeSectionVisible('recent-insights', isVisible('recent-insights'));
+  const showThisWeekWidget = isModeSectionVisible('this-week', isVisible('this-week'));
+  const hasCollapsedModeWidgets = !isModeDefault && (dashboardMode?.collapsedWidgets?.length ?? 0) > 0;
+
   // Loading state
   if (isLoading) {
     return <DashboardLoadingSkeleton />;
   }
 
   // Error state
-  if (error) {
+  if (dashboardLoadError) {
     return (
       <ErrorMessage
         title="Failed to load dashboard"
-        message="We couldn't load your dashboard data. Please check your connection and try again."
+        message={dashboardLoadError}
         onRetry={() => refetch()}
       />
     );
@@ -299,19 +804,24 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
       {/* Network status banner when offline */}
       {!isOnline && <NetworkStatus isOnline={isOnline} />}
 
-      <div className="min-h-screen bg-background pb-safe">
+      <div className="min-h-screen bg-background pb-safe page-enter">
         {/* Header - Responsive */}
         <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-4 md:p-6">
           <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-start mb-4 md:mb-6">
-              {/* Greeting - Compact on mobile */}
+              {/* Header title */}
               <div className="space-y-1 md:space-y-2 flex-1 min-w-0">
                 <h1 className="text-xl md:text-2xl font-bold truncate">
-                  {getWelcomeMessage()}
+                  Your Wellbeing Dashboard
                 </h1>
                 <p className="text-sm md:text-base text-muted-foreground">
                   {t('dashboard.howFeeling')}
                 </p>
+                {!isModeDefault && dashboardMode?.message && (
+                  <p className="text-xs md:text-sm text-primary font-medium">
+                    {dashboardMode.message}
+                  </p>
+                )}
               </div>
 
               {/* Header Actions - Responsive */}
@@ -382,7 +892,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       <div className="text-right">
                         <p className="text-sm font-medium">Profile {profileCompletion}% complete</p>
                         <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => onNavigate('profile')}>
-                          Complete setup →
+                          Complete setup â†’
                         </Button>
                       </div>
                     )}
@@ -416,53 +926,423 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
               </div>
             </div>
 
-            {/* Quick Mood Check - Horizontal scroll on mobile */}
-            {isVisible('mood-check') && (
-              <div ref={moodCheckRef}>
-                <Card>
-                  <CardContent className="p-3 md:p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Heart className="h-5 w-5 text-primary flex-shrink-0" />
-                      <span className="font-medium text-sm md:text-base">Quick mood check</span>
-                    </div>
-                    <div className={device.isMobile ? "flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 snap-x snap-mandatory" : "flex gap-2 flex-wrap"}>
-                      {moodOptions.map(({ mood, emoji, color }) => {
-                        const isSelected = todayMood === mood;
-                        return (
-                          <Button
-                            key={mood}
-                            variant="outline"
-                            size="sm"
-                            className={`${isSelected ? `${color} border-transparent shadow-sm` : ''} ${device.isMobile ? 'flex-shrink-0 snap-start min-h-[44px]' : ''} touch-manipulation`}
-                            onClick={() => handleMoodSelect(mood)}
-                            disabled={saveMood.isPending}
-                            aria-pressed={isSelected}
-                            aria-label={`Set mood to ${mood}`}
-                          >
-                            <span className="mr-2">{emoji}</span>
-                            {mood}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">
-                      {saveMood.isPending
-                        ? 'Saving your check-in...'
-                        : todayMood
-                          ? `Mood saved as ${todayMood}. Recommendations will adapt for today.`
-                          : 'Choose a mood to personalize your dashboard.'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
           </div>
         </div>
 
         <div className="max-w-7xl mx-auto p-4 md:p-6">
           <ResponsiveContainer spacing="medium">
+            {/* Tier 1: The Breathe Zone - Always visible */}
+            <div className="space-y-4 page-enter">
+              {isModeSectionVisible('greeting-header', isVisible('greeting-header')) && (
+                <GreetingHeader userName={user?.name || user?.firstName || undefined} />
+              )}
+
+              {isModeSectionVisible('mood-check', isVisible('mood-check')) && (
+                <div ref={moodCheckRef}>
+                  <Card className="border-primary/10 shadow-[var(--shadow-card)]">
+                    <CardContent className="p-4 sm:p-6">
+                      <p className="text-center text-sm text-muted-foreground mb-3">
+                        How are you feeling right now?
+                      </p>
+                      <MoodSelector
+                        onSelect={(mood) => {
+                          void handleMoodSelect(mood);
+                        }}
+                        selectedMood={todayMood}
+                        disabled={isLoggingMood}
+                      />
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="min-h-[40px]"
+                          onClick={handleVoiceMoodCheckIn}
+                          disabled={!isMoodVoiceSupported}
+                          aria-label={isMoodListening ? 'Stop voice mood check-in' : 'Start voice mood check-in'}
+                        >
+                          <Mic className="mr-2 h-4 w-4" />
+                          {isMoodListening ? 'Listening...' : 'Voice mood check-in'}
+                        </Button>
+                        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                          {isLoggingMood
+                            ? 'Saving your check-in...'
+                            : todayMood
+                              ? `Mood saved as ${todayMood}. Recommendations will adapt for today.`
+                              : 'Choose a mood to personalize your dashboard.'}
+                        </p>
+                      </div>
+                      {moodVoiceStatus ? (
+                        <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+                          {moodVoiceStatus}
+                        </p>
+                      ) : null}
+                      {moodVoiceFallbackPrompt ? (
+                        <div className="mt-3 space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                            {moodVoiceFallbackPrompt}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(['Great', 'Good', 'Okay', 'Struggling', 'Anxious'] as const).map((moodOption) => (
+                              <Button
+                                key={moodOption}
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                onClick={() => {
+                                  setMoodVoiceFallbackPrompt('');
+                                  void handleMoodSelect(moodOption);
+                                }}
+                              >
+                                {moodOption}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {isModeSectionVisible('one-thing-today', isVisible('one-thing-today')) && (
+                <OneThingToday
+                  title={oneThingTitle}
+                  description={oneThingDescription}
+                  duration={oneThingDuration}
+                  onStart={handleOneThingStart}
+                />
+              )}
+            </div>
+
+            {/* Tier 2: The Pulse - Compact stats */}
+            {isModeSectionVisible('stats-row', isVisible('stats-row')) && (
+              <StatsRow
+                streak={currentStreak}
+                wellnessScore={wellnessScore}
+                wellnessTrend={wellnessTrend}
+                weeklyCheckIns={weeklyCheckInCount}
+                habitsCompleted={completedHabitsCount}
+                habitsTotal={totalHabitsCount}
+                onStatClick={handleStatClick}
+              />
+            )}
+
+            {/* Tier 3: The Depth - Existing widgets */}
+            <div className="space-y-2">
+            {!isModeDefault && dashboardMode && isModeSectionVisible('adaptive-mode-banner', isVisible('adaptive-mode-banner')) && (
+              <Card className="border-primary/25 bg-primary/5">
+                <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-wide font-semibold text-primary">Adaptive mode</p>
+                    <p className="text-sm text-foreground">
+                      {dashboardMode.message || 'Dashboard is focused to reduce overload right now.'}
+                    </p>
+                  </div>
+                  {hasCollapsedModeWidgets && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowCollapsedModeWidgets((prev) => !prev)}
+                    >
+                      {showCollapsedModeWidgets ? 'Hide extra widgets' : 'See more widgets'}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {isModeSectionVisible('crisis-follow-up', isVisible('crisis-follow-up')) && recentCrisisEvent && (
+              <CrisisFollowUp
+                event={recentCrisisEvent}
+                onRespond={() => {
+                  void refetch();
+                }}
+                onNavigate={onNavigate}
+              />
+            )}
+
+            {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour < 12 && (
+              <DashboardCollapsibleSection
+                title="Morning Check-in"
+                summary={hasMorningCheckin ? 'Completed' : 'Start your day with a pulse-check'}
+                icon={<Sunrise className="h-4 w-4" />}
+                defaultOpen={!hasMorningCheckin}
+              >
+                {hasMorningCheckin ? (
+                  <p className="text-sm text-muted-foreground">Morning check-in already completed today.</p>
+                ) : (
+                  <MorningCheckin onComplete={() => void handleCheckinComplete()} />
+                )}
+              </DashboardCollapsibleSection>
+            )}
+
+            {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour >= 17 && (
+              <DashboardCollapsibleSection
+                title="Evening Reflection"
+                summary={hasEveningCheckin ? 'Completed' : 'Wind down with a quick reflection'}
+                icon={<Moon className="h-4 w-4" />}
+                defaultOpen={!hasEveningCheckin}
+              >
+                {hasEveningCheckin ? (
+                  <p className="text-sm text-muted-foreground">Evening reflection already completed today.</p>
+                ) : (
+                  <EveningCheckin onComplete={() => void handleCheckinComplete()} />
+                )}
+              </DashboardCollapsibleSection>
+            )}
+
+            {(
+              (isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0)
+              || (isModeSectionVisible('community-insights', isVisible('community-insights')) && Boolean(communityInsights?.metrics.length))
+              || (isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && Boolean(assessmentReminder?.shouldRemind))
+            ) && (
+              <DashboardCollapsibleSection
+                title="Insights & Nudges"
+                summary={`${insightCount} recent signals`}
+                icon={<Lightbulb className="h-4 w-4" />}
+                badge={insightCount > 0 ? insightCount : undefined}
+              >
+                <div className="space-y-3">
+                  {isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0 && (
+                    <Card className="border-primary/30 bg-primary/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          Smart Nudges
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {adaptiveNudges.map((nudge) => (
+                          <div key={nudge.id} className="rounded-md border bg-background p-3">
+                            <p className="text-sm text-foreground">{nudge.message}</p>
+                            {nudge.ctaLabel && nudge.ctaPage && (
+                              <Button
+                                variant="link"
+                                className="px-0 h-auto mt-1"
+                                onClick={() => onNavigate(nudge.ctaPage)}
+                              >
+                                {nudge.ctaLabel}
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {isModeSectionVisible('community-insights', isVisible('community-insights')) && communityInsights && communityInsights.metrics.length > 0 && (
+                    <Card className="border-slate-300/70 bg-slate-50/60">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-slate-700" />
+                          Community Insights
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          Anonymous trends from the community to reduce isolation and normalize progress.
+                        </p>
+
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {communityInsights.metrics.map((metric) => (
+                            <div key={metric.id} className="rounded-md border bg-background p-3 space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {metric.label}
+                              </p>
+                              <p className="text-xl font-semibold text-foreground">
+                                {metric.value}{metric.unit === 'percent' ? '%' : ''}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {metric.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                          Updated {new Date(communityInsights.generatedAt).toLocaleString()} â€¢ sample size up to {Math.max(...communityInsights.metrics.map((metric) => metric.sampleSize), 0)} users
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && assessmentReminder?.shouldRemind && (
+                    <Card className="border-amber-300/70 bg-amber-50/60">
+                      <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Assessment Reminder</p>
+                          <h3 className="text-base font-semibold text-foreground">Time for a check-in</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {assessmentReminder.message}
+                          </p>
+                        </div>
+                        <Button
+                          className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                          onClick={() => onNavigate('assessments')}
+                        >
+                          <Bell className="h-4 w-4 mr-2" />
+                          Retake Assessment
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </DashboardCollapsibleSection>
+            )}
+
+            {isModeSectionVisible('gratitude', isVisible('gratitude')) && (
+              <Card className="border-emerald-300/70 bg-emerald-50/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-emerald-600" />
+                  Daily Gratitude Prompt
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Name 3 things you&apos;re grateful for today.
+                </p>
+                <Input
+                  value={gratitudeInput}
+                  onChange={(event) => setGratitudeInput(event.target.value)}
+                  placeholder="coffee, sunshine, a kind conversation"
+                />
+                <Input
+                  value={gratitudeNote}
+                  onChange={(event) => setGratitudeNote(event.target.value)}
+                  placeholder="Optional note"
+                />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {gratitudeItemsPreview.length > 0
+                      ? `${gratitudeItemsPreview.length}/3 items ready`
+                      : 'Tip: separate items with commas'}
+                  </p>
+                  <Button
+                    onClick={() => void handleSaveGratitude()}
+                    disabled={isSavingGratitude || gratitudeItemsPreview.length === 0}
+                    className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                  >
+                    {isSavingGratitude ? 'Saving...' : 'Save gratitude entry'}
+                  </Button>
+                </div>
+
+                {gratitudeEntries.length > 0 && (
+                  <div className="pt-2 border-t space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent gratitude</p>
+                    {gratitudeEntries.slice(0, 2).map((entry) => (
+                      <p key={entry.id} className="text-sm text-foreground">
+                        {entry.items.slice(0, 3).join(', ')}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+              </Card>
+            )}
+
+            {isModeSectionVisible('habits', isVisible('habits')) && (
+              <div ref={habitsSectionRef}>
+                <DashboardCollapsibleSection
+                  title="My Habits"
+                  summary={`${completedHabitsCount}/${totalHabitsCount} completed today`}
+                  icon={<CheckCircle className="h-4 w-4" />}
+                  badge={`${completedHabitsCount}/${totalHabitsCount}`}
+                  defaultOpen={totalHabitsCount === 0}
+                >
+                <Card className="border-cyan-300/70 bg-cyan-50/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                  <Target className="h-5 w-5 text-cyan-700" />
+                  Habit Loops
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Build cue-based habits you can complete in under five minutes.
+                </p>
+
+                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                  <Input
+                    value={habitTitleInput}
+                    onChange={(event) => setHabitTitleInput(event.target.value)}
+                    placeholder="Habit title (e.g. 3 calming breaths)"
+                  />
+                  <Input
+                    value={habitCueInput}
+                    onChange={(event) => setHabitCueInput(event.target.value)}
+                    placeholder="Cue (e.g. After morning coffee)"
+                  />
+                  <Button
+                    onClick={() => void handleCreateHabit()}
+                    disabled={isSavingHabit || habitTitleInput.trim().length < 3 || habitCueInput.trim().length < 3}
+                    className={device.isMobile ? 'min-h-[44px] touch-manipulation' : ''}
+                  >
+                    {isSavingHabit ? 'Saving...' : 'Add loop'}
+                  </Button>
+                </div>
+
+                {habits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No active habit loops yet. Add one cue and one tiny action to get started.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {habits.slice(0, 4).map((habit) => {
+                      const completedToday = isHabitCompletedToday(habit.lastCompletedAt);
+                      return (
+                        <div key={habit.id} className="rounded-md border bg-background p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">{habit.title}</p>
+                            <p className="text-xs text-muted-foreground">Cue: {habit.cue}</p>
+                            <p className="text-xs text-muted-foreground">Streak: {habit.streak} day{habit.streak === 1 ? '' : 's'}</p>
+                          </div>
+                          <Button
+                            variant={completedToday ? 'secondary' : 'outline'}
+                            onClick={() => void handleCompleteHabit(habit.id)}
+                            disabled={completedToday || isCompletingHabitId === habit.id}
+                            className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation md:w-auto' : ''}
+                          >
+                            {completedToday
+                              ? 'Completed today'
+                              : isCompletingHabitId === habit.id
+                                ? 'Saving...'
+                                : 'Mark complete'}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+                </Card>
+                </DashboardCollapsibleSection>
+              </div>
+            )}
+
+            {isModeSectionVisible('intentions-sleep', isVisible('intentions-sleep')) && (
+              <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
+                <DailyIntentionCard
+                  intention={todayIntention}
+                  currentHour={currentHour}
+                  onUpdated={() => {
+                    void refetch();
+                  }}
+                />
+
+                <SleepLogCard
+                  latestLog={latestSleepLog}
+                  stats={sleepStats}
+                  onLogged={() => {
+                    void refetch();
+                  }}
+                />
+              </ResponsiveGrid>
+            )}
+
             {/* Priority 1: Quick Actions (Visible on all devices) */}
-            <Card>
+            {isModeSectionVisible('quick-actions', isVisible('quick-actions')) && (
+              <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base md:text-lg">Quick Actions</CardTitle>
               </CardHeader>
@@ -503,6 +1383,18 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       <div className="flex items-center gap-3">
                         <BookOpen className="h-5 w-5" />
                         <span className="font-medium">Browse Library</span>
+                      </div>
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
+                      onClick={() => onNavigate('journal')}
+                    >
+                      <div className="flex items-center gap-3">
+                        <BookOpen className="h-5 w-5" />
+                        <span className="font-medium">Journal</span>
                       </div>
                       <ChevronRight className="h-5 w-5" />
                     </Button>
@@ -559,6 +1451,17 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                     <Button
                       variant="outline"
                       className="justify-start h-auto py-4 px-4"
+                      onClick={() => onNavigate('journal')}
+                    >
+                      <div className="flex items-center gap-3">
+                        <BookOpen className="h-5 w-5" />
+                        <span className="font-medium">Journal</span>
+                      </div>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto py-4 px-4"
                       onClick={() => onNavigate('progress')}
                     >
                       <div className="flex items-center gap-3">
@@ -569,9 +1472,11 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                   </div>
                 )}
               </CardContent>
-            </Card>
+              </Card>
+            )}
 
-            <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-accent/10">
+            {isModeSectionVisible('recommended-next-step', isVisible('recommended-next-step')) && (
+              <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-accent/10">
               <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6 md:p-5">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-primary">Recommended next step</p>
@@ -586,10 +1491,18 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               </CardContent>
-            </Card>
+              </Card>
+            )}
 
             {/* Priority 2: Today's Practice */}
-            <Card className={device.isMobile ? '' : 'lg:col-span-2'}>
+            {isModeSectionVisible('today-practice', isVisible('today-practice')) && (
+              <DashboardCollapsibleSection
+                title="Recommended Practices"
+                summary="Personalized for your mood"
+                icon={<Headphones className="h-4 w-4" />}
+                defaultOpen={!device.isMobile}
+              >
+              <Card className={device.isMobile ? '' : 'lg:col-span-2'}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                   <Play className="h-5 w-5 text-primary" />
@@ -617,7 +1530,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
                           return normalizedTags
                             .slice(0, device.isSmallPhone ? 1 : 2)
-                            .map((tag) => <span key={tag}>• {tag}</span>);
+                            .map((tag) => <span key={tag}>â€¢ {tag}</span>);
                         })()}
                         {(() => {
                           const normalizedTags = Array.isArray(practiceTags)
@@ -633,7 +1546,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </div>
                       {recommendedPractice?.reason && (
                         <p className="text-xs text-primary/80 italic mt-2">
-                          💡 {recommendedPractice.reason}
+                          ðŸ’¡ {recommendedPractice.reason}
                         </p>
                       )}
                     </div>
@@ -648,7 +1561,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
                 {/* Secondary Practices - Collapsible on mobile */}
                 {device.isMobile ? (
-                  <CollapsibleSection
+                  <DashboardCollapsibleSection
                     title="More Practices"
                     icon={<Heart className="h-4 w-4" />}
                     defaultOpen={false}
@@ -683,7 +1596,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         </div>
                       </Button>
                     </ResponsiveStack>
-                  </CollapsibleSection>
+                  </DashboardCollapsibleSection>
                 ) : (
                   <div className="grid md:grid-cols-2 gap-4">
                     <Button
@@ -716,17 +1629,22 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                   </div>
                 )}
               </CardContent>
-            </Card>
+              </Card>
+              </DashboardCollapsibleSection>
+            )}
 
             {/* Priority 3-4: Key Metrics - Horizontal carousel on mobile */}
-            {isVisible('assessment-scores') && assessmentScores && (
+            {isModeSectionVisible('assessment-scores', isVisible('assessment-scores')) && assessmentScores && (
               <>
                 {device.isMobile ? (
                   <div>
                     <h2 className="text-lg font-semibold mb-3 px-1">Your Metrics</h2>
                     <HorizontalScrollContainer snap={true}>
                       {/* Anxiety Card */}
-                      <Card>
+                      <Card
+                        role="img"
+                        aria-label={`Anxiety level ${formatScore(assessmentScores.anxiety)} percent. ${getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}.`}
+                      >
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Brain className="h-5 w-5 text-primary" />
@@ -752,7 +1670,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </Card>
 
                       {/* Stress Card */}
-                      <Card>
+                      <Card
+                        role="img"
+                        aria-label={`Stress level ${formatScore(assessmentScores.stress)} percent. ${getScoreInterpretation('stress', assessmentScores.stress || 0)}.`}
+                      >
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Target className="h-5 w-5 text-primary" />
@@ -778,7 +1699,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </Card>
 
                       {/* Emotional Intelligence Card */}
-                      <Card>
+                      <Card
+                        role="img"
+                        aria-label={`Emotional intelligence ${formatScore(assessmentScores.emotionalIntelligence)} percent. ${getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}.`}
+                      >
                         <CardHeader className="pb-3">
                           <CardTitle className="text-base flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-primary" />
@@ -807,7 +1731,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                 ) : (
                   /* Desktop & Tablet: Grid layout */
                   <ResponsiveGrid columns="custom" className="md:grid-cols-3" gap="medium">
-                    <Card>
+                    <Card
+                      role="img"
+                      aria-label={`Anxiety level ${formatScore(assessmentScores.anxiety)} percent. ${getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}.`}
+                    >
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Brain className="h-5 w-5 text-primary" />
@@ -832,7 +1759,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card
+                      role="img"
+                      aria-label={`Stress level ${formatScore(assessmentScores.stress)} percent. ${getScoreInterpretation('stress', assessmentScores.stress || 0)}.`}
+                    >
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Target className="h-5 w-5 text-primary" />
@@ -857,7 +1787,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card
+                      role="img"
+                      aria-label={`Emotional intelligence ${formatScore(assessmentScores.emotionalIntelligence)} percent. ${getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}.`}
+                    >
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Sparkles className="h-5 w-5 text-primary" />
@@ -887,120 +1820,125 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
             )}
 
             {/* Priority 5: Enhanced AI Insights & This Week */}
-            <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
-              {/* Enhanced Insights Card - replaces old Recent Insights */}
-              <EnhancedInsightsCard onNavigate={onNavigate} />
+            {(showInsightsWidget || showThisWeekWidget) && (
+              <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
+                {showInsightsWidget && <EnhancedInsightsCard onNavigate={onNavigate} />}
 
-              {device.isMobile ? (
-                <CollapsibleSection
-                  title="This Week"
-                  icon={<Calendar className="h-5 w-5 text-primary" />}
-                  defaultOpen={false}
-                  summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices • ${streakInfo.current}-day streak` : "Loading..."}
-                >
-                  {weeklyProgress ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm">Daily practices</span>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <span className="text-sm">Mood check-ins</span>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                          <span className="text-sm">Assessments</span>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {weeklyProgress.assessments.completed} completed
-                        </Badge>
-                      </div>
-
-                      <div className="pt-3 border-t">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                          <span className="text-muted-foreground">{streakInfo.message}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
-                  )}
-                </CollapsibleSection>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-primary" />
-                      This Week
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {weeklyProgress ? (
-                      <>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm">Daily practices</span>
+                {showThisWeekWidget && (
+                  <>
+                    {device.isMobile ? (
+                      <DashboardCollapsibleSection
+                        title="This Week"
+                        icon={<Calendar className="h-5 w-5 text-primary" />}
+                        defaultOpen={false}
+                        summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices â€¢ ${streakInfo.current}-day streak` : 'Loading...'}
+                      >
+                        {weeklyProgress ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-sm">Daily practices</span>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
+                              </Badge>
                             </div>
-                            <Badge variant="secondary">
-                              {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
-                            </Badge>
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span className="text-sm">Mood check-ins</span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <span className="text-sm">Mood check-ins</span>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
+                              </Badge>
                             </div>
-                            <Badge variant="secondary">
-                              {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
-                            </Badge>
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                              <span className="text-sm">Assessments</span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                <span className="text-sm">Assessments</span>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {weeklyProgress.assessments.completed} completed
+                              </Badge>
                             </div>
-                            <Badge variant="secondary">
-                              {weeklyProgress.assessments.completed} completed
-                            </Badge>
-                          </div>
-                        </div>
 
-                        <div className="pt-3 border-t">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                            <span className="text-muted-foreground">{streakInfo.message}</span>
+                            <div className="pt-3 border-t">
+                              <div className="flex items-center gap-2 text-sm">
+                                <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                                <span className="text-muted-foreground">{streakInfo.message}</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
+                        )}
+                      </DashboardCollapsibleSection>
                     ) : (
-                      <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-primary" />
+                            This Week
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {weeklyProgress ? (
+                            <>
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    <span className="text-sm">Daily practices</span>
+                                  </div>
+                                  <Badge variant="secondary">
+                                    {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
+                                  </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                    <span className="text-sm">Mood check-ins</span>
+                                  </div>
+                                  <Badge variant="secondary">
+                                    {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
+                                  </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                    <span className="text-sm">Assessments</span>
+                                  </div>
+                                  <Badge variant="secondary">
+                                    {weeklyProgress.assessments.completed} completed
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                                  <span className="text-muted-foreground">{streakInfo.message}</span>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
+                          )}
+                        </CardContent>
+                      </Card>
                     )}
-                  </CardContent>
-                </Card>
-              )}
-            </ResponsiveGrid>
+                  </>
+                )}
+              </ResponsiveGrid>
+            )}
 
             {/* Navigation Shortcuts - Hide on mobile (use bottom nav instead) */}
-            {isVisible('navigation-shortcuts') && !device.isMobile && (
+            {isModeSectionVisible('navigation-shortcuts', isVisible('navigation-shortcuts')) && !device.isMobile && (
               <ResponsiveGrid columns="custom" className="grid-cols-2 md:grid-cols-4" gap="small">
                 <Button
                   variant="ghost"
@@ -1039,6 +1977,8 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                 </Button>
               </ResponsiveGrid>
             )}
+
+            </div>
 
             {/* Spacer for bottom navigation on mobile */}
             <BottomNavigationSpacer />

@@ -20,7 +20,7 @@ export function useGoogleAuth() {
     try {
       const baseUrl = API_BASE_URL.replace('/api', '');
       const authUrl = `${baseUrl}/api/auth/google?platform=mobile`;
-      const redirectUrl = 'maansarathi://auth/callback';
+      const redirectUrl = 'manasarthi://auth/callback';
 
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
 

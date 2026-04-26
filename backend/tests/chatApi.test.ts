@@ -5,6 +5,7 @@
 import request from 'supertest';
 import type { Express } from 'express';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { llmService } from '../src/services/llmProvider';
 
 // --- Prisma mock ---
 const createMessageMock = vi.fn((args: any) =>
@@ -23,6 +24,7 @@ vi.mock('@prisma/client', () => ({
         chatMessage: {
             create: createMessageMock,
             findMany: findManyMessagesMock,
+            findFirst: vi.fn(() => Promise.resolve(null)),
         },
         conversation: {
             create: createConversationMock,
@@ -45,6 +47,17 @@ vi.mock('@prisma/client', () => ({
         conversationGoal: {
             findMany: vi.fn(() => Promise.resolve([])),
         },
+        dailyIntention: {
+            findFirst: vi.fn(() => Promise.resolve(null)),
+        },
+        sleepLog: {
+            findMany: vi.fn(() => Promise.resolve([])),
+        },
+        chatFeedback: {
+            findMany: vi.fn(() => Promise.resolve([])),
+            findFirst: vi.fn(() => Promise.resolve(null)),
+            upsert: vi.fn(() => Promise.resolve({})),
+        },
         user: {
             findUnique: vi.fn(() =>
                 Promise.resolve({
@@ -56,6 +69,16 @@ vi.mock('@prisma/client', () => ({
             ),
         },
         moodEntry: {
+            findMany: vi.fn(() => Promise.resolve([])),
+        },
+        contentEngagement: {
+            count: vi.fn(() => Promise.resolve(0)),
+            findMany: vi.fn(() => Promise.resolve([])),
+        },
+        content: {
+            findMany: vi.fn(() => Promise.resolve([])),
+        },
+        practice: {
             findMany: vi.fn(() => Promise.resolve([])),
         },
         assessmentResult: {
@@ -93,6 +116,25 @@ vi.mock('../src/services/llmProvider', () => ({
     },
 }));
 
+vi.mock('../src/services/progressDetectionService', () => ({
+    progressDetectionService: {
+        detectProgress: vi.fn(() => Promise.resolve([])),
+    },
+}));
+
+vi.mock('../src/services/recommendationService', () => ({
+    recommendationService: {
+        getContentRecommendations: vi.fn(() =>
+            Promise.resolve({
+                items: [],
+                focusAreas: [],
+                rationale: 'mocked recommendations',
+                fallbackUsed: false,
+            })
+        ),
+    },
+}));
+
 // Mock chatbot service
 vi.mock('../src/services/chatbotService', () => ({
     chatbotService: {
@@ -118,12 +160,20 @@ let app: Express;
 beforeAll(async () => {
     const module = await import('../src/server');
     app = module.default;
-}, 20000);
+}, 60000);
 
 beforeEach(() => {
     createMessageMock.mockClear();
     findManyMessagesMock.mockClear();
     findManyConvMock.mockClear();
+
+    const mockedLlmService = llmService as any;
+    mockedLlmService.generateResponse.mockReset();
+    mockedLlmService.generateResponse.mockResolvedValue({
+        content: 'Hello! How can I help you today?'
+    });
+    mockedLlmService.getProviderStatus.mockReset();
+    mockedLlmService.getProviderStatus.mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -140,6 +190,62 @@ describe('Chat API', () => {
             // Should return a response (may be 200 or 201)
             expect(res.status).toBeLessThan(500);
             expect(res.body).toBeDefined();
+        });
+
+        it('does not trigger crisis mode for routine stress language', async () => {
+            const res = await request(app)
+                .post('/api/chat/message')
+                .send({ content: 'I am stressed about exams and cannot focus lately.' });
+
+            expect(res.status).toBe(201);
+            expect(res.body?.data?.crisis).not.toBe(true);
+        });
+
+        it('triggers crisis mode for explicit self-harm language', async () => {
+            const res = await request(app)
+                .post('/api/chat/message')
+                .send({ content: 'I want to kill myself tonight.' });
+
+            expect(res.status).toBe(201);
+            expect(res.body?.data?.crisis).toBe(true);
+            expect(typeof res.body?.data?.message?.content).toBe('string');
+            expect(res.body?.data?.message?.type).toBe('system');
+        });
+
+        it('replaces over-cautious self-harm refusals for non-crisis prompts', async () => {
+            const mockedLlmService = llmService as any;
+            mockedLlmService.generateResponse.mockResolvedValueOnce({
+                content:
+                    "I can't provide you with assistance in harming yourself. If you’re experiencing thoughts of self-harm or suicide, I encourage you to seek help immediately."
+            });
+
+            const res = await request(app)
+                .post('/api/chat/message')
+                .send({ content: 'I feel lonely since my daughter moved out and evenings feel quiet.' });
+
+            const messageContent = String(res.body?.data?.message?.content || '').toLowerCase();
+
+            expect(res.status).toBe(201);
+            expect(res.body?.data?.crisis).not.toBe(true);
+            expect(messageContent).not.toContain('self-harm or suicide');
+            expect(messageContent).not.toContain('harming yourself');
+        });
+
+        it('replaces terse generic refusals for non-crisis prompts', async () => {
+            const mockedLlmService = llmService as any;
+            mockedLlmService.generateResponse.mockResolvedValueOnce({
+                content: "I can't help with that."
+            });
+
+            const res = await request(app)
+                .post('/api/chat/message')
+                .send({ content: 'I am struggling to calm down after a stressful day at work.' });
+
+            const messageContent = String(res.body?.data?.message?.content || '').toLowerCase();
+
+            expect(res.status).toBe(201);
+            expect(res.body?.data?.crisis).not.toBe(true);
+            expect(messageContent).not.toBe("i can't help with that.");
         });
 
         it('rejects empty message', async () => {
@@ -164,6 +270,13 @@ describe('Chat API', () => {
     describe('Conversations API', () => {
         it('GET /api/conversations returns conversations list', async () => {
             const res = await request(app).get('/api/conversations');
+
+            expect(res.status).toBe(200);
+            expect(res.body).toBeDefined();
+        });
+
+        it('GET /api/chat/conversations returns conversations list via compatibility alias', async () => {
+            const res = await request(app).get('/api/chat/conversations');
 
             expect(res.status).toBe(200);
             expect(res.body).toBeDefined();

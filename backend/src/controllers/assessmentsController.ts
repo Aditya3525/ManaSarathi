@@ -320,6 +320,55 @@ type ShortFormVerificationRule = {
   interpretationBands: TemplateInterpretationBand[];
 };
 
+type AssessmentDefinitionCacheEntry = {
+  value: AssessmentDefinitionWithQuestions | null;
+  expiresAt: number;
+};
+
+type AssessmentTemplatesCacheEntry = {
+  templates: any[];
+  expiresAt: number;
+};
+
+const ASSESSMENT_DEFINITION_CACHE_TTL_MS = (() => {
+  const configured = Number(process.env.ASSESSMENT_DEFINITION_CACHE_TTL_MS);
+  if (Number.isFinite(configured) && configured > 0) {
+    return configured;
+  }
+  return 5 * 60 * 1000;
+})();
+
+const ASSESSMENT_TEMPLATES_CACHE_TTL_MS = (() => {
+  const configured = Number(process.env.ASSESSMENT_TEMPLATES_CACHE_TTL_MS);
+  if (Number.isFinite(configured) && configured > 0) {
+    return configured;
+  }
+  return 5 * 60 * 1000;
+})();
+
+const assessmentDefinitionCache = new Map<string, AssessmentDefinitionCacheEntry>();
+const assessmentTemplatesCache = new Map<string, AssessmentTemplatesCacheEntry>();
+
+const buildAssessmentTemplatesCacheKey = (requestedTypes: string[]): string => {
+  if (requestedTypes.length === 0) {
+    return '__default__';
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  requestedTypes.forEach((type) => {
+    const value = type.trim().toLowerCase();
+    if (!value || seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+    normalized.push(value);
+  });
+
+  return normalized.length > 0 ? normalized.join('|') : '__default__';
+};
+
 const SHORT_FORM_VERIFICATION_RULES: Record<string, ShortFormVerificationRule> = {
   anxiety_gad2: {
     minScore: 0,
@@ -688,8 +737,23 @@ const findDefinitionByCandidates = (
 const fetchAssessmentDefinitionForVerification = async (
   assessmentType: string
 ): Promise<AssessmentDefinitionWithQuestions | null> => {
+  const cacheKey = assessmentType.trim().toLowerCase();
+  const now = Date.now();
+  const cached = assessmentDefinitionCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  if (cached) {
+    assessmentDefinitionCache.delete(cacheKey);
+  }
+
   const candidates = buildDefinitionCandidates(assessmentType);
   if (candidates.length === 0) {
+    assessmentDefinitionCache.set(cacheKey, {
+      value: null,
+      expiresAt: now + ASSESSMENT_DEFINITION_CACHE_TTL_MS
+    });
     return null;
   }
 
@@ -706,7 +770,73 @@ const fetchAssessmentDefinitionForVerification = async (
     }
   });
 
-  return findDefinitionByCandidates(definitions, candidates);
+  const matched = findDefinitionByCandidates(definitions, candidates);
+
+  assessmentDefinitionCache.set(cacheKey, {
+    value: matched,
+    expiresAt: now + ASSESSMENT_DEFINITION_CACHE_TTL_MS
+  });
+
+  return matched;
+};
+
+const preloadAssessmentDefinitionsForVerification = async (assessmentTypes: string[]): Promise<void> => {
+  const now = Date.now();
+  const pendingLookups: Array<{ cacheKey: string; candidates: string[] }> = [];
+  const candidateSet = new Set<string>();
+
+  for (const assessmentType of assessmentTypes) {
+    const cacheKey = assessmentType.trim().toLowerCase();
+    if (!cacheKey) {
+      continue;
+    }
+
+    const cached = assessmentDefinitionCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      continue;
+    }
+
+    if (cached) {
+      assessmentDefinitionCache.delete(cacheKey);
+    }
+
+    const candidates = buildDefinitionCandidates(assessmentType);
+    if (candidates.length === 0) {
+      assessmentDefinitionCache.set(cacheKey, {
+        value: null,
+        expiresAt: now + ASSESSMENT_DEFINITION_CACHE_TTL_MS
+      });
+      continue;
+    }
+
+    pendingLookups.push({ cacheKey, candidates });
+    candidates.forEach((candidate) => candidateSet.add(candidate));
+  }
+
+  if (pendingLookups.length === 0 || candidateSet.size === 0) {
+    return;
+  }
+
+  const definitions = await prisma.assessmentDefinition.findMany({
+    where: {
+      isActive: true,
+      OR: [{ type: { in: Array.from(candidateSet) } }, { id: { in: Array.from(candidateSet) } }]
+    },
+    include: {
+      questions: {
+        include: { options: true },
+        orderBy: { order: 'asc' }
+      }
+    }
+  });
+
+  pendingLookups.forEach(({ cacheKey, candidates }) => {
+    const matched = findDefinitionByCandidates(definitions, candidates);
+    assessmentDefinitionCache.set(cacheKey, {
+      value: matched,
+      expiresAt: now + ASSESSMENT_DEFINITION_CACHE_TTL_MS
+    });
+  });
 };
 
 const resolveQuestionOptionValue = (option: AssessmentDefinitionWithQuestions['questions'][number]['options'][number]): number => {
@@ -847,11 +977,25 @@ const computeVerifiedScoreFromShortRule = (
   rule: ShortFormVerificationRule,
   responses: Record<string, unknown>
 ): VerifiedScorePayload => {
+  const getShortFormResponseValue = (questionId: string): unknown => {
+    if (Object.prototype.hasOwnProperty.call(responses, questionId)) {
+      return responses[questionId];
+    }
+
+    const normalizedQuestionId = questionId.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const fallbackEntry = Object.entries(responses).find(([responseKey]) => {
+      const normalizedKey = responseKey.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      return normalizedKey.endsWith(normalizedQuestionId);
+    });
+
+    return fallbackEntry ? fallbackEntry[1] : undefined;
+  };
+
   const reverseSet = new Set(rule.reverseScored ?? []);
   let rawScore = 0;
 
   Object.entries(rule.questionBounds).forEach(([questionId, bounds]) => {
-    const parsed = toFiniteNumber(responses[questionId]);
+    const parsed = toFiniteNumber(getShortFormResponseValue(questionId));
     if (parsed === null) {
       return;
     }
@@ -915,6 +1059,13 @@ const verifyAssessmentSubmission = async (
   providedMaxScore: number | null | undefined,
   providedCategoryBreakdown: unknown
 ): Promise<VerifiedScorePayload> => {
+  // Short-form overall assessments are authored in-app and may use stable lightweight IDs.
+  // Prioritize deterministic short-form rules before DB-template verification to avoid ID-prefix mismatches.
+  const shortRule = resolveShortFormVerificationRule(assessmentType);
+  if (shortRule) {
+    return computeVerifiedScoreFromShortRule(shortRule, responses);
+  }
+
   let definition: AssessmentDefinitionWithQuestions | null = null;
   try {
     definition = await fetchAssessmentDefinitionForVerification(assessmentType);
@@ -931,11 +1082,6 @@ const verifyAssessmentSubmission = async (
       ...verifiedFromDefinition,
       categoryBreakdown: verifiedFromDefinition.categoryBreakdown
     };
-  }
-
-  const shortRule = resolveShortFormVerificationRule(assessmentType);
-  if (shortRule) {
-    return computeVerifiedScoreFromShortRule(shortRule, responses);
   }
 
   const fallback = computeFallbackVerifiedScore(
@@ -1206,6 +1352,19 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
       ? typesParam.split(',').map((type) => type.trim()).filter(Boolean)
       : (Object.keys(ASSESSMENT_TEMPLATE_MAP) as TemplateBaseType[]);
 
+    const templatesCacheKey = buildAssessmentTemplatesCacheKey(requestedTypes);
+    const now = Date.now();
+    const cachedTemplates = assessmentTemplatesCache.get(templatesCacheKey);
+
+    if (cachedTemplates && cachedTemplates.expiresAt > now) {
+      res.json({ success: true, data: { templates: cachedTemplates.templates } });
+      return;
+    }
+
+    if (cachedTemplates) {
+      assessmentTemplatesCache.delete(templatesCacheKey);
+    }
+
     // Separate built-in types from custom/dynamic types
     const builtInTypes: TemplateBaseType[] = [];
     const customTypes: string[] = [];
@@ -1307,6 +1466,11 @@ export const getAssessmentTemplates = async (req: Request, res: Response) => {
       res.status(404).json({ success: false, error: 'Assessment templates not found' });
       return;
     }
+
+    assessmentTemplatesCache.set(templatesCacheKey, {
+      templates,
+      expiresAt: now + ASSESSMENT_TEMPLATES_CACHE_TTL_MS
+    });
 
     res.json({ success: true, data: { templates } });
   } catch (error) {
@@ -1429,39 +1593,68 @@ export const submitAssessment = async (req: any, res: Response) => {
 export const getAssessmentHistory = async (req: any, res: Response) => {
   try {
     const userId = req.user.id;
-    const [user, assessments, storedInsights] = await Promise.all([
+    const [user, latestAssessment, storedInsights] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { firstName: true, name: true }
       }),
-      prisma.assessmentResult.findMany({
+      prisma.assessmentResult.findFirst({
         where: { userId },
         orderBy: { completedAt: 'desc' },
-        take: 100
+        select: { completedAt: true }
       }),
       prisma.assessmentInsight.findUnique({ where: { userId } })
     ]);
 
-    const latestAssessment = assessments[0] ?? null;
     let cachedInsights: AssessmentInsightsPayload | null = null;
 
     if (storedInsights?.summary) {
       try {
-        const parsed = JSON.parse(storedInsights.summary as unknown as string);
+        let parsed: unknown = null;
+
+        if (typeof storedInsights.summary === 'string') {
+          const normalized = storedInsights.summary.trim();
+
+          // Gracefully ignore legacy/broken values like "[object Object]".
+          if (normalized.startsWith('{') || normalized.startsWith('[')) {
+            parsed = JSON.parse(normalized);
+          }
+        } else {
+          parsed = storedInsights.summary;
+        }
+
         if (parsed && typeof parsed === 'object' && 'insights' in parsed) {
           cachedInsights = parsed as AssessmentInsightsPayload;
         }
       } catch (error) {
-        console.warn('Failed to parse cached assessment insights', error);
+        console.info('Ignoring malformed cached assessment insights payload');
       }
     }
 
-    if (
-      cachedInsights &&
-      latestAssessment &&
-      storedInsights?.updatedAt &&
-      storedInsights.updatedAt.getTime() >= latestAssessment.completedAt.getTime()
-    ) {
+    if (cachedInsights && storedInsights?.updatedAt) {
+      const cacheIsFreshForLatestAssessment =
+        !latestAssessment ||
+        storedInsights.updatedAt.getTime() >= latestAssessment.completedAt.getTime();
+
+      if (cacheIsFreshForLatestAssessment) {
+        res.json({
+          success: true,
+          data: {
+            history: cachedInsights.history,
+            insights: cachedInsights.insights
+          }
+        });
+        return;
+      }
+    }
+
+    const assessments = await prisma.assessmentResult.findMany({
+      where: { userId },
+      orderBy: { completedAt: 'desc' },
+      take: 100
+    });
+
+    if (cachedInsights && assessments.length === 0) {
       res.json({
         success: true,
         data: {
@@ -1502,6 +1695,66 @@ export const getAssessmentHistory = async (req: any, res: Response) => {
   } catch (e) {
     console.error('Get assessment history error', e);
     res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
+
+const ASSESSMENT_REMINDER_THRESHOLD_DAYS = 21;
+
+export const getAssessmentReminder = async (req: any, res: Response) => {
+  try {
+    const userId = req.user.id;
+
+    const latestAssessment = await prisma.assessmentResult.findFirst({
+      where: { userId },
+      orderBy: { completedAt: 'desc' },
+      select: {
+        completedAt: true,
+        assessmentType: true,
+      }
+    });
+
+    if (!latestAssessment) {
+      res.json({
+        success: true,
+        data: {
+          shouldRemind: true,
+          reason: 'first-assessment',
+          thresholdDays: ASSESSMENT_REMINDER_THRESHOLD_DAYS,
+          daysSinceLastAssessment: null,
+          lastCompletedAt: null,
+          lastAssessmentType: null,
+          message: 'You have not taken an assessment yet. A quick check-in helps personalize your support plan.'
+        }
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const completedAtMs = latestAssessment.completedAt.getTime();
+    const daysSinceLastAssessment = Math.max(
+      0,
+      Math.floor((now - completedAtMs) / (1000 * 60 * 60 * 24))
+    );
+
+    const shouldRemind = daysSinceLastAssessment >= ASSESSMENT_REMINDER_THRESHOLD_DAYS;
+
+    res.json({
+      success: true,
+      data: {
+        shouldRemind,
+        reason: shouldRemind ? 'stale-assessment' : 'recent-assessment',
+        thresholdDays: ASSESSMENT_REMINDER_THRESHOLD_DAYS,
+        daysSinceLastAssessment,
+        lastCompletedAt: latestAssessment.completedAt.toISOString(),
+        lastAssessmentType: latestAssessment.assessmentType,
+        message: shouldRemind
+          ? `It's been ${daysSinceLastAssessment} days since your last assessment. Retaking it can help track your progress.`
+          : 'Your assessments are up to date.'
+      }
+    });
+  } catch (error) {
+    console.error('Get assessment reminder error', error);
+    res.status(500).json({ success: false, error: 'Unable to get assessment reminder' });
   }
 };
 
@@ -1733,6 +1986,21 @@ export const submitCombinedAssessments = async (req: any, res: Response) => {
     if (!session) {
       res.status(404).json({ success: false, error: 'Assessment session not found' });
       return;
+    }
+
+    const verificationTypes = combinedAssessments
+      .map((assessment: any) => (typeof assessment?.assessmentType === 'string' ? assessment.assessmentType : ''))
+      .filter((assessmentType: string): assessmentType is string => assessmentType.trim().length > 0);
+
+    if (verificationTypes.length > 0) {
+      try {
+        await preloadAssessmentDefinitionsForVerification(verificationTypes);
+      } catch (error) {
+        console.warn('Skipping bulk template preload during combined assessment verification', {
+          verificationTypes,
+          error
+        });
+      }
     }
 
     // Create all assessment results in a transaction

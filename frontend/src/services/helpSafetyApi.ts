@@ -254,6 +254,24 @@ export interface TherapistBooking {
   updatedAt: string;
 }
 
+export interface TherapistBookingSharingContext {
+  source?: 'insights-share' | 'insights-discuss' | 'direct-booking';
+  assessmentType?: string;
+  assessmentLabel?: string;
+  latestScore?: number;
+  trend?: string;
+  interpretation?: string;
+  recommendations?: string[];
+  wellnessScore?: number;
+  generatedAt?: string;
+  includeData?: {
+    scoreSummary?: boolean;
+    interpretation?: boolean;
+    recommendations?: boolean;
+    trend?: boolean;
+  };
+}
+
 // Helper function to get auth token
 const getAuthToken = () => {
   return localStorage.getItem('token');
@@ -366,6 +384,7 @@ export const therapistApi = {
     preferredTime: string;
     message?: string;
     userPhone?: string;
+    sharingContext?: TherapistBookingSharingContext;
   }): Promise<TherapistBooking> => {
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/therapists/booking`, {

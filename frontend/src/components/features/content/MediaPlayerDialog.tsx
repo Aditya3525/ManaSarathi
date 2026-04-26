@@ -1,6 +1,7 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import {
   Clock,
+  ExternalLink,
   Maximize2,
   Minimize2,
   Pause,
@@ -79,7 +80,7 @@ const CompletionCelebration = ({ show, onClose }: { show: boolean; onClose: () =
       </div>
       <h3 className="text-2xl font-bold mt-6 mb-2">Well Done!</h3>
       <p className="text-white/80 text-center max-w-xs mb-6">
-        You've completed this session. Take a moment to appreciate your progress.
+        You&apos;ve completed this session. Take a moment to appreciate your progress.
       </p>
       <Button 
         onClick={onClose}
@@ -107,6 +108,11 @@ const formatTime = (seconds?: number | null) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+const isProbablyUrl = (value?: string | null) => {
+  if (!value) return false;
+  return /^https?:\/\//i.test(value.trim());
+};
+
 const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide = false, onSessionComplete }: MediaPlayerDialogProps) {
@@ -132,6 +138,10 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
   const isVideo = media?.kind === 'video' && !media.youtubeId;
   const isYouTube = media?.kind === 'video' && !!media.youtubeId;
   const isAudio = media?.kind === 'audio';
+  const isTextualItem = item?.displayType === 'article' || item?.displayType === 'story' || item?.displayType === 'resource';
+  const textualBody = typeof item?.body === 'string' ? item.body.trim() : '';
+  const isTextBodyUrl = isProbablyUrl(textualBody);
+  const externalUrl = item?.externalUrl || (isTextBodyUrl ? textualBody : null);
   const isMindfulness = item?.category === 'meditation' || item?.category === 'breathing' || item?.tags?.some(t => 
     ['meditation', 'mindfulness', 'breathing', 'relaxation'].includes(t.toLowerCase())
   );
@@ -150,15 +160,21 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
   // Keyboard shortcuts
   useEffect(() => {
     if (!open) return;
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const el = mediaElement;
       if (!el) return;
-      
+
       switch (e.code) {
         case 'Space':
           e.preventDefault();
-          togglePlayback();
+          if (el.paused) {
+            el.play().catch(() => undefined);
+            setIsPlaying(true);
+          } else {
+            el.pause();
+            setIsPlaying(false);
+          }
           break;
         case 'ArrowLeft':
           e.preventDefault();
@@ -176,20 +192,31 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
         case 'ArrowDown':
           e.preventDefault();
           setVolume(v => Math.max(0, v - 10));
-          if (el) el.volume = Math.max(0, el.volume - 0.1);
+          el.volume = Math.max(0, el.volume - 0.1);
           break;
         case 'KeyM':
-          toggleMute();
+          if (isMuted || el.volume === 0) {
+            el.volume = volume / 100;
+            setIsMuted(false);
+          } else {
+            el.volume = 0;
+            setIsMuted(true);
+          }
           break;
         case 'KeyF':
-          toggleFullscreen();
+          if (!document.fullscreenElement) {
+            const fullscreenTarget = containerRef.current || videoRef.current;
+            fullscreenTarget?.requestFullscreen?.();
+          } else {
+            document.exitFullscreen?.();
+          }
           break;
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, mediaElement, duration]);
+  }, [open, mediaElement, duration, isMuted, volume]);
 
   useEffect(() => {
     if (!open) {
@@ -673,6 +700,35 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
                   />
                 </div>
               )}
+
+              {/* --- TEXTUAL/RESOURCE VIEW --- */}
+              {!isVideo && !isAudio && !isYouTube && isTextualItem && (
+                <div className="w-full max-w-3xl px-6 py-10">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-3">{item.title}</h3>
+                    <p className="text-sm text-slate-600 mb-5">
+                      {item.description || 'This item is presented as reading/resource content.'}
+                    </p>
+
+                    {externalUrl && (
+                      <Button
+                        type="button"
+                        onClick={() => window.open(externalUrl, '_blank', 'noopener,noreferrer')}
+                        className="mb-4"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Source
+                      </Button>
+                    )}
+
+                    {!!textualBody && !isTextBodyUrl && (
+                      <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap">
+                        {textualBody}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right Panel: Details */}
@@ -699,6 +755,12 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
                         <Clock className="h-3 w-3" />
                         {item.durationLabel || formatTime(duration)}
                       </Badge>
+                      {item.immediateRelief && (
+                        <Badge className="bg-rose-100 text-rose-700 border-none">Quick Relief</Badge>
+                      )}
+                      {item.crisisEligible && (
+                        <Badge className="bg-orange-100 text-orange-700 border-none">Crisis-Safe</Badge>
+                      )}
                     </div>
 
                     <h2 className={`text-2xl font-bold leading-tight ${isAudio ? 'text-slate-900' : 'text-white'
@@ -764,10 +826,10 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
                   )}
 
                   {/* Article Content */}
-                  {item.displayType === 'article' && item.body && (
+                  {(item.displayType === 'article' || item.displayType === 'story' || item.displayType === 'resource') && textualBody && !isTextBodyUrl && (
                     <div className={`mt-4 prose prose-sm max-w-none ${isAudio ? 'prose-slate' : 'prose-invert'
                       }`}>
-                      {item.body}
+                      {textualBody}
                     </div>
                   )}
                 </div>
@@ -775,7 +837,7 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
             </div>
           </div>
         ) : (
-          <div className="p-12 text-center text-slate-500">Select a video or audio item to start playback.</div>
+          <div className="p-12 text-center text-slate-500">Select an item to preview.</div>
         )}
       </DialogContent>
     </Dialog>

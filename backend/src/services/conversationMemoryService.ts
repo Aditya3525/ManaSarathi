@@ -4,6 +4,13 @@ import { logger } from '../utils/logger';
 const prisma = new PrismaClient();
 const memoryLogger = logger.child({ module: 'ConversationMemory' });
 
+type PendingMemoryUpdate = {
+  message: string;
+  topics: string[];
+  sentiment: 'positive' | 'neutral' | 'negative';
+  timestamp: string;
+};
+
 /**
  * Types for Conversation Memory
  */
@@ -56,6 +63,9 @@ export interface ConversationStyle {
  * Tracks conversation topics, patterns, and context across sessions
  */
 export class ConversationMemoryService {
+  private readonly MEMORY_UPDATE_DEBOUNCE_MS = 3000;
+  private readonly pendingUpdates = new Map<string, PendingMemoryUpdate[]>();
+  private readonly flushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   
   /**
    * Extract topics from a message using keyword matching and NLP
@@ -125,9 +135,46 @@ export class ConversationMemoryService {
 
       const topics = this.extractTopics(message);
       const sentiment = this.analyzeSentiment(message);
+      const pending = this.pendingUpdates.get(userId) ?? [];
+      pending.push({
+        message,
+        topics,
+        sentiment,
+        timestamp: new Date().toISOString()
+      });
+      this.pendingUpdates.set(userId, pending);
+
+      const existingTimer = this.flushTimers.get(userId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      const flushTimer = setTimeout(() => {
+        void this.flushMemoryUpdates(userId);
+      }, this.MEMORY_UPDATE_DEBOUNCE_MS);
+      this.flushTimers.set(userId, flushTimer);
+    } catch (error) {
+      memoryLogger.error({ userId, error }, 'Failed to update conversation memory');
+    }
+  }
+
+  private async flushMemoryUpdates(userId: string): Promise<void> {
+    const pendingUpdates = this.pendingUpdates.get(userId);
+    if (!pendingUpdates || pendingUpdates.length === 0) {
+      return;
+    }
+
+    this.pendingUpdates.delete(userId);
+
+    const existingTimer = this.flushTimers.get(userId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.flushTimers.delete(userId);
+    }
+
+    try {
       const now = new Date();
 
-      // Get or create memory record
       let memory = await prisma.conversationMemory.findUnique({
         where: { userId }
       });
@@ -152,59 +199,63 @@ export class ConversationMemoryService {
         });
       }
 
-      // Update topics
       const currentTopics = JSON.parse(memory.topics as string) || {};
-      topics.forEach(topic => {
-        if (!currentTopics[topic]) {
-          currentTopics[topic] = {
-            topic,
-            mentions: 0,
-            sentiment,
-            firstMentioned: now.toISOString(),
-            lastMentioned: now.toISOString(),
-            relatedKeywords: []
-          };
-        }
-        currentTopics[topic].mentions++;
-        currentTopics[topic].lastMentioned = now.toISOString();
-        currentTopics[topic].sentiment = sentiment;
-      });
-
-      // Update conversation metrics
-      const metrics = JSON.parse(memory.conversationMetrics as string) || { 
-        totalMessages: 0, 
-        avgMessageLength: 0, 
+      const metrics = JSON.parse(memory.conversationMetrics as string) || {
+        totalMessages: 0,
+        avgMessageLength: 0,
         questionsAsked: 0,
         sentimentCounts: { positive: 0, neutral: 0, negative: 0 }
       };
-      metrics.totalMessages++;
-      metrics.avgMessageLength = Math.round(
-        (metrics.avgMessageLength * (metrics.totalMessages - 1) + message.length) / metrics.totalMessages
-      );
-      if (message.includes('?')) {
-        metrics.questionsAsked++;
-      }
 
-      // Update sentiment counts
       if (!metrics.sentimentCounts) {
         metrics.sentimentCounts = { positive: 0, neutral: 0, negative: 0 };
       }
-      metrics.sentimentCounts[sentiment]++;
 
-      // Calculate predominant emotion and recent shift
-      const emotionalPatterns = JSON.parse(memory.emotionalPatterns as string) || { 
-        predominant: 'stable', 
-        recentShift: 'stable' 
+      const emotionalPatterns = JSON.parse(memory.emotionalPatterns as string) || {
+        predominant: 'stable',
+        recentShift: 'stable'
       };
-      
+
+      const lastSentiment = pendingUpdates[pendingUpdates.length - 1]?.sentiment ?? 'neutral';
+
+      pendingUpdates.forEach((update) => {
+        update.topics.forEach((topic) => {
+          if (!currentTopics[topic]) {
+            currentTopics[topic] = {
+              topic,
+              mentions: 0,
+              sentiment: update.sentiment,
+              firstMentioned: update.timestamp,
+              lastMentioned: update.timestamp,
+              relatedKeywords: []
+            };
+          }
+
+          currentTopics[topic].mentions++;
+          currentTopics[topic].lastMentioned = update.timestamp;
+          currentTopics[topic].sentiment = update.sentiment;
+        });
+
+        const previousTotalMessages = metrics.totalMessages;
+        metrics.totalMessages++;
+        metrics.avgMessageLength = Math.round(
+          (metrics.avgMessageLength * previousTotalMessages + update.message.length) / metrics.totalMessages
+        );
+
+        if (update.message.includes('?')) {
+          metrics.questionsAsked++;
+        }
+
+        metrics.sentimentCounts[update.sentiment]++;
+      });
+
       const sentimentCounts = metrics.sentimentCounts;
       const total = sentimentCounts.positive + sentimentCounts.neutral + sentimentCounts.negative;
-      
+
       if (total > 0) {
         const positiveRatio = sentimentCounts.positive / total;
         const negativeRatio = sentimentCounts.negative / total;
-        
-        // Determine predominant mood
+
         if (positiveRatio > 0.6) {
           emotionalPatterns.predominant = 'content';
         } else if (positiveRatio > 0.4) {
@@ -217,11 +268,11 @@ export class ConversationMemoryService {
           emotionalPatterns.predominant = 'stable';
         }
 
-        // Determine recent shift (compare last 5 messages if possible)
-        if (metrics.totalMessages >= 10) {
+        if (metrics.totalMessages >= 10 && total > 1) {
           const recentPositiveRatio = positiveRatio;
-          const previousPositiveRatio = (sentimentCounts.positive - (sentiment === 'positive' ? 1 : 0)) / (total - 1);
-          
+          const previousPositiveCount = sentimentCounts.positive - (lastSentiment === 'positive' ? 1 : 0);
+          const previousPositiveRatio = previousPositiveCount / (total - 1);
+
           if (recentPositiveRatio > previousPositiveRatio + 0.1) {
             emotionalPatterns.recentShift = 'improving';
           } else if (recentPositiveRatio < previousPositiveRatio - 0.1) {
@@ -232,7 +283,6 @@ export class ConversationMemoryService {
         }
       }
 
-      // Save updated memory
       await prisma.conversationMemory.update({
         where: { userId },
         data: {
@@ -243,9 +293,27 @@ export class ConversationMemoryService {
         }
       });
 
-      memoryLogger.info({ userId, topics, sentiment }, 'Conversation memory updated');
+      const topicsTouched = Array.from(new Set(pendingUpdates.flatMap((update) => update.topics)));
+      memoryLogger.info(
+        { userId, batchSize: pendingUpdates.length, topicsTouched },
+        'Conversation memory batch updated'
+      );
     } catch (error) {
-      memoryLogger.error({ userId, error }, 'Failed to update conversation memory');
+      // Re-queue updates so we do not drop user context if a transient DB error occurs.
+      const existingPending = this.pendingUpdates.get(userId) ?? [];
+      this.pendingUpdates.set(userId, [...pendingUpdates, ...existingPending]);
+
+      const existingRetryTimer = this.flushTimers.get(userId);
+      if (existingRetryTimer) {
+        clearTimeout(existingRetryTimer);
+      }
+
+      const retryTimer = setTimeout(() => {
+        void this.flushMemoryUpdates(userId);
+      }, this.MEMORY_UPDATE_DEBOUNCE_MS);
+      this.flushTimers.set(userId, retryTimer);
+
+      memoryLogger.error({ userId, error }, 'Failed to flush conversation memory batch');
     }
   }
 
@@ -254,6 +322,10 @@ export class ConversationMemoryService {
    */
   async getMemory(userId: string): Promise<ConversationContext> {
     try {
+      if (this.pendingUpdates.has(userId)) {
+        await this.flushMemoryUpdates(userId);
+      }
+
       const memory = await prisma.conversationMemory.findUnique({
         where: { userId }
       });
@@ -476,6 +548,13 @@ export class ConversationMemoryService {
    */
   async clearMemory(userId: string): Promise<void> {
     try {
+      const existingTimer = this.flushTimers.get(userId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.flushTimers.delete(userId);
+      }
+      this.pendingUpdates.delete(userId);
+
       await prisma.conversationMemory.delete({
         where: { userId }
       });

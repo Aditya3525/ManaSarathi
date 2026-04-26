@@ -2,8 +2,37 @@ import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
-const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+const resolveDatabaseUrl = (): string | null => {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) return null;
+
+  if (!raw.startsWith('file:')) {
+    return raw;
+  }
+
+  const filePath = raw.slice('file:'.length);
+  if (!filePath.startsWith('./') && !filePath.startsWith('../')) {
+    return raw;
+  }
+
+  const absolutePath = path.resolve(process.cwd(), filePath).replace(/\\/g, '/');
+  const parentDir = path.dirname(absolutePath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+
+  return `file:${absolutePath}`;
+};
+
+const resolvedDatabaseUrl = resolveDatabaseUrl();
+if (resolvedDatabaseUrl) {
+  process.env.DATABASE_URL = resolvedDatabaseUrl;
+}
+
+const hasDatabaseUrl = Boolean(resolvedDatabaseUrl);
 const prisma = hasDatabaseUrl ? new PrismaClient() : null;
 let app: Express;
 
@@ -33,7 +62,7 @@ maybeDescribe('Admin auth session flow', () => {
       },
     });
     createdUserId = user.id;
-  });
+  }, 60000);
 
   afterAll(async () => {
     // Leave user in DB for other tests; just disconnect prisma

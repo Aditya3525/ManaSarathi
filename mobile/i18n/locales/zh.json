@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MaanSarathi",
+    "name": "ManaSarathi",
     "tagline": "您的AI健康伴侣",
     "loading": "加载中...",
     "error": "错误",
@@ -165,7 +165,7 @@
     "resetPassword": "重置密码"
   },
   "onboarding": {
-    "welcome": "欢迎来到MaanSarathi",
+    "welcome": "欢迎来到ManaSarathi",
     "getStarted": "开始",
     "skip": "跳过",
     "setupPassword": "设置您的密码",
@@ -348,7 +348,7 @@
     "dataProtected": "您的数据受设备安全保护",
     "notAvailableDevice": "此设备不支持生物识别验证",
     "noCredentials": "未注册生物识别数据",
-    "authPrompt": "验证身份以访问MaanSarathi",
+    "authPrompt": "验证身份以访问ManaSarathi",
     "usePasscode": "使用密码",
     "authFailed": "验证失败。请重试。",
     "authError": "发生错误。请重试。"

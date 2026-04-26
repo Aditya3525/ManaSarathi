@@ -1,0 +1,7 @@
+/* Additive therapeutic tokens layered on top of design-tokens.css. */
+
+:root {
+  --therapeutic-surface-soft: color-mix(in oklab, var(--card) 94%, var(--primary));
+  --therapeutic-surface-quiet: color-mix(in oklab, var(--card) 96%, var(--muted));
+  --therapeutic-divider: color-mix(in oklab, var(--border) 70%, var(--primary));
+}

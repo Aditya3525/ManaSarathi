@@ -79,6 +79,14 @@ const HIGHER_IS_BETTER = new Set([
   'emotionalintelligenceeq5'
 ]);
 
+const NON_DIRECTIONAL_WELLNESS_TYPES = new Set([
+  'personality',
+  'personalityminiipip',
+  'personalitybigfive10',
+  'archetypes',
+  'psychologicalarchetypes'
+]);
+
 const normalizeType = (type: string): string => type.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const BASIC_OVERALL_ASSESSMENT_TYPES = new Set([
@@ -166,6 +174,10 @@ function friendlyLabel(type: string): string {
 
 function isHigherScoreBetter(type: string): boolean {
   return HIGHER_IS_BETTER.has(normalizeType(type));
+}
+
+function isNonDirectionalWellnessType(type: string): boolean {
+  return NON_DIRECTIONAL_WELLNESS_TYPES.has(normalizeType(type));
 }
 
 export function interpretAssessmentScore(assessmentType: string, score: number): string {
@@ -311,6 +323,10 @@ export function interpretAssessmentScore(assessmentType: string, score: number):
 
 function determineTrend(type: string, change: number | null): Trend {
   if (change === null) return 'baseline';
+
+  // Personality/archetype assessments are descriptive profiles, not directional risk metrics.
+  if (isNonDirectionalWellnessType(type)) return 'stable';
+
   const improvementThreshold = 5;
   const betterIfHigher = isHigherScoreBetter(type);
 
@@ -518,7 +534,9 @@ function computeHistoryAndSummaries(assessments: AssessmentResult[]): {
 
     const normalizedScore = betterIfHigher
       ? Math.max(0, Math.min(100, scoreBasis))
-      : Math.max(0, Math.min(100, 100 - scoreBasis));
+      : isNonDirectionalWellnessType(type)
+        ? Math.max(0, Math.min(100, scoreBasis))
+        : Math.max(0, Math.min(100, 100 - scoreBasis));
 
     summaries[type] = {
       latestScore: latest.score,
@@ -568,6 +586,11 @@ function calculateWellnessScore(
   Object.entries(summaries).forEach(([type, summary]) => {
     // Include both advanced assessments AND basic overall assessments
     if (!isAdvancedAssessmentType(type) && !isBasicOverallAssessmentType(type)) {
+      return;
+    }
+
+    // Personality/archetype profiles are not risk scales and should not skew overall wellness.
+    if (isNonDirectionalWellnessType(type)) {
       return;
     }
 
@@ -744,7 +767,10 @@ async function generateAISummary(
 }
 
 function deriveOverallTrend(summaries: Record<string, AssessmentTypeSummary>): Trend | 'mixed' {
-  const trends = Object.values(summaries).map((summary) => summary.trend).filter((trend) => trend !== 'baseline');
+  const trends = Object.entries(summaries)
+    .filter(([type]) => !isNonDirectionalWellnessType(type))
+    .map(([, summary]) => summary.trend)
+    .filter((trend) => trend !== 'baseline');
   if (trends.length === 0) return 'baseline';
   const improving = trends.filter((trend) => trend === 'improving').length;
   const declining = trends.filter((trend) => trend === 'declining').length;

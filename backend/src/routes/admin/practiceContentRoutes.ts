@@ -100,7 +100,8 @@ export const createPracticeContentRoutes = ({
         // V2 fields
         focusAreas,
         immediateRelief,
-        crisisEligible
+        crisisEligible,
+        scheduledPublishAt
       } = value;
 
       const resolvedDifficulty = normalizeDifficulty(difficulty || level);
@@ -170,7 +171,8 @@ export const createPracticeContentRoutes = ({
           // V2 fields
           focusAreas: focusAreas ? JSON.stringify(focusAreas) : null,
           immediateRelief: immediateRelief || false,
-          crisisEligible: crisisEligible || false
+          crisisEligible: crisisEligible || false,
+          scheduledPublishAt: scheduledPublishAt ? new Date(scheduledPublishAt) : null
         } as any
       });
 
@@ -270,6 +272,11 @@ export const createPracticeContentRoutes = ({
       }
       if (value.crisisEligible !== undefined) {
         updateData.crisisEligible = value.crisisEligible;
+      }
+      if (value.scheduledPublishAt !== undefined) {
+        updateData.scheduledPublishAt = value.scheduledPublishAt
+          ? new Date(value.scheduledPublishAt)
+          : null;
       }
 
       // Validate merged data
@@ -380,7 +387,8 @@ export const createPracticeContentRoutes = ({
         environment,
         culturalContext,
         hasSubtitles,
-        transcript
+        transcript,
+        scheduledPublishAt
       } = value;
 
       const normalizedIntensityLevel = normalizeIntensityLevel(intensityLevel);
@@ -438,8 +446,9 @@ export const createPracticeContentRoutes = ({
           transcript: transcript || null,
           completions: 0,
           averageRating: null,
-          effectiveness: null
-        }
+          effectiveness: null,
+          scheduledPublishAt: scheduledPublishAt ? new Date(scheduledPublishAt) : null
+        } as any
       });
 
       res.json({ success: true, data: created });
@@ -513,6 +522,11 @@ export const createPracticeContentRoutes = ({
       if (value.culturalContext !== undefined) updateData.culturalContext = value.culturalContext;
       if (value.hasSubtitles !== undefined) updateData.hasSubtitles = value.hasSubtitles;
       if (value.transcript !== undefined) updateData.transcript = value.transcript;
+      if (value.scheduledPublishAt !== undefined) {
+        updateData.scheduledPublishAt = value.scheduledPublishAt
+          ? new Date(value.scheduledPublishAt)
+          : null;
+      }
 
       // Validate merged data
       const merged: any = { ...(existing as any), ...updateData };

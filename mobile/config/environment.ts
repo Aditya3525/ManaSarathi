@@ -26,7 +26,7 @@ const environments: Record<Environment, EnvironmentConfig> = {
     appleOAuthClientId: 'your-dev-apple-client-id',
   },
   staging: {
-    apiUrl: 'https://staging-api.MaanSarathi.app/api',
+    apiUrl: 'https://staging-api.ManaSarathi.app/api',
     apiTimeout: 30000,
     enableLogging: true,
     enableAnalytics: true,
@@ -36,7 +36,7 @@ const environments: Record<Environment, EnvironmentConfig> = {
     appleOAuthClientId: 'your-staging-apple-client-id',
   },
   production: {
-    apiUrl: 'https://api.MaanSarathi.app/api',
+    apiUrl: 'https://api.ManaSarathi.app/api',
     apiTimeout: 30000,
     enableLogging: false,
     enableAnalytics: true,

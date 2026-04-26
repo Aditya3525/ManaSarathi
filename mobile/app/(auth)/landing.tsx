@@ -42,7 +42,7 @@ export default function LandingScreen() {
           </View>
           
           <Text variant="h1" className="text-center mb-4 text-primary-600">
-            {t('app.name', 'MaanSarathi')}
+            {t('app.name', 'ManaSarathi')}
           </Text>
           
           <Text variant="body" className="text-center text-gray-600 mb-2">
