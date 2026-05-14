@@ -59,6 +59,7 @@ type CookiePreferences = {
 };
 
 const COOKIE_PREFERENCES_KEY = 'mw-cookie-preferences-v1';
+const NEWSLETTER_INTEREST_KEY = 'mw-newsletter-interest-v1';
 const DEFAULT_COOKIE_PREFERENCES: CookiePreferences = {
   analytics: true,
   personalization: true,
@@ -92,6 +93,8 @@ export function LandingPage({
   const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
   const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
   const [isCookieDialogOpen, setIsCookieDialogOpen] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMessage, setNewsletterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences>(() => {
     if (typeof window === 'undefined') {
       return DEFAULT_COOKIE_PREFERENCES;
@@ -184,6 +187,22 @@ export function LandingPage({
     setCookiePreferences(acceptedPreferences);
     localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(acceptedPreferences));
     setIsCookieDialogOpen(false);
+  };
+  const handleNewsletterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedEmail = newsletterEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setNewsletterMessage({ type: 'error', text: 'Enter a valid email address to subscribe.' });
+      return;
+    }
+
+    localStorage.setItem(NEWSLETTER_INTEREST_KEY, trimmedEmail);
+    setNewsletterEmail('');
+    setNewsletterMessage({
+      type: 'success',
+      text: 'Thanks — your interest is saved and newsletter delivery will be connected before launch.',
+    });
   };
 
   const differentiators = useMemo(
@@ -1162,10 +1181,7 @@ export function LandingPage({
               </p>
               <form
                 className="space-y-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  // Form validation and submission logic would go here
-                }}
+                onSubmit={handleNewsletterSubmit}
               >
                 <div className="space-y-2">
                   <Label htmlFor="newsletter-email" className="text-xs text-foreground/70">
@@ -1180,6 +1196,11 @@ export function LandingPage({
                     aria-describedby="newsletter-consent"
                     inputMode="email"
                     autoComplete="email"
+                    value={newsletterEmail}
+                    onChange={(event) => {
+                      setNewsletterEmail(event.target.value);
+                      setNewsletterMessage(null);
+                    }}
                     required
                   />
                 </div>
@@ -1196,6 +1217,15 @@ export function LandingPage({
                   </a>
                   . Unsubscribe anytime.
                 </p>
+                {newsletterMessage && (
+                  <p
+                    className={`text-xs ${newsletterMessage.type === 'success' ? 'text-emerald-600' : 'text-destructive'}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {newsletterMessage.text}
+                  </p>
+                )}
               </form>
             </div>
           </div>
