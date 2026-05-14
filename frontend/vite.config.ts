@@ -53,6 +53,82 @@
     build: {
       target: 'esnext',
       outDir: 'dist',
+      chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) {
+              return undefined;
+            }
+
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+
+            if (id.includes('@radix-ui')) {
+              return 'vendor-radix';
+            }
+
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-charts';
+            }
+
+            if (id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'vendor-export';
+            }
+
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+
+            if (id.includes('react-syntax-highlighter')) {
+              return 'vendor-highlight';
+            }
+
+            if (id.includes('date-fns') || id.includes('react-day-picker')) {
+              return 'vendor-date';
+            }
+
+            if (id.includes('i18next') || id.includes('react-i18next')) {
+              return 'vendor-i18n';
+            }
+
+            if (id.includes('@dnd-kit')) {
+              return 'vendor-dnd';
+            }
+
+            if (id.includes('embla-carousel')) {
+              return 'vendor-carousel';
+            }
+
+            if (id.includes('driver.js')) {
+              return 'vendor-tour';
+            }
+
+            if (id.includes('axios')) {
+              return 'vendor-http';
+            }
+
+            if (id.includes('zustand')) {
+              return 'vendor-state';
+            }
+
+            if (id.includes('cmdk') || id.includes('sonner') || id.includes('vaul')) {
+              return 'vendor-ui';
+            }
+
+            if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) {
+              return 'vendor-markdown';
+            }
+
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+
+            return 'vendor';
+          },
+        },
+      },
     },
     server: {
       host: '0.0.0.0', // Allow external connections

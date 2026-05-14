@@ -1,21 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Toaster as SonnerToaster } from 'sonner';
 
 
-import { AdminDashboard } from './admin/AdminDashboard';
 import { AssessmentList, AssessmentFlow, CombinedAssessmentFlow, InsightsResults, OverallAssessmentInvite, OverallAssessmentSelection, OVERALL_ASSESSMENT_OPTION_IDS } from './components/features/assessment';
 import { AssessmentCompletionPayload } from './components/features/assessment/AssessmentFlow';
 import { AdminLoginPage, LandingPage, OAuthCallback, PasswordSetup, UserLoginPage } from './components/features/auth';
-import { ResponsiveChatbot } from './components/features/chat';
-import { ContentLibrary, Practices } from './components/features/content';
-import { Dashboard } from './components/features/dashboard';
-import { GamesHub } from './components/features/games';
-import { JournalPage } from './components/features/journal';
 import { OnboardingFlow } from './components/features/onboarding';
-import { PersonalizedPlan } from './components/features/plans';
-import { Progress, Profile } from './components/features/profile';
-import { HelpSafety } from './components/layout';
 import { PWAInstallPrompt } from './components/ui/pwa-install-prompt';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { getServerBaseUrl } from './config/apiConfig';
@@ -27,7 +18,6 @@ import { queryClient, queryKeys } from './lib/queryClient';
 import { assessmentsApi, AssessmentHistoryEntry, AssessmentInsights, AssessmentSessionSummary } from './services/api';
 import { getCurrentUser, loginUser, registerUser, signOut, StoredUser, completeOnboarding, setupUserPassword } from './services/auth';
 import { useAuthStore } from './stores/authStore';
-import { TherapistDashboard } from './therapist/TherapistDashboard';
 import { TherapistLoginPage } from './therapist/TherapistLoginPage';
 import { useTherapistAuth } from './therapist/useTherapistAuth';
 import {
@@ -40,6 +30,19 @@ import {
   resolveInitialPage,
   type Page,
 } from './utils/appRouting';
+
+const AdminDashboard = React.lazy(() => import('./admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+const ResponsiveChatbot = React.lazy(() => import('./components/features/chat').then((module) => ({ default: module.ResponsiveChatbot })));
+const ContentLibrary = React.lazy(() => import('./components/features/content').then((module) => ({ default: module.ContentLibrary })));
+const Practices = React.lazy(() => import('./components/features/content').then((module) => ({ default: module.Practices })));
+const Dashboard = React.lazy(() => import('./components/features/dashboard').then((module) => ({ default: module.Dashboard })));
+const GamesHub = React.lazy(() => import('./components/features/games').then((module) => ({ default: module.GamesHub })));
+const JournalPage = React.lazy(() => import('./components/features/journal').then((module) => ({ default: module.JournalPage })));
+const PersonalizedPlan = React.lazy(() => import('./components/features/plans').then((module) => ({ default: module.PersonalizedPlan })));
+const Progress = React.lazy(() => import('./components/features/profile').then((module) => ({ default: module.Progress })));
+const Profile = React.lazy(() => import('./components/features/profile').then((module) => ({ default: module.Profile })));
+const HelpSafety = React.lazy(() => import('./components/layout').then((module) => ({ default: module.HelpSafety })));
+const TherapistDashboard = React.lazy(() => import('./therapist/TherapistDashboard').then((module) => ({ default: module.TherapistDashboard })));
 
 type AdminLoginDestinationChoice = 'user' | 'admin';
 
@@ -161,6 +164,12 @@ const DEFAULT_COMBINED_SELECTION = (() => {
 
   return defaults.length > 0 ? defaults : Array.from(OVERALL_ASSESSMENT_ID_SET);
 })();
+
+const RouteLoadingFallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+    Loading...
+  </div>
+);
 
 const DASHBOARD_TOUR_STORAGE_KEY = 'mw-dashboard-tour-pending';
 const PERSISTED_UI_PREFERENCE_KEYS = [
@@ -1357,7 +1366,9 @@ function AppInner() {
         <div className="flex items-center justify-center h-screen text-muted-foreground">Loading...</div>
       ) : (
         <div key={currentPage} className={pageTransitionClass}>
-          {renderCurrentPage()}
+          <Suspense fallback={<RouteLoadingFallback />}>
+            {renderCurrentPage()}
+          </Suspense>
         </div>
       )}
     </div>
