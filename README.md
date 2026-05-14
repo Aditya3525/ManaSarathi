@@ -335,6 +335,9 @@ npm run build --workspace frontend
 ### Vercel (Frontend)
 `vercel.json` is configured at the repository root for SPA rewrites and a Vite build from `frontend/`.
 
+### GitHub Actions
+The repository keeps CI in `.github/workflows/ci.yml` for type/build/test checks. Production deployment is owned by Render and Vercel, so older Azure/Netlify/Railway/Heroku workflows have been removed to prevent accidental or confusing deploy paths.
+
 ### Mobile (EAS Build)
 ```bash
 cd mobile
