@@ -256,17 +256,6 @@ app.use('/api/crisis', crisisRoutes);         // Crisis resources & safety plans
 app.use('/api/therapists', therapistRoutes);  // Therapist directory & bookings
 app.use('/api/therapist-portal', therapistPortalRoutes); // Therapist self-service portal
 
-// Serve frontend static files in production
-if (process.env.NODE_ENV === 'production') {
-  // Serve static files from frontend build
-  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
-
-  // Handle React Router - send all non-API requests to React app
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
-  });
-}
-
 // Error handling middleware
 app.use(notFound);
 app.use(errorHandler);

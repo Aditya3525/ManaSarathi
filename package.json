@@ -41,8 +41,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "wait-on": "^7.2.0",
-    "rimraf": "^5.0.5"
+    "rimraf": "^5.0.5",
+    "wait-on": "^7.2.0"
   },
   "engines": {
     "node": ">=18",
@@ -62,5 +62,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Aditya3525/ManaSarathi.git"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
   }
 }

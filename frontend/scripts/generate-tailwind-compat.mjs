@@ -27,7 +27,7 @@ const walk = (dir, matcher, acc = []) => {
 
 const sourceFiles = walk(path.join(root, 'src'), /\.(tsx|ts|jsx|js)$/);
 const cssFiles = walk(path.join(root, 'src'), /\.css$/);
-const classRegex = /(?<![A-Za-z0-9-])(?:hover:|focus:|active:)?(?:bg|text|border)-[a-z][a-z0-9-]*(?:\/\d{1,3})?(?![A-Za-z0-9-])/g;
+const classRegex = /(?<![A-Za-z0-9-])(?:hover:|focus:|active:)?(?:bg|text|border|from|via|to)-[a-z][a-z0-9-]*(?:\/\d{1,3})?(?![A-Za-z0-9-])/g;
 const usedClasses = new Set();
 
 for (const filePath of sourceFiles) {
@@ -49,11 +49,15 @@ for (const cssFile of cssFiles) {
 
 const escapeClassSelector = (className) => className.replaceAll(':', '\\:').replaceAll('/', '\\/');
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const missingClasses = [...usedClasses]
   .sort()
   .filter((utilityClass) => {
     const selector = '.' + escapeClassSelector(utilityClass);
-    return !compiledStyles.includes(selector);
+    // Avoid substring false positives like `.from-primary` matching `.from-primary\/5`.
+    const selectorRegex = new RegExp(`${escapeRegex(selector)}(?![A-Za-z0-9-]|\\\\)`);
+    return !selectorRegex.test(compiledStyles);
   });
 
 const colors = {
@@ -128,6 +132,20 @@ const parseUtilityClass = (utilityClass) => {
       opacity: null,
       property: null,
       token: null,
+      variant,
+    };
+  }
+
+  const gradientStopMatch = coreClass.match(/^(from|via|to)-(.+?)(?:\/(\d{1,3}))?$/);
+  if (gradientStopMatch) {
+    const [, stop, token, rawOpacity] = gradientStopMatch;
+    const opacity = rawOpacity ? Math.max(0, Math.min(Number(rawOpacity), 100)) : null;
+    return {
+      coreClass,
+      gradientStop: stop,
+      opacity,
+      property: null,
+      token,
       variant,
     };
   }
@@ -222,6 +240,26 @@ const buildDeclaration = (property, baseColor, opacity) => {
   return `${property}: ${baseColor}; ${property}: color-mix(in oklab, ${baseColor} ${opacity}%, transparent);`;
 };
 
+const buildGradientStopValue = (baseColor, opacity) => {
+  if (opacity === null) {
+    return baseColor;
+  }
+
+  return `color-mix(in oklab, ${baseColor} ${opacity}%, transparent)`;
+};
+
+const buildGradientStopDeclaration = (stop, stopValue) => {
+  if (stop === 'from') {
+    return `--tw-gradient-from: ${stopValue}; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent);`;
+  }
+
+  if (stop === 'via') {
+    return `--tw-gradient-via: ${stopValue}; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, transparent);`;
+  }
+
+  return `--tw-gradient-to: ${stopValue};`;
+};
+
 const rules = [];
 rules.push('/* Auto-generated compatibility utilities for classes used in src but missing from styles/index.css */');
 rules.push('/* Do not edit manually. Run: npm run styles:compat */');
@@ -240,6 +278,19 @@ for (const utilityClass of missingClasses) {
 
   if (parsed.declaration) {
     rules.push(`${selector} { ${parsed.declaration} }`);
+    continue;
+  }
+
+  if (parsed.gradientStop) {
+    const colorValue = resolveColorValue(parsed.token);
+    if (!colorValue) {
+      skipped.push(utilityClass);
+      continue;
+    }
+
+    const stopValue = buildGradientStopValue(colorValue, parsed.opacity);
+    const declaration = buildGradientStopDeclaration(parsed.gradientStop, stopValue);
+    rules.push(`${selector} { ${declaration} }`);
     continue;
   }
 

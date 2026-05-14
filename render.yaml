@@ -1,27 +1,11 @@
 services:
   - type: web
-    name: manasarthi-frontend
-    runtime: static
-    region: oregon
-    plan: free
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://manasarthi-backend.onrender.com/api
-
-  - type: web
     name: manasarthi-backend
     runtime: node
     region: oregon
-    plan: free
+    plan: starter
     rootDir: backend
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma db push --accept-data-loss && npm run build && npx ts-node src/prisma/seed-production.ts
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build && npx ts-node src/prisma/seed-production.ts
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -40,7 +24,7 @@ services:
       - key: PORT
         value: 10000
       - key: FRONTEND_URL
-        value: https://manasarthi-frontend.onrender.com
+        value: https://YOUR-VERCEL-PRODUCTION-DOMAIN.vercel.app
       - key: AI_PROVIDER_PRIORITY
         value: huggingface,gemini,openai,anthropic
       - key: AI_ENABLE_FALLBACK
@@ -66,5 +50,5 @@ databases:
   - name: manasarthi-db
     databaseName: manasarthi
     user: manasarthi_user
-    plan: free
+    plan: starter
     region: oregon

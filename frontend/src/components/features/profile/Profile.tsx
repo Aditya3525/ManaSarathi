@@ -623,7 +623,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   {avatarInitials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold truncate">
+                  <h1 className="text-xl font-semibold truncate text-foreground">
                     {profileDisplayName}
                   </h1>
                   <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
@@ -649,7 +649,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   {avatarInitials}
                 </div>
                 <div>
-                  <h1 className="text-3xl">{profileDisplayName}</h1>
+                  <h1 className="text-3xl text-foreground">{profileDisplayName}</h1>
                   <p className="text-muted-foreground">{user?.email}</p>
                 </div>
               </div>

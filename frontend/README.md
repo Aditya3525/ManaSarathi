@@ -121,6 +121,8 @@ For production on Vercel, set:
 VITE_API_URL=https://manasarthi-backend.onrender.com/api
 ```
 
+Also configure the backend Render service with `FRONTEND_URL` pointing to the Vercel production domain so OAuth and email flows redirect back to the correct web app.
+
 ## Contributing
 
 1. Follow the established **folder structure**

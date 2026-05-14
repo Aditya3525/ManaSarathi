@@ -57,6 +57,9 @@
     server: {
       host: '0.0.0.0', // Allow external connections
       port: 3000,
+      // Fail fast when 3000 is already occupied so developers do not
+      // accidentally open a different app on 3000 while this one runs elsewhere.
+      strictPort: true,
       open: true,
       proxy: {
         '/api': {

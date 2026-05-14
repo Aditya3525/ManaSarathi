@@ -407,7 +407,7 @@
   display: flex;
   gap: 0.25rem;
   padding: 0.25rem;
-  background: hsl(var(--muted));
+  background: var(--muted);
   border-radius: 0.5rem;
   width: fit-content;
 }
@@ -419,21 +419,21 @@
   font-weight: 500;
   border: none;
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .therapist-sub-tab:hover {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .therapist-sub-tab.active,
 .therapist-sub-tab[aria-pressed='true'],
 .therapist-sub-tab[data-selected='true'] {
-  border: 1px solid hsl(var(--primary) / 0.25);
-  background: hsl(var(--primary) / 0.14);
-  color: hsl(var(--primary));
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
   box-shadow: 0 1px 3px hsl(var(--foreground) / 0.06);
   font-weight: 600;
 }
