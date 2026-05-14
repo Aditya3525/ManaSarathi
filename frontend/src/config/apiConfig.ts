@@ -1,12 +1,12 @@
 /**
  * Centralized API URL configuration.
  * 
- * In production, VITE_API_URL is set at build time (e.g. https://manasarthi-backend.onrender.com/api).
+ * In production, VITE_API_URL is set at build time (e.g. https://mana-sarathi-platform.onrender.com/api).
  * In development, dynamically resolves based on the browser's hostname so LAN
  * access from mobile devices also works.
  */
 
-const PROD_BACKEND_ORIGIN = 'https://manasarthi-backend.onrender.com';
+const PROD_BACKEND_ORIGIN = 'https://mana-sarathi-platform.onrender.com';
 
 const toApiBase = (origin: string): string => `${origin.replace(/\/+$/, '')}/api`;
 
@@ -59,17 +59,17 @@ const resolveServerOrigin = (): string => {
     return `http://${hostname}:5000`;
 };
 
-/** Returns the API base URL with /api suffix, e.g. https://manasarthi-backend.onrender.com/api */
+/** Returns the API base URL with /api suffix, e.g. https://mana-sarathi-platform.onrender.com/api */
 export const getApiBaseUrl = (): string => {
     return toApiBase(resolveServerOrigin());
 };
 
-/** Returns just the server origin, e.g. https://manasarthi-backend.onrender.com */
+/** Returns just the server origin, e.g. https://mana-sarathi-platform.onrender.com */
 export const getServerBaseUrl = (): string => {
     return resolveServerOrigin();
 };
 
-/** Returns the WebSocket base URL, e.g. wss://manasarthi-backend.onrender.com */
+/** Returns the WebSocket base URL, e.g. wss://mana-sarathi-platform.onrender.com */
 export const getWsBaseUrl = (): string => {
     return resolveServerOrigin().replace(/^http/, 'ws');
 };
