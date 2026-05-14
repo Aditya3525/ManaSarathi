@@ -1,5 +1,7 @@
 import { X, Play, Volume2, FileText, Clock, Tag } from 'lucide-react';
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -158,10 +160,21 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({
               )}
               
               {content.content ? (
-                <div 
-                  className="whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: content.content }}
-                />
+                <div className="whitespace-pre-wrap">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    skipHtml
+                    components={{
+                      a: ({ children, href }) => (
+                        <a href={href} target="_blank" rel="noopener noreferrer">
+                          {children}
+                        </a>
+                      ),
+                    }}
+                  >
+                    {content.content}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <p className="text-muted-foreground">No content available</p>
               )}

@@ -316,14 +316,16 @@ Base URL: `/api`
 
 ### Render.com (Backend + PostgreSQL)
 The `render.yaml` at the repository root configures:
-- **`manasarthi-backend`** — Node.js web service (auto-runs Prisma migrations on deploy)
+- **`manasarthi-backend`** — Node.js web service (generates Prisma client, syncs schema, builds, and seeds baseline content on deploy)
 - **`manasarthi-db`** — Managed PostgreSQL database
 
 ```bash
 # Render backend deployment steps
 cd backend
-npx prisma migrate deploy        # Run pending migrations
+npm run db:generate              # Generate Prisma client
+npm run db:push:auto             # Sync production schema
 npm run build                    # Compile the backend
+npm run seed:production          # Seed assessments, practices, content, FAQ, crisis resources, therapists
 npm start                        # Start production server
 
 # Vercel frontend deployment is handled separately from the repo root

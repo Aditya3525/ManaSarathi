@@ -616,10 +616,8 @@ function AppInner() {
   const signUp = async (userData: { name: string; email: string; password: string }) => {
     try {
       setAuthError(null);
-      console.log('Starting registration process for:', userData);
 
       const result = await registerUser(userData);
-      console.log('Registration successful:', result);
 
       // Set user data with token and route to onboarding
       setUser({
@@ -630,7 +628,6 @@ function AppInner() {
         clinicianSharing: false
       }, result.token);
 
-      console.log('Routing new user to onboarding');
       navigateTo('onboarding');
 
     } catch (error) {
@@ -653,10 +650,8 @@ function AppInner() {
       setLoginError(null);
       setAuthError(null);
       setPendingAdminDestinationChoice(null);
-      console.log('Attempting login for:', credentials.email);
       const result = await loginUser(credentials);
       if (result) {
-        console.log('Login successful:', result);
         const normalizedEmail = normalizeEmailForAdminDestination(credentials.email);
 
         const isAdminAccount = await adminAuth.checkIsUserAdmin(result.token);
@@ -805,9 +800,7 @@ function AppInner() {
 
   const handleAdminLogin = async (credentials: { email: string; password: string }) => {
     try {
-      console.log('App.tsx: Starting admin login process');
       await adminLogin(credentials);
-      console.log('App.tsx: Admin login successful, redirecting to admin dashboard');
       navigateTo('admin', { bypassAdminGuard: true });
     } catch (error) {
       console.error('App.tsx: Admin login failed:', error);
@@ -878,12 +871,9 @@ function AppInner() {
     createdAt?: string;
     updatedAt?: string;
   }) => {
-    console.log('OAuth Success Data:', userData);
-
     // CRITICAL: Store token in localStorage FIRST (before setUser)
     // This ensures the token is available for immediate API calls
     if (userData.token) {
-      console.log('Storing OAuth token in localStorage');
       localStorage.setItem('token', userData.token);
     }
 
@@ -917,28 +907,15 @@ function AppInner() {
     // Clear URL parameters
     window.history.replaceState({}, document.title, '/');
 
-    // Determine flow based on user status
-    console.log('User status check:', {
-      needsPassword: userData.needsPassword,
-      needsSetup: userData.needsSetup,
-      isOnboarded: userData.isOnboarded,
-      hasPassword: userData.hasPassword,
-      justCreated: userData.justCreated,
-      tokenStored: !!localStorage.getItem('token')
-    });
-
     // Simplified routing logic:
     // - New Google users (justCreated) -> password setup
     // - Existing users without onboarding -> onboarding
     // - Existing users with onboarding -> dashboard
     if (userData.needsPassword || userData.hasPassword === false || userData.justCreated) {
-      console.log('Routing new Google user to password setup');
       navigateTo('password-setup');
     } else if (!userData.isOnboarded) {
-      console.log('Routing returning user to onboarding (incomplete)');
       navigateTo('onboarding');
     } else {
-      console.log('Routing returning user to dashboard (onboarded)');
       navigateTo('dashboard');
     }
   };
@@ -963,20 +940,11 @@ function AppInner() {
     dataConsent?: boolean;
     clinicianSharing?: boolean;
   }) => {
-    console.log('completeOnboardingFlow called with:', profileData);
-    console.log('Current token in localStorage:', localStorage.getItem('token'));
-
     try {
-      console.log('Completing onboarding with data:', profileData);
-      console.log('Current user before onboarding:', user);
-
       if (profileData.approach) {
-        console.log('Making API call to complete onboarding...');
         // Send all profile data to backend
         const updatedUser = await completeOnboarding(profileData.approach, profileData);
-        console.log('API response received:', updatedUser);
         if (updatedUser) {
-          console.log('Onboarding completed, updated user:', updatedUser);
           setUser({
             ...updatedUser,
             dataConsent:
@@ -989,18 +957,14 @@ function AppInner() {
                 : updatedUser.clinicianSharing,
           });
           updateDashboardTourPending(true);
-        } else {
-          console.log('No updated user returned from API');
         }
       } else {
-        console.log('No approach selected, skipping API call');
         if (user) {
           updateUser({ isOnboarded: true });
         }
         updateDashboardTourPending(true);
       }
 
-      console.log('Onboarding complete - routing to overall assessment invite');
       navigateTo('assessment-invite');
 
     } catch (error) {
@@ -1016,7 +980,6 @@ function AppInner() {
   const completePasswordSetup = async (password: string) => {
     try {
       setAuthError(null);
-      console.log('Setting up user password...');
 
       // Verify we have a user and token before attempting password setup
       if (!user) {
@@ -1030,16 +993,13 @@ function AppInner() {
 
       const updatedUser = await setupUserPassword(password);
       if (updatedUser) {
-        console.log('Password setup successful:', updatedUser);
         // Update user with new password status
         setUser({ ...updatedUser, hasPassword: true });
 
         // Check if user still needs onboarding after password setup
         if (!updatedUser.isOnboarded) {
-          console.log('User needs onboarding - routing to onboarding');
           navigateTo('onboarding');
         } else {
-          console.log('User is fully onboarded - routing to dashboard');
           navigateTo('dashboard');
         }
       } else {
@@ -1052,7 +1012,6 @@ function AppInner() {
 
       // If token is missing, redirect back to login
       if (errorMessage.includes('token') || errorMessage.includes('Authentication')) {
-        console.log('Token issue detected, redirecting to login');
         logout(); // Clear all auth state
         navigateTo('user-login');
       }
@@ -1226,7 +1185,6 @@ function AppInner() {
             user={user}
             onExit={() => {
               // Save & Exit: keep user logged in, go to landing page
-              console.log('OnboardingFlow onExit called - navigating to landing');
               navigateTo('landing');
             }}
             onBack={() => {

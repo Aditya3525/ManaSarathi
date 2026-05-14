@@ -486,14 +486,9 @@ export const resendEmailVerification = async (_req: Request, res: Response) => {
 // Setup password for OAuth users
 export const setupPassword = async (req: any, res: Response) => {
   try {
-    console.log('Setup password request received');
-    console.log('Request body:', req.body);
-    console.log('User from auth middleware:', req.user);
-    
     const { password } = req.body;
     
     if (!password || !isStrongPassword(password)) {
-      console.log('Password validation failed:', { password: password ? 'provided' : 'missing', length: password?.length });
       res.status(400).json({
         success: false,
         error: STRONG_PASSWORD_MESSAGE,
@@ -502,7 +497,6 @@ export const setupPassword = async (req: any, res: Response) => {
     }
 
     if (!req.user || !req.user.id) {
-      console.log('User not found in request:', req.user);
       res.status(401).json({
         success: false,
         error: 'User not authenticated',
@@ -511,12 +505,10 @@ export const setupPassword = async (req: any, res: Response) => {
     }
 
     // Hash password
-    console.log('Hashing password for user:', req.user.id);
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Update user with password
-    console.log('Updating user password in database');
     const updatedUser = await prisma.user.update({
       where: { id: req.user.id },
       data: { password: hashedPassword }
@@ -528,7 +520,6 @@ export const setupPassword = async (req: any, res: Response) => {
       hasPassword: !!updatedUser.password,
     };
 
-    console.log('Password setup successful for user:', user.id);
     res.json({
       success: true,
       data: { user: userResponse },

@@ -6,7 +6,7 @@ services:
     region: oregon
     plan: starter
     rootDir: backend
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build && npx ts-node src/prisma/seed-production.ts
+    buildCommand: npm install --include=dev && npm run db:generate && npm run db:push:auto && npm run build && npm run seed:production
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -25,7 +25,9 @@ services:
       - key: PORT
         value: 10000
       - key: FRONTEND_URL
-        value: https://YOUR-VERCEL-PRODUCTION-DOMAIN.vercel.app
+        value: https://mana-sarathi-platform-frontend.vercel.app
+      - key: BACKEND_URL
+        value: https://mana-sarathi-platform.onrender.com
       - key: AI_PROVIDER_PRIORITY
         value: huggingface,gemini,openai,anthropic
       - key: AI_ENABLE_FALLBACK

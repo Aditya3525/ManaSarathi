@@ -3,26 +3,13 @@
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'ManaSarathi-v1.0.6';
-const API_CACHE_NAME = 'ManaSarathi-api-v1.0.6';
+const CACHE_NAME = 'ManaSarathi-v1.0.7';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
   '/index.html',
   '/favicon.svg',
   '/manifest.json',
-];
-
-// API endpoints to cache
-const CACHEABLE_API_ROUTES = [
-  '/api/users/me',
-  '/api/assessments/definitions',
-  '/api/plans/modules',
-  '/api/dashboard/summary',
-  '/api/dashboard/insights',
-  '/api/dashboard/weekly-progress',
-  '/api/dashboard/community-insights',
-  '/api/checkins/summary',
 ];
 
 // Install event - cache static assets
@@ -46,7 +33,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME && cacheName !== API_CACHE_NAME) {
+          if (cacheName.startsWith('ManaSarathi-') && cacheName !== CACHE_NAME) {
             console.log('[ServiceWorker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -74,15 +61,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - Network First, fallback to cache
+  // Never cache API responses. They may contain private mental-health data and
+  // must always come from the network/backend auth layer.
   if (url.pathname.startsWith('/api/')) {
-    if (!isCacheableApiRoute(url.pathname)) {
-      return;
-    }
-
-    event.respondWith(
-      networkFirstStrategy(request, API_CACHE_NAME)
-    );
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -137,42 +119,6 @@ async function cacheFirstStrategy(request, cacheName) {
   }
 }
 
-/**
- * Network First Strategy
- * Good for API requests where fresh data is important
- */
-async function networkFirstStrategy(request, cacheName) {
-  if (!isCacheableRequest(request)) {
-    return fetch(request);
-  }
-
-  try {
-    console.log('[ServiceWorker] Fetching API from network:', request.url);
-    const networkResponse = await fetch(request);
-
-    // Cache successful responses
-    const cacheControl = networkResponse.headers.get('cache-control') || '';
-    if (networkResponse && networkResponse.status === 200 && !cacheControl.includes('no-store')) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] Network failed, trying cache:', request.url);
-    
-    const cachedResponse = await caches.match(request);
-    
-    if (cachedResponse) {
-      console.log('[ServiceWorker] Serving stale API data from cache');
-      return cachedResponse;
-    }
-
-    console.error('[ServiceWorker] No cached response available:', error);
-    throw error;
-  }
-}
-
 function isCacheableRequest(request) {
   try {
     const url = new URL(request.url);
@@ -180,10 +126,6 @@ function isCacheableRequest(request) {
   } catch {
     return false;
   }
-}
-
-function isCacheableApiRoute(pathname) {
-  return CACHEABLE_API_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
 // Background sync for offline actions
