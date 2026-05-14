@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Separator } from '../../ui/separator';
+import { Switch } from '../../ui/switch';
 
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { HeroSection } from './HeroSection';
@@ -50,6 +51,19 @@ interface LandingPageProps {
   onChooseLoginAsAdmin?: (rememberChoice?: boolean) => Promise<void> | void;
   onNavigate?: (page: string) => void;
 }
+
+type CookiePreferences = {
+  analytics: boolean;
+  personalization: boolean;
+  marketing: boolean;
+};
+
+const COOKIE_PREFERENCES_KEY = 'mw-cookie-preferences-v1';
+const DEFAULT_COOKIE_PREFERENCES: CookiePreferences = {
+  analytics: true,
+  personalization: true,
+  marketing: false,
+};
 
 export function LandingPage({
   onSignUp,
@@ -77,6 +91,21 @@ export function LandingPage({
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
   const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
+  const [isCookieDialogOpen, setIsCookieDialogOpen] = useState(false);
+  const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences>(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_COOKIE_PREFERENCES;
+    }
+
+    try {
+      const storedPreferences = localStorage.getItem(COOKIE_PREFERENCES_KEY);
+      return storedPreferences
+        ? { ...DEFAULT_COOKIE_PREFERENCES, ...JSON.parse(storedPreferences) }
+        : DEFAULT_COOKIE_PREFERENCES;
+    } catch {
+      return DEFAULT_COOKIE_PREFERENCES;
+    }
+  });
 
   const passwordChecks = {
     minLength: password.length >= 8,
@@ -138,6 +167,23 @@ export function LandingPage({
     setActiveModal(modal);
     setMobileMenuOpen(false); // Close mobile menu when opening a modal
     analytics.trackButtonClick(`open_${modal}_modal`, 'landing_page');
+  };
+  const updateCookiePreference = (key: keyof CookiePreferences, value: boolean) => {
+    setCookiePreferences((current) => ({ ...current, [key]: value }));
+  };
+  const saveCookiePreferences = () => {
+    localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(cookiePreferences));
+    setIsCookieDialogOpen(false);
+  };
+  const acceptAllCookies = () => {
+    const acceptedPreferences: CookiePreferences = {
+      analytics: true,
+      personalization: true,
+      marketing: true,
+    };
+    setCookiePreferences(acceptedPreferences);
+    localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(acceptedPreferences));
+    setIsCookieDialogOpen(false);
   };
 
   const differentiators = useMemo(
@@ -1189,9 +1235,7 @@ export function LandingPage({
               <button
                 type="button"
                 className="transition-colors hover:text-foreground hover:underline underline-offset-4"
-                onClick={() => {
-                  // Cookie preferences modal would open here
-                }}
+                onClick={() => setIsCookieDialogOpen(true)}
               >
                 Manage Cookies
               </button>
@@ -1508,6 +1552,50 @@ export function LandingPage({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCookieDialogOpen} onOpenChange={setIsCookieDialogOpen}>
+        <DialogContent className="max-w-[22rem] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cookie preferences</DialogTitle>
+            <DialogDescription>
+              Essential cookies stay on for security. Choose the optional cookies ManaSarathi can use.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/40 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Essential</p>
+                  <p className="text-sm text-muted-foreground">Required for sign-in, security, and app stability.</p>
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Always on</span>
+              </div>
+            </div>
+            {([
+              ['analytics', 'Analytics', 'Helps us understand app performance and improve important flows.'],
+              ['personalization', 'Personalization', 'Keeps helpful preferences like language, accessibility, and experience settings.'],
+              ['marketing', 'Marketing', 'Allows optional campaign and outreach measurement.'],
+            ] as const).map(([key, title, description]) => (
+              <div key={key} className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                <div className="space-y-1">
+                  <Label htmlFor={`cookie-${key}`} className="font-medium">{title}</Label>
+                  <p className="text-sm text-muted-foreground">{description}</p>
+                </div>
+                <Switch
+                  id={`cookie-${key}`}
+                  checked={cookiePreferences[key]}
+                  onCheckedChange={(checked) => updateCookiePreference(key, checked)}
+                  aria-label={`${title} cookies`}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={saveCookiePreferences}>Save choices</Button>
+            <Button onClick={acceptAllCookies}>Accept all</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
