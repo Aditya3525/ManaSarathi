@@ -55,6 +55,13 @@
       outDir: 'dist',
       chunkSizeWarningLimit: 1200,
       rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.message.includes('Error when using sourcemap for reporting an error')) {
+            return;
+          }
+
+          warn(warning);
+        },
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) {

@@ -969,16 +969,10 @@ export function InsightsResults({ insights, history, onNavigate, isLoading, erro
         <div className="flex flex-col sm:flex-row gap-4">
           <Button
             className="flex-1"
-            onClick={() => {
-              push({
-                type: 'info',
-                title: 'Coming Soon',
-                description: 'Personalized plan creation from insights will be available soon.',
-              });
-            }}
+            onClick={() => onNavigate('plan')}
           >
             <Play className="h-4 w-4 mr-2" />
-            Create Personalised Plan (Coming Soon)
+            Create Personalised Plan
           </Button>
 
           <Button variant="outline" onClick={() => setDiscussDialogOpen(true)}>

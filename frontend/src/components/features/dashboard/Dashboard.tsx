@@ -196,7 +196,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     return {
       current: weeklyProgress.currentStreak || 0,
       message: weeklyProgress.currentStreak > 0
-        ? `${weeklyProgress.currentStreak} day${weeklyProgress.currentStreak !== 1 ? 's' : ''} strong! ðŸ”¥`
+        ? `${weeklyProgress.currentStreak} day${weeklyProgress.currentStreak !== 1 ? 's' : ''} strong! 🔥`
         : 'Start your journey today!'
     };
   };
@@ -638,7 +638,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
   const practiceTags = recommendedPractice?.tags || (() => {
     switch (user?.approach) {
-      case 'western': return ['CBT technique', 'Thought tracking', '5â€“10 min'];
+      case 'western': return ['CBT technique', 'Thought tracking', '5–10 min'];
       case 'eastern': return ['Meditation', 'Breathwork', 'Grounding'];
       case 'hybrid': return ['Mindfulness', 'Cognitive reframing', 'Balanced'];
       default: return ['Anxiety relief', 'Beginner friendly', '10 min'];
@@ -892,7 +892,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       <div className="text-right">
                         <p className="text-sm font-medium">Profile {profileCompletion}% complete</p>
                         <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => onNavigate('profile')}>
-                          Complete setup â†’
+                          Complete setup →
                         </Button>
                       </div>
                     )}
@@ -1160,7 +1160,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         </div>
 
                         <p className="text-xs text-muted-foreground">
-                          Updated {new Date(communityInsights.generatedAt).toLocaleString()} â€¢ sample size up to {Math.max(...communityInsights.metrics.map((metric) => metric.sampleSize), 0)} users
+                          Updated {new Date(communityInsights.generatedAt).toLocaleString()} • sample size up to {Math.max(...communityInsights.metrics.map((metric) => metric.sampleSize), 0)} users
                         </p>
                       </CardContent>
                     </Card>
@@ -1530,7 +1530,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
                           return normalizedTags
                             .slice(0, device.isSmallPhone ? 1 : 2)
-                            .map((tag) => <span key={tag}>â€¢ {tag}</span>);
+                            .map((tag) => <span key={tag}>• {tag}</span>);
                         })()}
                         {(() => {
                           const normalizedTags = Array.isArray(practiceTags)
@@ -1546,7 +1546,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                       </div>
                       {recommendedPractice?.reason && (
                         <p className="text-xs text-primary/80 italic mt-2">
-                          ðŸ’¡ {recommendedPractice.reason}
+                          💡 {recommendedPractice.reason}
                         </p>
                       )}
                     </div>
@@ -1831,7 +1831,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         title="This Week"
                         icon={<Calendar className="h-5 w-5 text-primary" />}
                         defaultOpen={false}
-                        summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices â€¢ ${streakInfo.current}-day streak` : 'Loading...'}
+                        summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices • ${streakInfo.current}-day streak` : 'Loading...'}
                       >
                         {weeklyProgress ? (
                           <div className="space-y-3">

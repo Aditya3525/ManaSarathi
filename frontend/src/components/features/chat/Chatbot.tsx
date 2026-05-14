@@ -666,12 +666,30 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
   };
 
   const handleBookmark = () => {
-    // In a real implementation, this would save the conversation to bookmarks
-    // For now, we'll just show a placeholder message
+    const bookmark = {
+      id: currentConversationId || `local-${Date.now()}`,
+      title: messages.find((message) => message.type === 'user')?.content.slice(0, 80) || 'Untitled conversation',
+      conversationId: currentConversationId,
+      savedAt: new Date().toISOString(),
+      messageCount: messages.filter((message) => message.type !== 'system').length,
+    };
+
+    let existingBookmarks: typeof bookmark[] = [];
+    try {
+      existingBookmarks = JSON.parse(localStorage.getItem('mw-chat-bookmarks-v1') || '[]') as typeof bookmark[];
+    } catch {
+      existingBookmarks = [];
+    }
+    const nextBookmarks = [
+      bookmark,
+      ...existingBookmarks.filter((item) => item.id !== bookmark.id),
+    ].slice(0, 25);
+    localStorage.setItem('mw-chat-bookmarks-v1', JSON.stringify(nextBookmarks));
+
     const systemMessage: Message = {
       id: Date.now().toString(),
       type: 'system',
-      content: 'Bookmark feature coming soon! This conversation will be saved to your bookmarks.',
+      content: 'Conversation bookmarked on this device.',
       timestamp: new Date()
     };
     setMessages(prev => [...prev, systemMessage]);

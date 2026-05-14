@@ -58,6 +58,11 @@ type CookiePreferences = {
   marketing: boolean;
 };
 
+type InfoDialogContent = {
+  title: string;
+  description: string;
+};
+
 const COOKIE_PREFERENCES_KEY = 'mw-cookie-preferences-v1';
 const NEWSLETTER_INTEREST_KEY = 'mw-newsletter-interest-v1';
 const DEFAULT_COOKIE_PREFERENCES: CookiePreferences = {
@@ -93,6 +98,7 @@ export function LandingPage({
   const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
   const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
   const [isCookieDialogOpen, setIsCookieDialogOpen] = useState(false);
+  const [infoDialog, setInfoDialog] = useState<InfoDialogContent | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterMessage, setNewsletterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences>(() => {
@@ -187,6 +193,9 @@ export function LandingPage({
     setCookiePreferences(acceptedPreferences);
     localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(acceptedPreferences));
     setIsCookieDialogOpen(false);
+  };
+  const showInfoDialog = (title: string, description: string) => {
+    setInfoDialog({ title, description });
   };
   const handleNewsletterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1077,9 +1086,13 @@ export function LandingPage({
                   </a>
                 </li>
                 <li>
-                  <a href="/pricing" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Pricing', 'ManaSarathi is free during early access. If paid plans are introduced later, pricing will be shared clearly before any charge.')}
+                  >
                     Pricing
-                  </a>
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -1089,29 +1102,49 @@ export function LandingPage({
               <h4 id="footer-company" className="text-sm font-semibold text-foreground">Company</h4>
               <ul className="space-y-1 text-sm text-foreground/70">
                 <li>
-                  <a href="/about" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('About ManaSarathi', 'ManaSarathi is a mental wellbeing platform combining assessments, mindful practices, journaling, and supportive AI guidance.')}
+                  >
                     About us
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/careers" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Careers', 'We are not hiring right now, but future opportunities will be shared here as the platform grows.')}
+                  >
                     Careers
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/blog" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Blog', 'Wellbeing articles and product updates are coming soon.')}
+                  >
                     Blog
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/press" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Press Kit', 'A public press kit is being prepared. For now, please use the product overview on this page.')}
+                  >
                     Press Kit
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/partners" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Partners', 'Partnership information is coming soon. We are focused on thoughtful, safety-first wellbeing collaborations.')}
+                  >
                     Partners
-                  </a>
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -1126,22 +1159,34 @@ export function LandingPage({
                   </a>
                 </li>
                 <li>
-                  <a href="/contact" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Contact Support', 'For urgent safety concerns, use crisis resources immediately. General support contact options will be available as the platform expands.')}
+                  >
                     Contact Support
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/privacy" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Privacy Policy', 'ManaSarathi is designed around consent, minimal data collection, and user privacy controls. Signed-in users can manage sharing and privacy settings from their profile.')}
+                  >
                     Privacy Policy
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/terms" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Terms of Service', 'ManaSarathi provides wellbeing support and education, not emergency care or a replacement for professional medical advice.')}
+                  >
                     Terms of Service
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/crisis" className="inline-flex items-center py-2 text-red-600 transition-colors hover:text-red-700 underline-offset-4 hover:underline">
+                  <a href="tel:988" className="inline-flex items-center py-2 text-red-600 transition-colors hover:text-red-700 underline-offset-4 hover:underline">
                     Crisis Resources
                   </a>
                 </li>
@@ -1253,15 +1298,27 @@ export function LandingPage({
 
             {/* Legal Links */}
             <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6" aria-label="Legal and compliance links">
-              <a href="/privacy" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => showInfoDialog('Privacy Policy', 'ManaSarathi is designed around consent, minimal data collection, and user privacy controls. Signed-in users can manage sharing and privacy settings from their profile.')}
+              >
                 Privacy
-              </a>
-              <a href="/terms" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
+              </button>
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => showInfoDialog('Terms of Service', 'ManaSarathi provides wellbeing support and education, not emergency care or a replacement for professional medical advice.')}
+              >
                 Terms
-              </a>
-              <a href="/cookies" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
+              </button>
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => setIsCookieDialogOpen(true)}
+              >
                 Cookies
-              </a>
+              </button>
               <button
                 type="button"
                 className="transition-colors hover:text-foreground hover:underline underline-offset-4"
@@ -1269,9 +1326,13 @@ export function LandingPage({
               >
                 Manage Cookies
               </button>
-              <a href="/accessibility" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => showInfoDialog('Accessibility', 'ManaSarathi includes theme, font, motion, and readability controls inside the app experience to support different access needs.')}
+              >
                 Accessibility
-              </a>
+              </button>
             </nav>
 
             <p className="flex items-center gap-1.5">
@@ -1625,6 +1686,18 @@ export function LandingPage({
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={saveCookiePreferences}>Save choices</Button>
             <Button onClick={acceptAllCookies}>Accept all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(infoDialog)} onOpenChange={(open) => !open && setInfoDialog(null)}>
+        <DialogContent className="max-w-[22rem] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{infoDialog?.title}</DialogTitle>
+            <DialogDescription>{infoDialog?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setInfoDialog(null)}>Got it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
