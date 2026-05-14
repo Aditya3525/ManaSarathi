@@ -6,10 +6,21 @@
 
   export default defineConfig({
     plugins: [react()],
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'recharts',
+        'react-calendar-heatmap',
+      ],
+    },
     resolve: {
       dedupe: ['react', 'react-dom'],
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
+        'react': path.resolve(__dirname, '../node_modules/react'),
+        'react-dom': path.resolve(__dirname, '../node_modules/react-dom'),
         'vaul@1.1.2': 'vaul',
         'sonner@2.0.3': 'sonner',
         'recharts@2.15.2': 'recharts',
@@ -55,6 +66,10 @@
       target: 'esnext',
       outDir: 'dist',
       chunkSizeWarningLimit: 1200,
+      commonjsOptions: {
+        include: [/node_modules/],
+        transformMixedEsModules: true,
+      },
       rollupOptions: {
         onwarn(warning, warn) {
           if (warning.message.includes('Error when using sourcemap for reporting an error')) {

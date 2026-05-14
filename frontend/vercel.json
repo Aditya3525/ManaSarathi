@@ -1,5 +1,5 @@
 {
-  "installCommand": "echo skip",
+  "installCommand": "cd .. && npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
