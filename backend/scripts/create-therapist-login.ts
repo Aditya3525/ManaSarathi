@@ -11,12 +11,12 @@ const prisma = new PrismaClient();
 
 const THERAPIST_LOGINS = [
   {
-    therapistEmail: 'sarah.johnson@example.com',   // matches seed therapist
+    therapistEmail: 'demo-sarah-johnson@manasarthi.app',   // matches seed therapist
     portalEmail: 'therapist@demo.com',
     portalPassword: 'Therapist@123',
   },
   {
-    therapistEmail: 'michael.chen@example.com',
+    therapistEmail: 'demo-michael-chen@manasarthi.app',
     portalEmail: 'michael.chen@demo.com',
     portalPassword: 'Therapist@123',
   },

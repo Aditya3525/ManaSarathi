@@ -8,6 +8,9 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const DEMO_THERAPIST_NOTICE =
+  'Demo provider profile for product evaluation. Replace with verified local provider details before public launch.';
+
 async function seedAssessments() {
   const count = await prisma.assessmentDefinition.count();
   if (count > 0) {
@@ -177,52 +180,53 @@ async function seedTherapists() {
     return;
   }
   console.log('  🌱 Seeding therapist directory...');
+  console.log('  ⚠️  Therapist seed profiles are demo data. Replace before public launch.');
   const result = await prisma.therapist.createMany({
     data: [
       {
         name: 'Dr. Sarah Johnson', credential: 'PSYCHOLOGIST', title: 'Clinical Psychologist, PhD',
-        bio: 'Specializes in CBT and mindfulness-based interventions with 15+ years of experience helping clients manage anxiety, depression, and stress.',
+        bio: `${DEMO_THERAPIST_NOTICE} Specializes in CBT and mindfulness-based interventions with 15+ years of experience helping clients manage anxiety, depression, and stress.`,
         specialtiesJson: JSON.stringify(['Anxiety', 'Depression', 'Stress Management', 'CBT', 'Mindfulness']),
-        email: 'sarah.johnson@example.com', phone: '(555) 123-4567',
+        email: 'demo-sarah-johnson@manasarthi.app', phone: null,
         city: 'San Francisco', state: 'CA', country: 'US',
         acceptsInsurance: true, sessionFee: 150, offersSliding: true,
-        yearsExperience: 15, languages: 'English, Spanish', isVerified: true, isActive: true
+        yearsExperience: 15, languages: 'English, Spanish', isVerified: false, isActive: true
       },
       {
         name: 'Michael Chen, LCSW', credential: 'LCSW', title: 'Licensed Clinical Social Worker',
-        bio: 'Specializes in trauma-informed care and EMDR therapy for individuals who have experienced trauma, PTSD, grief, and relationship issues.',
+        bio: `${DEMO_THERAPIST_NOTICE} Specializes in trauma-informed care and EMDR therapy for individuals who have experienced trauma, PTSD, grief, and relationship issues.`,
         specialtiesJson: JSON.stringify(['Trauma', 'PTSD', 'EMDR', 'Grief', 'Relationship Issues']),
-        email: 'michael.chen@example.com', phone: '(555) 234-5678',
+        email: 'demo-michael-chen@manasarthi.app', phone: null,
         city: 'Los Angeles', state: 'CA', country: 'US',
         acceptsInsurance: true, sessionFee: 120, offersSliding: true,
-        yearsExperience: 10, languages: 'English, Mandarin', isVerified: true, isActive: true
+        yearsExperience: 10, languages: 'English, Mandarin', isVerified: false, isActive: true
       },
       {
         name: 'Dr. Emily Rodriguez', credential: 'PSYCHIATRIST', title: 'Board-Certified Psychiatrist, MD',
-        bio: 'Expertise in medication management for depression, anxiety, bipolar disorder. Takes a holistic approach combining medication with therapy referrals.',
+        bio: `${DEMO_THERAPIST_NOTICE} Expertise in medication management for depression, anxiety, bipolar disorder. Takes a holistic approach combining medication with therapy referrals.`,
         specialtiesJson: JSON.stringify(['Medication Management', 'Depression', 'Anxiety', 'Bipolar Disorder']),
-        email: 'emily.rodriguez@example.com', phone: '(555) 345-6789',
+        email: 'demo-emily-rodriguez@manasarthi.app', phone: null,
         city: 'New York', state: 'NY', country: 'US',
         acceptsInsurance: true, sessionFee: 200, offersSliding: false,
-        yearsExperience: 12, languages: 'English, Spanish', isVerified: true, isActive: true
+        yearsExperience: 12, languages: 'English, Spanish', isVerified: false, isActive: true
       },
       {
         name: 'Jessica Williams, LMFT', credential: 'LMFT', title: 'Licensed Marriage and Family Therapist',
-        bio: 'Specializes in couples therapy, family therapy, and relationship counseling with a collaborative, strengths-based approach.',
+        bio: `${DEMO_THERAPIST_NOTICE} Specializes in couples therapy, family therapy, and relationship counseling with a collaborative, strengths-based approach.`,
         specialtiesJson: JSON.stringify(['Couples Therapy', 'Family Therapy', 'Relationship Issues', 'Communication']),
-        email: 'jessica.williams@example.com', phone: '(555) 456-7890',
+        email: 'demo-jessica-williams@manasarthi.app', phone: null,
         city: 'Seattle', state: 'WA', country: 'US',
         acceptsInsurance: true, sessionFee: 140, offersSliding: true,
-        yearsExperience: 8, languages: 'English', isVerified: true, isActive: true
+        yearsExperience: 8, languages: 'English', isVerified: false, isActive: true
       },
       {
         name: 'Dr. James Thompson', credential: 'PSYCHOLOGIST', title: 'Clinical Psychologist, PsyD',
-        bio: 'Specializes in treating OCD, panic disorder, and phobias using Exposure and Response Prevention (ERP) and CBT.',
+        bio: `${DEMO_THERAPIST_NOTICE} Specializes in treating OCD, panic disorder, and phobias using Exposure and Response Prevention (ERP) and CBT.`,
         specialtiesJson: JSON.stringify(['OCD', 'Panic Disorder', 'Phobias', 'ERP', 'CBT', 'Anxiety Disorders']),
-        email: 'james.thompson@example.com', phone: '(555) 567-8901',
+        email: 'demo-james-thompson@manasarthi.app', phone: null,
         city: 'Boston', state: 'MA', country: 'US',
         acceptsInsurance: true, sessionFee: 160, offersSliding: false,
-        yearsExperience: 18, languages: 'English', isVerified: true, isActive: true
+        yearsExperience: 18, languages: 'English', isVerified: false, isActive: true
       }
     ]
   });
@@ -230,7 +234,7 @@ async function seedTherapists() {
 }
 
 async function seedAdminUser() {
-  const adminEmail = (process.env.ADMIN_EMAILS || 'admin@example.com').split(',')[0].trim().toLowerCase();
+  const adminEmail = (process.env.ADMIN_EMAILS || 'admin@manasarthi.app').split(',')[0].trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (existing) {
     console.log(`  ✅ Admin user already exists (${adminEmail}) — skipping`);
