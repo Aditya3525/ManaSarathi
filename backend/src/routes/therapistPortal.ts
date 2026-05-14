@@ -127,7 +127,6 @@ router.post('/login', async (req, res) => {
         );
 
         // Return JWT token in response body (cross-domain compatible)
-        console.log('Therapist login success:', user.email);
         const { password: _, ...userData } = user as any;
         res.json({
             ...userData,

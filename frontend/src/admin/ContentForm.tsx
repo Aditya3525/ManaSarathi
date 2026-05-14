@@ -155,11 +155,9 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   }
 
   const fetchYouTubeFull = async (id: string, force = false) => {
-    console.log('ContentForm fetchYouTubeFull called with id:', id, 'force:', force);
     setMetaLoading(true);
     try {
       const resp = await adminFetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
-      console.log('ContentForm metadata response status:', resp.status);
       if (!resp.ok) {
         let msg = `Metadata request failed (${resp.status})`;
         try {
@@ -171,12 +169,10 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         return;
       }
       const json = await resp.json();
-      console.log('ContentForm metadata response:', json);
       if (!json.success) {
         push({ type: 'error', title: 'YouTube Metadata', description: json.error || 'Failed to fetch video data' });
         return;
       }
-      console.log('ContentForm setting form data with duration:', json.durationMinutes, 'current duration:', formData.duration);
       setFormData(prev => ({
         ...prev,
         title: prev.title?.trim() ? prev.title : (json.title || prev.title),
@@ -199,7 +195,6 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   const lastFetchedId = useRef<string>('');
   useEffect(() => {
     const raw = youtubeInput.trim();
-    console.log('ContentForm YouTube URL changed:', raw);
     if (!raw) {
       lastFetchedId.current = '';
       return;
@@ -207,7 +202,6 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
     if (ytDebounceRef.current) clearTimeout(ytDebounceRef.current);
     ytDebounceRef.current = setTimeout(() => {
       const id = extractYouTubeId(raw);
-      console.log('ContentForm extracted YouTube ID:', id);
       if (!id) return;
       if (lastFetchedId.current === id) return;
       lastFetchedId.current = id;

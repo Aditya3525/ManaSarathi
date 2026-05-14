@@ -1191,7 +1191,6 @@ export function LandingPage({
                 className="transition-colors hover:text-foreground hover:underline underline-offset-4"
                 onClick={() => {
                   // Cookie preferences modal would open here
-                  console.log('Manage cookie preferences');
                 }}
               >
                 Manage Cookies

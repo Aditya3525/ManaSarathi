@@ -352,7 +352,6 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
     }
   ) => {
     if (messagePayload.conversationId && messagePayload.conversationId !== currentConversationId) {
-      console.log('📝 Setting conversation ID:', messagePayload.conversationId);
       setCurrentConversationId(messagePayload.conversationId);
     }
 
@@ -442,13 +441,11 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
 
     try {
       const targetConversationId = options?.conversationId ?? currentConversationId ?? undefined;
-      console.log('🤖 Sending message to chat API:', messageContent, 'conversationId:', targetConversationId);
 
       const sendWithLegacyEndpoint = async () => {
         const response = await chatApi.sendMessage(messageContent, targetConversationId, {
           simpleLanguage: accessibilitySettings.simpleLanguage,
         });
-        console.log('📥 Chat API response:', response);
 
         if (response.success && response.data) {
           applyChatPayload(response.data, { enableTypewriter: true });

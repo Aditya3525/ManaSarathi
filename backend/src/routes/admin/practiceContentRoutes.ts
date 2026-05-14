@@ -56,9 +56,6 @@ export const createPracticeContentRoutes = ({
   // Create practice (admin only)
   router.post('/practices', requireAdmin, async (req, res) => {
     try {
-      // Log incoming request for debugging
-      console.log('Practice creation request body:', JSON.stringify(req.body, null, 2));
-
       // Validate request body
       const { error, value } = practiceValidationSchema.validate(req.body, { abortEarly: false });
       if (error) {

@@ -161,11 +161,9 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
 
   // Fetch full YouTube metadata (title, description, thumbnail, duration)
   const fetchYouTubeFull = async (id: string, force = false) => {
-    console.log('fetchYouTubeFull called with id:', id, 'force:', force);
     setMetaLoading(true);
     try {
       const resp = await adminFetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
-      console.log('Metadata response status:', resp.status);
       if (!resp.ok) {
         let msg = `Metadata request failed (${resp.status})`;
         try {
@@ -177,12 +175,10 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
         return;
       }
       const json = await resp.json();
-      console.log('Metadata response:', json);
       if (!json.success) {
         push({ type: 'error', title: 'YouTube Metadata', description: json.error || 'Failed to fetch video data' });
         return;
       }
-      console.log('Setting form data with duration:', json.durationMinutes, 'current duration:', formData.duration);
       setFormData(prev => ({
         ...prev,
         title: prev.title?.trim() ? prev.title : (json.title || prev.title),
@@ -205,7 +201,6 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
   const lastFetchedId = useRef<string>('');
   useEffect(() => {
     const raw = youtubeInput.trim();
-    console.log('YouTube URL changed:', raw);
     if (!raw) {
       lastFetchedId.current = '';
       return;
@@ -213,7 +208,6 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
     if (ytDebounceRef.current) clearTimeout(ytDebounceRef.current);
     ytDebounceRef.current = setTimeout(() => {
       const id = extractYouTubeId(raw);
-      console.log('Extracted YouTube ID:', id);
       if (!id) return;
       if (lastFetchedId.current === id) return; // avoid duplicate fetch
       lastFetchedId.current = id;
@@ -452,8 +446,6 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
       if (Array.isArray(finalPayload.contraindications) && finalPayload.contraindications.length === 0) {
         delete finalPayload.contraindications;
       }
-
-      console.log('Sending practice payload:', JSON.stringify(finalPayload, null, 2));
 
       const response = await adminFetch(url, {
         method,

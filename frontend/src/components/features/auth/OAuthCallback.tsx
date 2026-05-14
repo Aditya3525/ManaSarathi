@@ -43,12 +43,10 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         if (userDataParam) {
           try {
             googleUserData = JSON.parse(userDataParam);
-            console.log('Google User Data:', googleUserData);
           } catch (parseError) {
             try {
               // Backward compatibility for legacy callbacks that sent double-encoded payloads.
               googleUserData = JSON.parse(decodeURIComponent(userDataParam));
-              console.log('Google User Data (legacy decode):', googleUserData);
             } catch (legacyParseError) {
               console.error('Error parsing user data:', legacyParseError);
             }
@@ -70,7 +68,6 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         }
 
         const userData = await response.json();
-        console.log('Backend user data:', userData);
 
         // Merge with Google user data if available
         const enhancedUserData = {
@@ -84,8 +81,6 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
           justCreated: googleUserData?.justCreated
         };
 
-        console.log('Enhanced user data for frontend:', enhancedUserData);
-
         // Store token in localStorage
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(enhancedUserData));
@@ -93,8 +88,6 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         setStatus('success');
 
         // Determine the flow based on redirect parameter
-        console.log('OAuth routing decision:', { redirectTo, needsSetup, hasPassword: enhancedUserData.hasPassword, isOnboarded: enhancedUserData.isOnboarded });
-
         // If backend says dashboard but client thinks needs setup due to stale params, trust backend flags
         switch (redirectTo) {
           case 'setup-password':

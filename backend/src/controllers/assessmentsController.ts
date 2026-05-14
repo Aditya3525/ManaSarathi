@@ -1543,15 +1543,6 @@ export const submitAssessment = async (req: any, res: Response) => {
         }]
       : [];
 
-    console.log('[Assessment Submission] Building insights with detailed context:', {
-      userId,
-      assessmentType,
-      hasResponseDetails: Array.isArray(responseDetails) && responseDetails.length > 0,
-      responseDetailsCount: responseDetails?.length || 0,
-      detailedContextCount: detailedContext.length,
-      sampleResponse: detailedContext[0]?.responses?.[0]
-    });
-
     const insightsPayload = await buildAssessmentInsights(
       assessments,
       {

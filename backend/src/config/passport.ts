@@ -21,14 +21,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     scope: ['profile', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
     try {
-      console.log('Google Profile Data:', {
-        id: profile.id,
-        displayName: profile.displayName,
-        emails: profile.emails,
-        photos: profile.photos,
-        name: profile.name
-      });
-
     const email = (profile.emails?.[0]?.value || '').trim().toLowerCase();
     if (!email) {
       return done(new Error('Google account did not provide an email address'));

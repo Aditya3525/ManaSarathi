@@ -339,7 +339,6 @@ export function useDashboardWebSocket() {
 
     ws.onopen = () => {
       setIsConnected(true);
-      console.log('[Dashboard] WebSocket connected');
     };
 
     ws.onmessage = (event) => {
@@ -357,8 +356,6 @@ export function useDashboardWebSocket() {
           case 'assessment_completed':
             queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
             break;
-          default:
-            console.log('[Dashboard] Unknown update type:', data.type);
         }
 
         setLastUpdate(new Date());
@@ -374,7 +371,6 @@ export function useDashboardWebSocket() {
 
     ws.onclose = () => {
       setIsConnected(false);
-      console.log('[Dashboard] WebSocket disconnected');
     };
 
     return () => {

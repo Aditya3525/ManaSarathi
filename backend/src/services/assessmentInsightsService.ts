@@ -717,14 +717,6 @@ async function generateAISummary(
 
   const fullContext = `${prompt}\n\nAssessments:\n${lines}${anxietyBreakdownContext ? `\n\n${anxietyBreakdownContext}` : ''}${detailSections ? `\n\nHighlights from recent responses:\n${detailSections}` : ''}`;
 
-  console.log('[AI Summary] Generating AI summary with context:', {
-    userName,
-    assessmentCount: summaryEntries.length,
-    hasDetailedAssessments: detailedAssessments.length > 0,
-    detailSectionsLength: detailSections?.length || 0,
-    fullContextPreview: fullContext.substring(0, 200)
-  });
-
   try {
     const response = await llmService.generateResponse([
       { role: 'system', content: 'You are a licensed wellbeing coach speaking in a supportive, empowering tone. Avoid making medical diagnoses, refrain from apologising for being an AI, and keep language strengths-based. If acute risk is detected, calmly recommend contacting a professional or emergency services.' },
@@ -738,18 +730,9 @@ async function generateAISummary(
       model: 'gpt-oss:20b-cloud'
     });
 
-    console.log('[AI Summary] LLM response:', {
-      hasResponse: !!response,
-      hasContent: !!response?.content,
-      contentPreview: response?.content?.substring(0, 100),
-      isFallback: shouldUseFallbackSummary(response?.content)
-    });
-
     if (response?.content && !shouldUseFallbackSummary(response.content)) {
       return response.content.trim();
     }
-
-    console.log('[AI Summary] Using fallback due to invalid response');
   } catch (error) {
     console.error('[AI Summary] LLM service error:', error);
     // Fall back to heuristic summary below

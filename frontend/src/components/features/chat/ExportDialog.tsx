@@ -40,7 +40,6 @@ export function ExportDialog({
   const exportMutation = useExportConversation();
 
   const handleFormatChange = (val: string) => {
-    console.log('Format changing to:', val);
     setFormat(val as ExportFormat);
   };
 

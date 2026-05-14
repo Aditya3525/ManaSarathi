@@ -66,9 +66,6 @@ export class GeminiProvider extends BaseAIProvider {
             },
           ],
         });
-
-        console.log(`[Gemini] Generating response with ${messages.length} messages...`);
-
         // Extract system prompt from incoming messages if present (injected by chatService),
         // otherwise fall back to the base provider's lightweight prompt.
         let systemPrompt: string;
@@ -88,10 +85,6 @@ export class GeminiProvider extends BaseAIProvider {
         const result = await model.generateContent(conversationHistory);
         const response = await result.response;
         
-        // Log full response for debugging
-        console.log('[Gemini] Response candidates:', response.candidates?.length || 0);
-        console.log('[Gemini] Prompt feedback:', response.promptFeedback);
-        
         // Check if response was blocked
         if (response.promptFeedback?.blockReason) {
           console.error(`[Gemini] Response blocked: ${response.promptFeedback.blockReason}`);
@@ -101,7 +94,6 @@ export class GeminiProvider extends BaseAIProvider {
         // Check if we have candidates
         if (!response.candidates || response.candidates.length === 0) {
           console.error('[Gemini] No candidates in response');
-          console.error('[Gemini] Full response:', JSON.stringify(response, null, 2));
           throw new Error('No response candidates from Gemini');
         }
         
@@ -111,19 +103,15 @@ export class GeminiProvider extends BaseAIProvider {
           text = response.text();
         } catch (textError: any) {
           console.error('[Gemini] Error calling response.text():', textError.message);
-          console.error('[Gemini] First candidate:', JSON.stringify(response.candidates[0], null, 2));
           throw new Error(`Failed to extract text from Gemini response: ${textError.message}`);
         }
 
         if (!text || text.trim().length === 0) {
           console.error('[Gemini] Empty text in response');
-          console.error('[Gemini] Response object:', JSON.stringify(response, null, 2));
           throw new Error('Empty response from Gemini');
         }
 
         const processingTime = Date.now() - startTime;
-
-        console.log(`[Gemini] Successfully generated response in ${processingTime}ms`);
 
         return {
           content: text.trim(),
