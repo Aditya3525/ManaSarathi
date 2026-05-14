@@ -65,71 +65,78 @@
         },
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) {
+            const normalizedId = id.replace(/\\/g, '/');
+
+            if (!normalizedId.includes('/node_modules/')) {
               return undefined;
             }
 
-            if (id.includes('react') || id.includes('scheduler')) {
+            // Keep core React isolated to avoid circular vendor chunk deps.
+            if (
+              normalizedId.includes('/node_modules/react/') ||
+              normalizedId.includes('/node_modules/react-dom/') ||
+              normalizedId.includes('/node_modules/scheduler/')
+            ) {
               return 'vendor-react';
             }
 
-            if (id.includes('@radix-ui')) {
+            if (normalizedId.includes('/node_modules/@radix-ui/')) {
               return 'vendor-radix';
             }
 
-            if (id.includes('recharts') || id.includes('d3-')) {
+            if (normalizedId.includes('recharts') || normalizedId.includes('d3-')) {
               return 'vendor-charts';
             }
 
-            if (id.includes('jspdf') || id.includes('html2canvas')) {
+            if (normalizedId.includes('jspdf') || normalizedId.includes('html2canvas')) {
               return 'vendor-export';
             }
 
-            if (id.includes('lucide-react')) {
+            if (normalizedId.includes('lucide-react')) {
               return 'vendor-icons';
             }
 
-            if (id.includes('react-syntax-highlighter')) {
+            if (normalizedId.includes('react-syntax-highlighter')) {
               return 'vendor-highlight';
             }
 
-            if (id.includes('date-fns') || id.includes('react-day-picker')) {
+            if (normalizedId.includes('date-fns') || normalizedId.includes('react-day-picker')) {
               return 'vendor-date';
             }
 
-            if (id.includes('i18next') || id.includes('react-i18next')) {
+            if (normalizedId.includes('i18next') || normalizedId.includes('react-i18next')) {
               return 'vendor-i18n';
             }
 
-            if (id.includes('@dnd-kit')) {
+            if (normalizedId.includes('@dnd-kit')) {
               return 'vendor-dnd';
             }
 
-            if (id.includes('embla-carousel')) {
+            if (normalizedId.includes('embla-carousel')) {
               return 'vendor-carousel';
             }
 
-            if (id.includes('driver.js')) {
+            if (normalizedId.includes('driver.js')) {
               return 'vendor-tour';
             }
 
-            if (id.includes('axios')) {
+            if (normalizedId.includes('axios')) {
               return 'vendor-http';
             }
 
-            if (id.includes('zustand')) {
+            if (normalizedId.includes('zustand')) {
               return 'vendor-state';
             }
 
-            if (id.includes('cmdk') || id.includes('sonner') || id.includes('vaul')) {
+            if (normalizedId.includes('cmdk') || normalizedId.includes('sonner') || normalizedId.includes('vaul')) {
               return 'vendor-ui';
             }
 
-            if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) {
+            if (normalizedId.includes('react-markdown') || normalizedId.includes('remark-') || normalizedId.includes('rehype-')) {
               return 'vendor-markdown';
             }
 
-            if (id.includes('@tanstack')) {
+            if (normalizedId.includes('@tanstack')) {
               return 'vendor-query';
             }
 

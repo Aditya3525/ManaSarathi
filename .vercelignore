@@ -1,0 +1,14 @@
+**/node_modules
+**/.cache
+**/.next
+**/.turbo
+**/dist
+**/build
+backend/prisma/dev.db
+graphify-out/
+tmp_pdf_review_tool/
+tools/
+mobile/
+*.pdf
+*.doc
+*.docx
