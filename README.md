@@ -348,7 +348,7 @@ eas submit --platform android                    # Submit to Play Store
 - Set strong `JWT_SECRET` and `SESSION_SECRET`
 - Set `FRONTEND_URL` to your Vercel production URL
 - Set `VITE_API_URL` in Vercel to your Render backend URL
-- Configure strict CORS origins
+- Configure strict CORS origins; use `ADDITIONAL_CORS_ORIGINS` for explicit staging/preview URLs
 - Force HTTPS
 - Set `NODE_ENV=production`
 

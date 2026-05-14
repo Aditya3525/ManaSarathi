@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import Joi from 'joi';
 import { prisma } from '../config/database';
 import { getJwtSecret } from '../config/auth';
+import { isAllowedFrontendOrigin } from '../config/allowedOrigins';
 import { 
   AppError,
   NotFoundError, 
@@ -80,37 +81,6 @@ const buildVerificationRedirectUrl = (status: 'success' | 'expired' | 'invalid',
   }
 
   return `${getFrontendBaseUrl()}/user_login?${params.toString()}`;
-};
-
-const isAllowedFrontendOrigin = (origin: string): boolean => {
-  const normalizedOrigin = origin.replace(/\/+$/, '');
-  const configuredFrontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
-
-  if (configuredFrontendUrl && normalizedOrigin === configuredFrontendUrl) {
-    return true;
-  }
-
-  try {
-    const parsed = new URL(normalizedOrigin);
-    const protocol = parsed.protocol.toLowerCase();
-    const hostname = parsed.hostname.toLowerCase();
-
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return protocol === 'http:' || protocol === 'https:';
-    }
-
-    if (protocol !== 'https:') {
-      return false;
-    }
-
-    return (
-      hostname.endsWith('.vercel.app') ||
-      hostname === 'manasarthi.app' ||
-      hostname === 'manasarthi-frontend.onrender.com'
-    );
-  } catch {
-    return false;
-  }
 };
 
 const getOAuthOriginFromState = (req: Request): string | null => {

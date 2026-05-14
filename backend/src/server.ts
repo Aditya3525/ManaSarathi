@@ -43,8 +43,10 @@ import privacyRoutes from './routes/privacy';
 import prisma from './config/database';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { noStoreApiResponses } from './middleware/noStoreApi';
 import { systemHealthMiddleware, startHealthMonitoring } from './middleware/systemHealthMiddleware';
 import { getSessionSecret } from './config/auth';
+import { getAllowedProductionOrigins, isAllowedFrontendOrigin } from './config/allowedOrigins';
 import { logger, refreshLogLevelFromEnv } from './utils/logger';
 import { llmService } from './services/llmProvider';
 
@@ -111,25 +113,20 @@ app.use((req, res, next) => {
 // CORS must come before rate limiter so rate-limited 429 responses still carry CORS headers
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      process.env.MOBILE_URL || 'http://localhost:8081',
-      'https://manasarthi-frontend.onrender.com',
-      // Allow Expo Go and mobile device access
-      /^https?:\/\/192\.168\.\d+\.\d+/,
-      /^https?:\/\/10\.\d+\.\d+\.\d+/,
-      /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/,
-      // Allow all Vercel preview and production deployments
-      /\.vercel\.app$/,
-      // Allow the production mobile app (native apps send no Origin)
-      'https://manasarthi.app',
-      'https://api.manasarthi.app',
-    ].filter(Boolean) as (string | RegExp)[]
+    ? (origin, callback) => {
+      if (!origin || isAllowedFrontendOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS origin not allowed: ${origin}`));
+    }
     : true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Platform'],
 }));
+
+logger.info({ origins: getAllowedProductionOrigins() }, 'configured production CORS origins');
 
 // Rate limiter after CORS so 429 responses still carry CORS headers
 if (process.env.NODE_ENV === 'production') {
@@ -155,6 +152,7 @@ app.use(passport.session());
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(noStoreApiResponses);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');

@@ -30,45 +30,13 @@ import {
   updateProfileSchema,
 } from '../api/validators';
 import { prisma } from '../config/database';
+import { isAllowedFrontendOrigin, normalizeOrigin } from '../config/allowedOrigins';
 
 const router = express.Router();
 
-const normalizeUrl = (value: string): string => value.replace(/\/+$/, '');
-
-const isAllowedFrontendOrigin = (origin: string): boolean => {
-  const normalizedOrigin = normalizeUrl(origin);
-  const configuredFrontendUrl = process.env.FRONTEND_URL ? normalizeUrl(process.env.FRONTEND_URL) : '';
-
-  if (configuredFrontendUrl && normalizedOrigin === configuredFrontendUrl) {
-    return true;
-  }
-
-  try {
-    const parsed = new URL(normalizedOrigin);
-    const protocol = parsed.protocol.toLowerCase();
-    const hostname = parsed.hostname.toLowerCase();
-
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return protocol === 'http:' || protocol === 'https:';
-    }
-
-    if (protocol !== 'https:') {
-      return false;
-    }
-
-    return (
-      hostname.endsWith('.vercel.app') ||
-      hostname === 'manasarthi.app' ||
-      hostname === 'manasarthi-frontend.onrender.com'
-    );
-  } catch {
-    return false;
-  }
-};
-
 const extractOrigin = (value: string): string => {
   try {
-    return normalizeUrl(new URL(value).origin);
+    return normalizeOrigin(new URL(value).origin);
   } catch {
     return '';
   }

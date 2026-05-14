@@ -215,13 +215,13 @@ router.get('/summary', async (req: Request, res: Response) => {
 
     const ifNoneMatch = req.headers['if-none-match'];
     if (typeof ifNoneMatch === 'string' && ifNoneMatch === etag) {
-      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Vary', 'Authorization');
       res.setHeader('ETag', etag);
       return res.status(304).end();
     }
 
-    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Vary', 'Authorization');
     res.setHeader('ETag', etag);
     res.type('application/json').send(serializedSummary);
