@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
+import { MediaPlayer } from '../../common/MediaPlayer';
 import {
   Dialog,
   DialogContent
@@ -138,6 +139,7 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
   const isVideo = media?.kind === 'video' && !media.youtubeId;
   const isYouTube = media?.kind === 'video' && !!media.youtubeId;
   const isAudio = media?.kind === 'audio';
+  const useSharedVideoPlayer = isVideo || isYouTube;
   const isTextualItem = item?.displayType === 'article' || item?.displayType === 'story' || item?.displayType === 'resource';
   const textualBody = typeof item?.body === 'string' ? item.body.trim() : '';
   const isTextBodyUrl = isProbablyUrl(textualBody);
@@ -386,7 +388,22 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
               )}
 
               {/* --- VIDEO PLAYER --- */}
-              {isVideo && media?.src ? (
+              {useSharedVideoPlayer && (media?.src || media?.youtubeId) ? (
+                <div className="h-full w-full">
+                  <MediaPlayer
+                    videoUrl={!isYouTube ? media?.src : undefined}
+                    youtubeUrl={media?.youtubeId || undefined}
+                    poster={media?.poster ?? item.thumbnail}
+                    title={item.title}
+                    artist={item.author || undefined}
+                    autoPlay
+                    variant="full"
+                    fillScreen
+                  />
+                </div>
+              ) : null}
+
+              {!useSharedVideoPlayer && isVideo && media?.src ? (
                 <>
                   <video
                     ref={videoRef}
@@ -689,7 +706,7 @@ export function MediaPlayerDialog({ item, open, onOpenChange, showBreathingGuide
               ) : null}
 
               {/* --- YOUTUBE PLAYER --- */}
-              {isYouTube && (
+              {!useSharedVideoPlayer && isYouTube && (
                 <div className="relative w-full h-full bg-black">
                   <iframe
                     className="w-full h-full"

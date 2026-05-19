@@ -17,7 +17,6 @@ import { STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_REGEX, isStrongPassword } from
 
 // Validation schemas
 const registerSchema = Joi.object({
-  name: Joi.string().min(2).max(50).required(),
   email: Joi.string().email().required(),
   password: Joi.string().pattern(STRONG_PASSWORD_REGEX).required().messages({
     'string.pattern.base': STRONG_PASSWORD_MESSAGE,
@@ -166,6 +165,7 @@ export const googleAuthSuccess = async (req: Request, res: Response) => {
         emergencyPhone: true,
         dataConsent: true,
         clinicianSharing: true,
+        isPremium: true,
         createdAt: true,
         updatedAt: true,
         password: true,
@@ -211,6 +211,7 @@ export const googleAuthSuccess = async (req: Request, res: Response) => {
       emergencyPhone: canonicalUser.emergencyPhone,
       dataConsent: canonicalUser.dataConsent,
       clinicianSharing: canonicalUser.clinicianSharing,
+      isPremium: canonicalUser.isPremium,
       createdAt: canonicalUser.createdAt,
       updatedAt: canonicalUser.updatedAt,
     };
@@ -252,7 +253,7 @@ export const register = async (req: Request, res: Response) => {
       throw new BadRequestError(error.details[0].message);
     }
 
-    const { name, email, password } = req.body;
+    const { email, password } = req.body;
     const emailValidation = validateRegistrationEmail(email);
     if (!emailValidation.isValid) {
       throw new BadRequestError(emailValidation.message || 'Invalid email address');
@@ -272,6 +273,8 @@ export const register = async (req: Request, res: Response) => {
     // Hash password
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
+
+    const name = normalizedEmail.split('@')[0];
 
     // Create user
     const createdUser = await prisma.user.create({

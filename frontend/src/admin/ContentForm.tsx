@@ -379,7 +379,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         title: formData.title,
         type: formData.type,
         category: formData.category || 'General',
-        approach: formData.approach || 'all',
+        approach: formData.approach || 'hybrid',
         content: mediaContent,
         description: formData.description,
         youtubeUrl: updated.youtubeUrl || (youtubeVideoId ?? formData.youtubeUrl),
@@ -475,17 +475,16 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         <div className="space-y-2">
           <Label htmlFor="approach">Approach</Label>
           <Select
-            value={formData.approach || 'all'}
+            value={formData.approach || 'hybrid'}
             onValueChange={(value) => handleInputChange('approach', value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select approach" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Approaches</SelectItem>
               <SelectItem value="western">Western</SelectItem>
               <SelectItem value="eastern">Eastern</SelectItem>
-              <SelectItem value="hybrid">Hybrid</SelectItem>
+              <SelectItem value="hybrid">Hybrid (All)</SelectItem>
             </SelectContent>
           </Select>
         </div>

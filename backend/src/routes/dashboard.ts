@@ -118,6 +118,9 @@ router.get('/summary', async (req: Request, res: Response) => {
       }
     }
 
+    const currentMood = recentMoods[0]?.mood ?? null;
+    const moodTrend = deriveMoodTrend(recentMoods);
+
     // Get recommended practice
     let recommendedPractice = null;
     if (assessmentInsights && user.approach) {
@@ -132,7 +135,20 @@ router.get('/summary', async (req: Request, res: Response) => {
             byType: assessmentInsights.insights.byType,
             recommendations: []
           },
-          wellnessScore: assessmentInsights.insights.wellnessScore?.value
+          wellnessScore: assessmentInsights.insights.wellnessScore?.value,
+          wellbeingTrend: assessmentInsights.insights.overallTrend,
+          currentMood,
+          moodTrend,
+          recentMoodEntries: recentMoods.map((entry) => ({
+            mood: entry.mood,
+            createdAt: entry.createdAt,
+          })),
+          recentActivity: {
+            weeklyPractices,
+            weeklyMoodEntries,
+            weeklyAssessments,
+            currentStreak,
+          },
         };
 
         const recommendations = await recommendationService.getContentRecommendations({
@@ -200,6 +216,7 @@ router.get('/summary', async (req: Request, res: Response) => {
         createdAt: mood.createdAt.toISOString()
       })),
       recommendedPractice: recommendedPractice ? {
+        id: recommendedPractice.id,
         title: recommendedPractice.title,
         description: recommendedPractice.description,
         type: recommendedPractice.type,
@@ -633,12 +650,33 @@ router.get('/recommended-practice', async (req: Request, res: Response) => {
       return res.json({ recommendedPractice: null });
     }
 
-    // Get assessment insights
-    const assessments = await prisma.assessmentResult.findMany({
-      where: { userId },
-      orderBy: { completedAt: 'desc' },
-      take: 10
-    });
+    // Get assessment insights and recent activity context
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [assessments, recentMoodEntries, weeklyPractices, weeklyMoodEntries] = await Promise.all([
+      prisma.assessmentResult.findMany({
+        where: { userId },
+        orderBy: { completedAt: 'desc' },
+        take: 10
+      }),
+      prisma.moodEntry.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 7
+      }),
+      prisma.userPlanModule.count({
+        where: {
+          userId,
+          completed: true,
+          completedAt: { gte: weekAgo }
+        }
+      }),
+      prisma.moodEntry.count({
+        where: {
+          userId,
+          createdAt: { gte: weekAgo }
+        }
+      })
+    ]);
 
     if (assessments.length === 0) {
       return res.json({ recommendedPractice: null });
@@ -659,7 +697,22 @@ router.get('/recommended-practice', async (req: Request, res: Response) => {
         byType: assessmentInsights.insights.byType,
         recommendations: []
       },
-      wellnessScore: assessmentInsights.insights.wellnessScore?.value
+      wellnessScore: assessmentInsights.insights.wellnessScore?.value,
+      wellbeingTrend: assessmentInsights.insights.overallTrend,
+      currentMood: recentMoodEntries[0]?.mood ?? null,
+      moodTrend: deriveMoodTrend(recentMoodEntries),
+      recentMoodEntries: recentMoodEntries.map((entry) => ({
+        mood: entry.mood,
+        emotion: entry.emotion,
+        emotionGroup: entry.emotionGroup,
+        intensity: entry.intensity,
+        trigger: entry.trigger,
+        createdAt: entry.createdAt,
+      })),
+      recentActivity: {
+        weeklyPractices,
+        weeklyMoodEntries,
+      },
     };
 
     const recommendations = await recommendationService.getContentRecommendations({
@@ -1363,6 +1416,46 @@ function calculateMoodDistribution(moodEntries: any[]): Record<string, number> {
     distribution[entry.mood] = (distribution[entry.mood] || 0) + 1;
   });
   return distribution;
+}
+
+function deriveMoodTrend(moodEntries: Array<{ mood?: string | null }>): string {
+  if (moodEntries.length < 2) {
+    return 'stable';
+  }
+
+  const scoreByMood: Record<string, number> = {
+    anxious: -2,
+    struggling: -2,
+    sad: -2,
+    overwhelmed: -2,
+    low: -1,
+    okay: 0,
+    neutral: 0,
+    good: 1,
+    calm: 1,
+    great: 2,
+    happy: 2,
+  };
+
+  const values = moodEntries
+    .map((entry) => {
+      const normalized = String(entry.mood || '').trim().toLowerCase();
+      return normalized in scoreByMood ? scoreByMood[normalized] : 0;
+    });
+
+  const latest = values[0] ?? 0;
+  const priorAverage = values.slice(1).reduce((sum, value) => sum + value, 0) / Math.max(1, values.length - 1);
+  const delta = latest - priorAverage;
+
+  if (delta >= 1) {
+    return 'improving';
+  }
+
+  if (delta <= -1) {
+    return 'declining';
+  }
+
+  return 'stable';
 }
 
 function getStreakMessage(streak: number): string {

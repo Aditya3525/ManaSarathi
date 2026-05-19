@@ -221,18 +221,18 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background page-enter">
+    <div className="min-h-screen overflow-x-clip bg-background page-enter">
       {/* Crisis Banner - Always Visible */}
-      <div className="bg-gradient-to-r from-red-700 via-rose-600 to-orange-500 text-white p-4 shadow-lg">
-        <div className="max-w-6xl mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+      <div className="bg-gradient-to-r from-red-700 via-rose-600 to-orange-500 p-4 text-white shadow-lg">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center">
             <AlertTriangle className="h-6 w-6" />
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold">If you are in immediate danger or having thoughts of self-harm:</p>
               <p className="text-sm">Call 988 (US) • Text HOME to 741741 • Call 911 for emergencies</p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="secondary"
               onClick={() => window.location.replace('https://www.google.com')}
@@ -254,9 +254,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
       </div>
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
+      <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-4 sm:p-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
             <Button
               variant="ghost"
               size="sm"
@@ -276,10 +276,10 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-4 sm:p-6">
+      <div className="mx-auto max-w-6xl p-4 sm:p-6">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'crisis' | 'faq' | 'therapists' | 'support')} className="space-y-6">
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <TabsList className="inline-flex w-auto min-w-full justify-start gap-1 sm:grid sm:w-full sm:grid-cols-4">
+            <TabsList className="inline-flex min-w-full w-auto justify-start gap-1 sm:grid sm:w-full sm:grid-cols-4">
               <TabsTrigger value="crisis" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Crisis Resources</TabsTrigger>
               <TabsTrigger value="faq" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">FAQ</TabsTrigger>
               <TabsTrigger value="therapists" className="flex-shrink-0 px-3 min-h-[44px] sm:px-2">Find Therapist</TabsTrigger>
@@ -307,16 +307,16 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : (
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {crisisResources.map((resource) => (
                       <Card key={resource.id} className={`border-2 ${resource.type === 'HOTLINE' ? 'border-red-200 bg-red-50' :
                         resource.type === 'TEXT' ? 'border-orange-200 bg-orange-50' :
                           'border-blue-200 bg-blue-50'
                         }`}>
                         <CardContent className="p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-semibold">{resource.name}</h3>
-                            <div className="flex gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <h3 className="min-w-0 font-semibold break-words">{resource.name}</h3>
+                            <div className="flex flex-wrap gap-2">
                               {resource.available24x7 && (
                                 <Badge variant="secondary" className="text-xs">
                                   24/7
@@ -384,7 +384,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
             </Card>
 
             {/* Additional Resources */}
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid gap-6 md:grid-cols-3">
               <Card>
                 <CardContent className="p-6 text-center space-y-3">
                   <Heart className="h-8 w-8 text-primary mx-auto" />
@@ -488,8 +488,8 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                             onClick={() => handleFaqClick(faq.id)}
                           >
                             <AccordionTrigger className="text-left">
-                              <div className="flex items-center justify-between w-full pr-4">
-                                <span>{faq.question}</span>
+                              <div className="flex w-full items-start justify-between gap-3 pr-4">
+                                <span className="min-w-0 break-words text-left">{faq.question}</span>
                                 <Badge variant="outline" className="ml-2">
                                   {faq.category}
                                 </Badge>
@@ -508,9 +508,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                                   ))}
                                 </div>
                               )}
-                              <div className="flex items-center gap-4 pt-2 border-t">
+                              <div className="flex flex-col gap-3 border-t pt-2 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="text-sm text-muted-foreground">Was this helpful?</span>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -610,7 +610,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
             {/* My Bookings Sub-Tab */}
             {therapistSubTab === 'bookings' && (
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <MyBookings />
                 </CardContent>
               </Card>
@@ -664,7 +664,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                     {filteredTherapists.map((therapist) => (
                       <Card key={therapist.id} className="cursor-pointer transition-all hover:shadow-md hover:border-primary/20" onClick={() => handleViewProfile(therapist)}>
                         <CardContent className="p-6">
-                          <div className="flex gap-4">
+                          <div className="flex flex-col gap-4 sm:flex-row">
                             {therapist.profileImageUrl ? (
                               <img
                                 src={therapist.profileImageUrl}
@@ -677,9 +677,9 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                               </div>
                             )}
 
-                            <div className="flex-1 space-y-3">
-                              <div className="flex items-start justify-between">
-                                <div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
                                   <div className="flex items-center gap-2">
                                     <h3 className="font-semibold">{therapist.name}</h3>
                                     {therapist.isVerified && (
@@ -688,10 +688,10 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="break-words text-sm text-muted-foreground">
                                     {therapist.title} • {therapist.credential}
                                   </p>
-                                  <div className="flex items-center gap-2 mt-1">
+                                  <div className="mt-1 flex flex-wrap items-center gap-2">
                                     <div className="flex items-center gap-1">
                                       <Star className="h-4 w-4 fill-current text-yellow-500" />
                                       <span className="text-sm">{therapist.rating.toFixed(1)}</span>
@@ -703,7 +703,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                                     </div>
                                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                       <MapPin className="h-3 w-3" />
-                                      <span>{therapist.city}, {therapist.state}</span>
+                                      <span className="break-words">{therapist.city}, {therapist.state}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -725,8 +725,8 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                                 ))}
                               </div>
 
-                              <div className="flex items-center justify-between">
-                                <div className="flex gap-2">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-wrap gap-2">
                                   {therapist.phone && (
                                     <Button
                                       size="sm"
@@ -808,7 +808,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
 
           {/* Contact Support Tab */}
           <TabsContent value="support" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -816,7 +816,7 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                     Contact Support
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 p-4 sm:p-6">
                   <p className="text-muted-foreground">
                     Need help with the app or have questions about your wellbeing journey?
                     Our support team is here to help.
@@ -901,32 +901,32 @@ export function HelpSafety({ onNavigate, userRegion }: HelpSafetyProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
                       <Mail className="h-5 w-5 text-primary" />
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium">Email Support</p>
                         <p className="text-sm text-muted-foreground">support@wellbeingai.com</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
                       <MessageSquare className="h-5 w-5 text-primary" />
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium">Live Chat</p>
                         <p className="text-sm text-muted-foreground">Available Mon-Fri, 9AM-6PM PST</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
                       <BookOpen className="h-5 w-5 text-primary" />
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium">Help Center</p>
                         <p className="text-sm text-muted-foreground">Comprehensive guides and tutorials</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t">
+                  <div className="border-t pt-4">
                     <p className="text-sm text-muted-foreground">
                       <strong>Response Times:</strong><br />
                       • General inquiries: Within 24 hours<br />

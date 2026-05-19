@@ -92,11 +92,10 @@ const normalizePracticeApproach = (value?: string): Practice['approach'] => {
     case 'eastern':
       return 'Eastern';
     case 'hybrid':
-      return 'Hybrid';
     case 'all':
-      return 'All';
+      return 'Hybrid';
     default:
-      return 'All';
+      return 'Hybrid';
   }
 };
 
@@ -163,7 +162,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
-  const [filterApproach, setFilterApproach] = useState<string>('all');
+  const [filterApproach, setFilterApproach] = useState<string>('Hybrid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const filterGridClasses = 'grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4';
 
@@ -401,7 +400,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
     
     const matchesType = filterType === 'all' || item.type === filterType;
     const matchesLevel = filterLevel === 'all' || (item.level || item.difficulty) === filterLevel;
-    const matchesApproach = filterApproach === 'all' || item.approach === filterApproach;
+    const matchesApproach = filterApproach === 'Hybrid' || item.approach === filterApproach;
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'published' && item.isPublished) ||
                          (filterStatus === 'draft' && !item.isPublished);
@@ -482,14 +481,12 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
             <Select value={filterApproach} onValueChange={setFilterApproach}>
               <SelectTrigger className="h-11">
-                <SelectValue placeholder="All Approaches" />
+                <SelectValue placeholder="Hybrid (All)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Approaches</SelectItem>
                 <SelectItem value="Western">Western</SelectItem>
                 <SelectItem value="Eastern">Eastern</SelectItem>
-                <SelectItem value="Hybrid">Hybrid</SelectItem>
-                <SelectItem value="All">All</SelectItem>
+                <SelectItem value="Hybrid">Hybrid (All)</SelectItem>
               </SelectContent>
             </Select>
 

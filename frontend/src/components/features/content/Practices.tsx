@@ -22,7 +22,7 @@ import {
   List,
   ArrowUp
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiBaseUrl } from '../../../config/apiConfig';
@@ -35,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
 import { Progress } from '../../ui/progress';
 import { ResponsiveContainer } from '../../ui/responsive-layout';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 import {
   Sheet,
   SheetContent,
@@ -77,7 +78,16 @@ interface PracticeSession {
   isCompleted: boolean;
 }
 
+interface PracticeAutoStartPayload {
+  id?: string | null;
+  title?: string | null;
+  source?: string;
+  createdAt?: number;
+}
+
 type PracticeSortKey = 'recommended' | 'duration' | 'title';
+
+const DASHBOARD_PRACTICE_AUTOSTART_KEY = 'mw-practice-autostart';
 
 const parseStringArray = (raw: unknown): string[] => {
   if (!raw) return [];
@@ -127,6 +137,7 @@ export function Practices({ onNavigate }: PracticesProps) {
   const [practices, setPractices] = useState<Practice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const didAutoStartRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -192,10 +203,9 @@ export function Practices({ onNavigate }: PracticesProps) {
   ];
 
   const approaches = [
-    { id: 'all', label: 'All Approaches', icon: Filter },
     { id: 'Western', label: 'Western', icon: Heart },
     { id: 'Eastern', label: 'Eastern', icon: Waves },
-    { id: 'Hybrid', label: 'Hybrid', icon: Users }
+    { id: 'Hybrid', label: 'Hybrid (All)', icon: Users }
   ];
 
   const difficulties = [
@@ -212,7 +222,7 @@ export function Practices({ onNavigate }: PracticesProps) {
       (selectedDuration === 'medium' && practice.duration > 10 && practice.duration <= 20) ||
       (selectedDuration === 'long' && practice.duration > 20);
     const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(practice.format) || (practice.format === 'Audio/Video' && (selectedFormats.includes('Audio') || selectedFormats.includes('Video')));
-    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes(practice.approach);
+    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes('Hybrid') || selectedApproaches.includes(practice.approach) || practice.approach === 'All' || practice.approach === 'Hybrid';
     const matchesDifficulty = selectedDifficulties.length === 0 || selectedDifficulties.includes(practice.difficulty);
     const matchesSearch = searchQuery.trim() === '' || 
       practice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -287,6 +297,46 @@ export function Practices({ onNavigate }: PracticesProps) {
     setMediaInstanceKey(prev => prev + 1);
     setCurrentSession({ practice, currentTime: 0, duration: practice.duration * 60, isPlaying: true, volume: 0.7, isCompleted: false });
   };
+
+  useEffect(() => {
+    if (didAutoStartRef.current || currentSession || practices.length === 0 || typeof window === 'undefined') {
+      return;
+    }
+
+    const rawPayload = window.sessionStorage.getItem(DASHBOARD_PRACTICE_AUTOSTART_KEY);
+    if (!rawPayload) {
+      return;
+    }
+
+    let payload: PracticeAutoStartPayload | null = null;
+    try {
+      payload = JSON.parse(rawPayload) as PracticeAutoStartPayload;
+    } catch {
+      payload = null;
+    }
+
+    window.sessionStorage.removeItem(DASHBOARD_PRACTICE_AUTOSTART_KEY);
+    didAutoStartRef.current = true;
+
+    if (!payload) {
+      return;
+    }
+
+    const title = payload.title?.trim().toLowerCase();
+    const matchedPractice = practices.find((practice) => {
+      if (payload?.id && practice.id === payload.id) {
+        return true;
+      }
+      if (title && practice.title.trim().toLowerCase() === title) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchedPractice) {
+      startPractice(matchedPractice);
+    }
+  }, [currentSession, practices]);
 
   const completePractice = useCallback(() => {
     if (currentSession) {
@@ -1304,134 +1354,140 @@ export function Practices({ onNavigate }: PracticesProps) {
         
         {/* Mobile List View */}
         {!loading && !error && (device.isMobile || viewMode === 'list') && sortedPractices.length > 0 && (
-          <div className="space-y-3">
-            {sortedPractices.map((practice) => (
-              <Card key={practice.id} className="flex gap-3 p-3 hover:shadow-md transition-shadow">
-                {/* Thumbnail */}
-                <div className="relative flex-shrink-0 w-32 h-20 rounded overflow-hidden">
-                  <ImageWithFallback
-                    src={practice.image}
-                    alt={practice.title}
-                    className="w-full h-full object-cover"
-                  />
-                  
-                  {/* Duration badge */}
-                  <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5">
-                    {practice.duration}min
-                  </Badge>
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0 flex flex-col">
-                  {/* Title */}
-                  <h3 className="font-semibold text-sm line-clamp-2 mb-1">
-                    {practice.title}
-                  </h3>
-                  
-                  {/* Description */}
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                    {practice.description}
-                  </p>
-                  
-                  {/* Meta row */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                    <div className="flex items-center gap-1">
-                      {getTypeIcon(practice.type)}
-                      <span className="capitalize">{practice.type}</span>
+          <StaggerContainer staggerDelay={0.08}>
+            <div className="space-y-3">
+              {sortedPractices.map((practice) => (
+                <StaggerItem key={practice.id}>
+                  <Card className="flex gap-3 p-3 hover:shadow-md transition-shadow">
+                    {/* Thumbnail */}
+                    <div className="relative flex-shrink-0 w-32 h-20 rounded overflow-hidden">
+                      <ImageWithFallback
+                        src={practice.image}
+                        alt={practice.title}
+                        className="w-full h-full object-cover"
+                      />
+                      
+                      {/* Duration badge */}
+                      <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5">
+                        {practice.duration}min
+                      </Badge>
                     </div>
-                    <span>•</span>
-                    <span className={getDifficultyColor(practice.difficulty)}>{practice.difficulty}</span>
-                  </div>
-                  
-                  {/* Tags */}
-                  {(practice.immediateRelief || practice.crisisEligible) && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {practice.immediateRelief && (
-                        <Badge className="bg-rose-100 text-rose-700 text-xs px-1.5 py-0">Quick Relief</Badge>
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      {/* Title */}
+                      <h3 className="font-semibold text-sm line-clamp-2 mb-1">
+                        {practice.title}
+                      </h3>
+                      
+                      {/* Description */}
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                        {practice.description}
+                      </p>
+                      
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                        <div className="flex items-center gap-1">
+                          {getTypeIcon(practice.type)}
+                          <span className="capitalize">{practice.type}</span>
+                        </div>
+                        <span>•</span>
+                        <span className={getDifficultyColor(practice.difficulty)}>{practice.difficulty}</span>
+                      </div>
+                      
+                      {/* Tags */}
+                      {(practice.immediateRelief || practice.crisisEligible) && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {practice.immediateRelief && (
+                            <Badge className="bg-rose-100 text-rose-700 text-xs px-1.5 py-0">Quick Relief</Badge>
+                          )}
+                          {practice.crisisEligible && (
+                            <Badge className="bg-orange-100 text-orange-700 text-xs px-1.5 py-0">Crisis-Safe</Badge>
+                          )}
+                        </div>
                       )}
-                      {practice.crisisEligible && (
-                        <Badge className="bg-orange-100 text-orange-700 text-xs px-1.5 py-0">Crisis-Safe</Badge>
-                      )}
-                    </div>
-                  )}
 
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {practice.tags.slice(0, 2).map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {practice.tags.length > 2 && (
-                      <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                        +{practice.tags.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {/* CTA */}
-                  <Button 
-                    size="sm"
-                    className="w-full mt-auto min-h-[44px]"
-                    onClick={() => startPractice(practice)}
-                  >
-                    <Play className="h-4 w-4 mr-1" />
-                    {t('practices.startPractice')}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {practice.tags.slice(0, 2).map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {practice.tags.length > 2 && (
+                          <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                            +{practice.tags.length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {/* CTA */}
+                      <Button 
+                        size="sm"
+                        className="w-full mt-auto min-h-[44px]"
+                        onClick={() => startPractice(practice)}
+                      >
+                        <Play className="h-4 w-4 mr-1" />
+                        {t('practices.startPractice')}
+                      </Button>
+                    </div>
+                  </Card>
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
         )}
         
         {/* Desktop Grid View */}
         {!loading && !error && !device.isMobile && viewMode === 'grid' && sortedPractices.length > 0 && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedPractices.map((practice) => (
-            <Card key={practice.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="relative">
-                <ImageWithFallback
-                  src={practice.image}
-                  alt={practice.title}
-                  className="w-full h-48 object-cover"
-                />
-                
-                {/* Play overlay */}
-                <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center group">
-                  <Button 
-                    size="lg"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity rounded-full w-16 h-16"
-                    onClick={() => startPractice(practice)}
-                  >
-                    <Play className="h-6 w-6" />
-                  </Button>
-                </div>
-
-                {/* Duration badge */}
-                <Badge className="absolute top-2 left-2 bg-black/70 text-white">
-                  {practice.duration} min
-                </Badge>
-              </div>
-
-              <CardContent className="p-4 space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={getTypeColor(practice.type)}
-                    >
-                      <div className="flex items-center gap-1">
-                        {getTypeIcon(practice.type)}
-                        <span className="capitalize">{practice.type}</span>
-                      </div>
-                    </Badge>
+          <StaggerContainer staggerDelay={0.08}>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sortedPractices.map((practice) => (
+                <StaggerItem key={practice.id}>
+                <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <div className="relative">
+                    <ImageWithFallback
+                      src={practice.image}
+                      alt={practice.title}
+                      className="w-full h-48 object-cover"
+                    />
                     
-                    <Badge 
-                      variant="outline"
-                      className={getDifficultyColor(practice.difficulty)}
-                    >
-                      {practice.difficulty}
+                    {/* Play overlay */}
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center group">
+                      <Button 
+                        size="lg"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity rounded-full w-16 h-16"
+                        onClick={() => startPractice(practice)}
+                      >
+                        <Play className="h-6 w-6" />
+                      </Button>
+                    </div>
+
+                    {/* Duration badge */}
+                    <Badge className="absolute top-2 left-2 bg-black/70 text-white">
+                      {practice.duration} min
                     </Badge>
                   </div>
+
+                  <CardContent className="p-4 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge 
+                          className={getTypeColor(practice.type)}
+                        >
+                          <div className="flex items-center gap-1">
+                            {getTypeIcon(practice.type)}
+                            <span className="capitalize">{practice.type}</span>
+                          </div>
+                        </Badge>
+                        
+                        <Badge 
+                          variant="outline"
+                          className={getDifficultyColor(practice.difficulty)}
+                        >
+                          {practice.difficulty}
+                        </Badge>
+                      </div>
 
                   <h3 className="font-semibold leading-tight">{practice.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -1472,9 +1528,11 @@ export function Practices({ onNavigate }: PracticesProps) {
                   {t('practices.startPractice')}
                 </Button>
               </CardContent>
-            </Card>
-          ))}
-        </div>
+                </Card>
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
         )}
         
         {/* Back to Top Button */}

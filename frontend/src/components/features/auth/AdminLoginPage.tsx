@@ -7,6 +7,8 @@ import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Separator } from '../../ui/separator';
 
+import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD } from './defaultCredentials';
+
 interface AdminLoginPageProps {
   onAdminLogin: (credentials: { email: string; password: string }) => Promise<void> | void;
   authError?: string | null;
@@ -22,8 +24,8 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onNavigateHome,
   onNavigateUserLogin
 }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(DEMO_LOGIN_EMAIL);
+  const [password, setPassword] = useState(DEMO_LOGIN_PASSWORD);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -121,7 +123,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                     autoComplete="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="admin@wellbeingai.com"
+                    placeholder={DEMO_LOGIN_EMAIL}
                     required
                   />
                 </div>
@@ -134,9 +136,9 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                     autoComplete="current-password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Enter your password"
+                    placeholder={DEMO_LOGIN_PASSWORD}
                     required
-                    minLength={10}
+                    minLength={8}
                   />
                 </div>
 

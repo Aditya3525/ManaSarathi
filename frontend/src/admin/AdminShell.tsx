@@ -164,7 +164,7 @@ export function AdminShell({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-muted/30 via-background to-muted/20 text-foreground transition-colors duration-300">
+    <div className="min-h-screen overflow-x-clip bg-gradient-to-br from-muted/30 via-background to-muted/20 text-foreground transition-colors duration-300">
       <a
         href="#admin-main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md"
@@ -185,7 +185,7 @@ export function AdminShell({
       {/* Mobile navigation */}
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 grid grid-cols-[minmax(0,1fr)] lg:hidden">
-          <div className="h-full w-full bg-background shadow-xl animate-in slide-in-from-left duration-300">
+          <div className="h-full w-full overflow-y-auto bg-background shadow-xl animate-in slide-in-from-left duration-300">
             <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-transparent">
               <div className="flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-lg">
@@ -250,7 +250,7 @@ export function AdminShell({
         </div>
       ) : null}
 
-      <div className="container mx-auto flex min-h-screen flex-col px-4 py-4 lg:flex-row lg:gap-8 lg:py-8">
+      <div className="container mx-auto flex min-h-screen min-w-0 flex-col px-4 py-4 lg:flex-row lg:gap-8 lg:py-8">
         {/* Sidebar */}
         <aside className="hidden w-64 shrink-0 lg:block">
           <div className="sticky top-8 rounded-2xl border bg-background/80 backdrop-blur-md shadow-lg transition-all duration-300 hover:shadow-xl">
@@ -326,7 +326,7 @@ export function AdminShell({
         </aside>
 
         {/* Main content */}
-        <main id="admin-main-content" className="flex-1 space-y-4 lg:space-y-6">
+        <main id="admin-main-content" className="min-w-0 flex-1 space-y-4 lg:space-y-6">
           {/* Header */}
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/90 backdrop-blur-sm px-4 py-4 shadow-sm transition-all duration-300 hover:shadow-md sm:px-6">
             <div className="flex items-center gap-3">
@@ -375,7 +375,7 @@ export function AdminShell({
           </header>
 
           {/* Content area */}
-          <div className="rounded-2xl border bg-background/90 backdrop-blur-sm p-4 shadow-sm transition-all duration-300 hover:shadow-md sm:p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="min-w-0 rounded-2xl border bg-background/90 backdrop-blur-sm p-4 shadow-sm transition-all duration-300 hover:shadow-md sm:p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {children}
           </div>
         </main>

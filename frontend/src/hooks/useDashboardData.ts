@@ -79,6 +79,7 @@ export interface MoodEntry {
 }
 
 export interface RecommendedPractice {
+  id?: string;
   title: string;
   description: string | null;
   type: string;

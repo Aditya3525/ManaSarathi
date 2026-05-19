@@ -65,7 +65,7 @@ export function TherapistShell({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50/50 via-background to-teal-50/40 dark:from-emerald-950/20 dark:via-background dark:to-teal-950/20">
+    <div className="min-h-screen overflow-x-clip bg-gradient-to-br from-emerald-50/50 via-background to-teal-50/40 dark:from-emerald-950/20 dark:via-background dark:to-teal-950/20">
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" aria-modal="true" role="dialog">
           <button
@@ -74,7 +74,7 @@ export function TherapistShell({
             aria-label="Close navigation"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative z-10 h-full w-72 bg-background shadow-xl border-r">
+          <div className="relative z-10 h-full w-72 overflow-y-auto bg-background shadow-xl border-r">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-emerald-600" />
@@ -102,7 +102,7 @@ export function TherapistShell({
         </div>
       ) : null}
 
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 lg:flex-row lg:gap-6 lg:px-6 lg:py-6">
+      <div className="mx-auto flex min-h-screen min-w-0 max-w-7xl flex-col px-4 py-4 lg:flex-row lg:gap-6 lg:px-6 lg:py-6">
         <aside className="hidden w-64 shrink-0 lg:block">
           <div className="sticky top-6 rounded-2xl border bg-background/90 shadow-sm backdrop-blur">
             <div className="rounded-t-2xl border-b bg-gradient-to-r from-emerald-600/15 to-teal-500/10 px-4 py-4">
@@ -133,10 +133,10 @@ export function TherapistShell({
           </div>
         </aside>
 
-        <main className="flex-1 space-y-4 lg:space-y-6">
+        <main className="min-w-0 flex-1 space-y-4 lg:space-y-6">
           <header className="rounded-2xl border bg-background/90 px-4 py-4 shadow-sm backdrop-blur sm:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -146,7 +146,7 @@ export function TherapistShell({
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Therapist Dashboard</p>
                   <p className="text-lg font-semibold text-foreground">Care management workspace</p>
                 </div>

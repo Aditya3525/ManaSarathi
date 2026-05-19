@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Toaster as SonnerToaster } from 'sonner';
+import { PageTransition } from './components/ui/motion-wrapper';
 
 
 import { AssessmentList, AssessmentFlow, CombinedAssessmentFlow, InsightsResults, OverallAssessmentInvite, OverallAssessmentSelection, OVERALL_ASSESSMENT_OPTION_IDS } from './components/features/assessment';
@@ -38,7 +39,6 @@ const Practices = React.lazy(() => import('./components/features/content').then(
 const Dashboard = React.lazy(() => import('./components/features/dashboard').then((module) => ({ default: module.Dashboard })));
 const GamesHub = React.lazy(() => import('./components/features/games').then((module) => ({ default: module.GamesHub })));
 const JournalPage = React.lazy(() => import('./components/features/journal').then((module) => ({ default: module.JournalPage })));
-const PersonalizedPlan = React.lazy(() => import('./components/features/plans').then((module) => ({ default: module.PersonalizedPlan })));
 const Progress = React.lazy(() => import('./components/features/profile').then((module) => ({ default: module.Progress })));
 const Profile = React.lazy(() => import('./components/features/profile').then((module) => ({ default: module.Profile })));
 const HelpSafety = React.lazy(() => import('./components/layout').then((module) => ({ default: module.HelpSafety })));
@@ -180,7 +180,6 @@ const PERSISTED_UI_PREFERENCE_KEYS = [
 
 function AppInner() {
   const [currentPage, setCurrentPage] = useState<Page>(() => pathToPage(window.location.pathname));
-  const [pageTransitionClass, setPageTransitionClass] = useState('page-enter-active');
 
   // Auth state from Zustand store
   const user = useAuthStore((state) => state.user);
@@ -277,14 +276,7 @@ function AppInner() {
     if (loadingUser) {
       return;
     }
-
-    setPageTransitionClass('page-enter');
-    const raf = window.requestAnimationFrame(() => {
-      setPageTransitionClass('page-enter-active');
-    });
-
-    return () => window.cancelAnimationFrame(raf);
-  }, [currentPage, loadingUser]);
+  }, [loadingUser]);
 
   const syncAssessments = useCallback(
     async (activeUserId: string | null, updateUserScores = true) => {
@@ -622,7 +614,7 @@ function AppInner() {
     }
   };
 
-  const signUp = async (userData: { name: string; email: string; password: string }) => {
+  const signUp = async (userData: { email: string; password: string }) => {
     try {
       setAuthError(null);
 
@@ -1295,7 +1287,21 @@ function AppInner() {
           />
         );
       case 'plan':
-        return <PersonalizedPlan user={user} onNavigate={navigateTo} />;
+        return (
+          <div className="min-h-screen bg-background flex items-center justify-center px-4">
+            <div className="w-full max-w-xl rounded-xl border bg-card p-8 text-center space-y-4">
+              <h1 className="text-2xl font-semibold">Personalized Plan</h1>
+              <p className="text-muted-foreground text-lg">Coming soon...</p>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+                onClick={() => navigateTo('dashboard')}
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        );
       case 'chatbot':
         return <ResponsiveChatbot user={user} onNavigate={navigateTo} />;
       case 'library':
@@ -1343,7 +1349,7 @@ function AppInner() {
             therapistName={therapistSession.therapistName}
           />
         ) : (
-          <div className="flex items-center justify-center h-screen text-muted-foreground">Loading therapist portal...</div>
+          <div className="flex min-h-screen items-center justify-center px-4 text-center text-muted-foreground">Loading therapist portal...</div>
         );
       default:
         return (
@@ -1363,13 +1369,13 @@ function AppInner() {
   return (
     <div className="min-h-screen bg-background">
       {loadingUser ? (
-        <div className="flex items-center justify-center h-screen text-muted-foreground">Loading...</div>
+        <div className="flex min-h-screen items-center justify-center px-4 text-center text-muted-foreground">Loading...</div>
       ) : (
-        <div key={currentPage} className={pageTransitionClass}>
+        <PageTransition key={currentPage} variant="fade">
           <Suspense fallback={<RouteLoadingFallback />}>
             {renderCurrentPage()}
           </Suspense>
-        </div>
+        </PageTransition>
       )}
     </div>
   );

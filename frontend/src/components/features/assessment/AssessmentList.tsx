@@ -35,6 +35,7 @@ import {
   ResponsiveContainer, 
   ResponsiveCollapsibleSection
 } from '../../ui/responsive-layout';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 
 // Type for available assessment from API
 interface AvailableAssessment {
@@ -390,8 +391,10 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
     };
   });
 
-  // Use dynamic assessments if available, otherwise fallback to hardcoded base assessments
-  const assessmentsSource = dynamicAssessments.length > 0 ? dynamicAssessments : baseAssessments;
+  // Only show assessments that actually exist in the database.
+  // Previously this fell back to hardcoded `baseAssessments`, which showed
+  // phantom entries for templates that hadn't been created yet.
+  const assessmentsSource = dynamicAssessments;
 
   const assessments: AssessmentCardState[] = assessmentsSource.map((assessment) => {
     const typeKey = assessment.typeKey;
@@ -787,9 +790,28 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
           </Card>
 
           {/* Individual Assessment Cards - Mobile optimized */}
-          {filteredAssessments.map((assessment) => (
-            <Card
-              key={assessment.id}
+          {filteredAssessments.length === 0 && !isLoadingAssessments && (
+            <Card className="shadow-sm border-dashed">
+              <CardContent className={device.isMobile ? 'p-6' : 'p-8'}>
+                <div className="flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="p-3 rounded-full bg-muted">
+                    <BarChart3 className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-base">No assessments available yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Assessment templates haven't been created in the system yet. 
+                      You can still take the Basic Overall Assessment above to get your wellness score.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <StaggerContainer staggerDelay={0.12}>
+            {filteredAssessments.map((assessment) => (
+              <StaggerItem key={assessment.id}>
+                <Card
               className={`transition-all shadow-sm ${
                 assessment.completed ? 'border-green-200 bg-green-50/30' : 'hover:border-primary/20'
               }`}
@@ -949,8 +971,10 @@ export function AssessmentList({ onStartAssessment, onStartCombinedAssessment, o
                   </div>
                 </div>
               </CardContent>
-            </Card>
-          ))}
+                </Card>
+              </StaggerItem>
+            ))}
+          </StaggerContainer>
         </div>
 
         {/* RECENT ASSESSMENT HISTORY - Collapsible on mobile */}

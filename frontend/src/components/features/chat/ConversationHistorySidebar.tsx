@@ -133,17 +133,17 @@ export function ConversationHistorySidebar({
   };
 
   return (
-    <div className={`flex flex-col h-full bg-background border-r ${className}`}>
+    <div className={`flex h-full min-w-0 flex-col bg-background border-r ${className}`}>
       {/* Header with New Chat button */}
-      <div className="p-4 border-b space-y-3">
+      <div className="border-b space-y-3 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
+          <h2 className="min-w-0 text-sm font-semibold text-foreground">Conversations</h2>
           {showCloseButton && onCloseSidebar ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 flex-shrink-0"
               aria-label="Minimize sidebar"
               onClick={onCloseSidebar}
             >
@@ -154,7 +154,7 @@ export function ConversationHistorySidebar({
 
         <Button
           onClick={handleNewChat}
-          className="w-full"
+            className="w-full min-w-0"
           variant="default"
           size="sm"
         >
@@ -183,7 +183,7 @@ export function ConversationHistorySidebar({
       </div>
 
       {/* Conversation List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="p-2">
           {showLoadingState ? (
             // Loading skeleton
@@ -266,7 +266,7 @@ export function ConversationHistorySidebar({
 
       {/* Footer with conversation count */}
       {!showLoadingState && conversations.length > 0 && (
-        <div className="p-3 border-t">
+        <div className="border-t p-3">
           <p className="text-xs text-muted-foreground text-center">
             {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
           </p>

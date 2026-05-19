@@ -1,9 +1,11 @@
-/* Fluid typography and baseline text hierarchy. */
+/* Fluid typography and baseline text hierarchy - UI UX Pro Max Editorial Wellness */
 
 :root {
   --font-family-sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-family-serif: "Playfair Display", "Georgia", serif;
   --font-family-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /* Fluid typography scale */
   --text-xs: clamp(0.69rem, 0.66rem + 0.18vw, 0.8rem);
   --text-sm: clamp(0.8rem, 0.75rem + 0.24vw, 0.94rem);
   --text-base: clamp(0.94rem, 0.86rem + 0.35vw, 1.13rem);

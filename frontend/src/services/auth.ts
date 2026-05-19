@@ -6,6 +6,7 @@
  */
 
 import { getApiBaseUrl } from '../config/apiConfig';
+import { fetchWithRetry, requestDeduplicator } from '../utils/networkRetry';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ export interface StoredUser {
   hasPassword?: boolean;
   isGoogleUser?: boolean;
   securityQuestion?: string | null;
+  isPremium?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -50,6 +52,16 @@ export type RegisterResult = { user: StoredUser; token: string };
 const getToken = (): string | null =>
   localStorage.getItem('token');
 
+/**
+ * NEW: Extract and store refreshed token from response headers if available
+ */
+const extractAndStoreRefreshedToken = (response: Response): void => {
+  const newToken = response.headers.get('X-New-Token');
+  if (newToken && newToken.trim()) {
+    localStorage.setItem('token', newToken);
+  }
+};
+
 const authHeaders = (): Record<string, string> => {
   const token = getToken();
   return token
@@ -68,9 +80,13 @@ export async function getCurrentUser(): Promise<StoredUser | null> {
   if (!token) return null;
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/auth/me`, {
+    // NEW: Use retry logic for resilience
+    const response = await fetchWithRetry(`${getApiBaseUrl()}/auth/me`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
+
+    // NEW: Extract refreshed token if available
+    extractAndStoreRefreshedToken(response);
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -94,12 +110,18 @@ export async function loginUser(credentials: {
   email: string;
   password: string;
 }): Promise<{ user: StoredUser; token: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
-  });
+  // NEW: Use deduplication to prevent multiple concurrent login requests
+  const dedupeKey = `login:${credentials.email}`;
 
+  const fetcher = async (): Promise<Response> => {
+    return fetchWithRetry(`${getApiBaseUrl()}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+  };
+
+  const response = await requestDeduplicator.dedupedFetch(dedupeKey, fetcher);
   const data = await response.json();
 
   if (!response.ok) {
@@ -112,6 +134,9 @@ export async function loginUser(credentials: {
     throw new Error('Invalid response from server');
   }
 
+  // NEW: Extract refreshed token if available
+  extractAndStoreRefreshedToken(response);
+
   return { user: data.data.user as StoredUser, token: data.data.token };
 }
 
@@ -120,11 +145,10 @@ export async function loginUser(credentials: {
  * Returns `{ user, token }` on success; throws on failure.
  */
 export async function registerUser(userData: {
-  name: string;
   email: string;
   password: string;
 }): Promise<RegisterResult> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/register`, {
+  const response = await fetchWithRetry(`${getApiBaseUrl()}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
@@ -163,11 +187,14 @@ export async function registerUser(userData: {
     throw new Error('Invalid response from server');
   }
 
+  // NEW: Extract refreshed token if available
+  extractAndStoreRefreshedToken(response);
+
   return { user: data.data.user as StoredUser, token: data.data.token };
 }
 
 export async function resendEmailVerification(email: string): Promise<{ message: string; verificationUrl?: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/auth/resend-verification`, {
+  const response = await fetchWithRetry(`${getApiBaseUrl()}/auth/resend-verification`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -191,6 +218,7 @@ export async function resendEmailVerification(email: string): Promise<{ message:
 export function signOut(): void {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  requestDeduplicator.clear();
 }
 
 /**

@@ -31,6 +31,14 @@ import {
 } from '../api/validators';
 import { prisma } from '../config/database';
 import { isAllowedFrontendOrigin, normalizeOrigin } from '../config/allowedOrigins';
+// NEW: Import specific auth rate limiters
+import {
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+  verificationResendLimiter,
+  oauthLimiter,
+} from '../middleware/authRateLimits';
 
 const router = express.Router();
 
@@ -46,31 +54,19 @@ const encodeOAuthState = (payload: { platform: 'web' | 'mobile'; frontendOrigin?
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 };
 
-const resendVerificationLimiter = rateLimit({
-  windowMs: parseInt(process.env.RESEND_VERIFICATION_WINDOW_MS || '600000', 10),
-  max: parseInt(process.env.RESEND_VERIFICATION_MAX_REQUESTS || '5', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test',
-  keyGenerator: (req) => {
-    const emailPart = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : 'unknown';
-    return `${req.ip || 'unknown-ip'}:${emailPart}`;
-  },
-  message: {
-    success: false,
-    error: 'Too many verification resend requests. Please wait before trying again.'
-  }
-});
-
+// NEW: Using specific rate limiters for each auth endpoint
 // Traditional email/password routes
-router.post('/register', validate(registerSchema), asyncHandler(register));
-router.post('/login', validate(loginSchema), asyncHandler(login));
+router.post('/register', registerLimiter, validate(registerSchema), asyncHandler(register));
+router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(login));
 router.get('/verify-email', asyncHandler(verifyEmail));
-router.post('/resend-verification', resendVerificationLimiter, asyncHandler(resendEmailVerification));
+router.post('/resend-verification', verificationResendLimiter, asyncHandler(resendEmailVerification));
+router.post('/reset-password', passwordResetLimiter, asyncHandler(resetPasswordWithSecurityAnswer));
+router.post('/reset-password/authenticated', authenticate, asyncHandler(resetPasswordWithSecurityAnswerAuthenticated));
+router.post('/update-security-question', authenticate, asyncHandler(updateSecurityQuestionWithPassword));
+router.post('/update-approach', authenticate, asyncHandler(updateApproachWithPassword));
 
-// Google OAuth routes
-// Accept ?platform=mobile query param so the callback knows where to redirect
-router.get('/google', (req, res, next) => {
+// Google OAuth routes with rate limiting
+router.get('/google', oauthLimiter, (req, res, next) => {
   const platform = req.query.platform === 'mobile' ? 'mobile' : 'web';
   let frontendOriginForState = '';
 

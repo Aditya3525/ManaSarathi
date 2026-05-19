@@ -45,6 +45,8 @@ import {
   ResponsiveGrid,
   ResponsiveStack
 } from '../../ui/responsive-layout';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
+import { MotionCard } from '../../ui/motion-enhanced';
 import { EveningCheckin, MorningCheckin } from '../checkins';
 
 import { DashboardCollapsibleSection } from './CollapsibleSection';
@@ -96,6 +98,7 @@ type MoodSpeechWindow = Window & {
   SpeechRecognition?: MoodSpeechRecognitionCtor;
   webkitSpeechRecognition?: MoodSpeechRecognitionCtor;
 };
+const DASHBOARD_PRACTICE_AUTOSTART_KEY = 'mw-practice-autostart';
 
 export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = false, onTourDismiss, onTourComplete }: DashboardProps) {
   const [todayMood, setTodayMood] = useState<string>('');
@@ -406,6 +409,23 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
     }
   }, [refetch, saveMood]);
 
+  const launchPracticeFromDashboard = useCallback((practice?: { id?: string | null; title?: string | null }) => {
+    const practiceId = typeof practice?.id === 'string' ? practice.id : null;
+    const practiceTitle = typeof practice?.title === 'string' ? practice.title : null;
+
+    if (typeof window !== 'undefined') {
+      const payload = JSON.stringify({
+        id: practiceId,
+        title: practiceTitle,
+        source: 'dashboard',
+        createdAt: Date.now(),
+      });
+      window.sessionStorage.setItem(DASHBOARD_PRACTICE_AUTOSTART_KEY, payload);
+    }
+
+    onNavigate('practices');
+  }, [onNavigate]);
+
   const handleOneThingAction = useCallback(async (actionType: OneThingActionType, actionData?: Record<string, unknown>) => {
     if (actionType === 'mood') {
       const mood = typeof actionData?.mood === 'string' ? actionData.mood : null;
@@ -441,8 +461,16 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
       return;
     }
 
+    if (actionType === 'practice') {
+      launchPracticeFromDashboard({
+        id: typeof actionData?.practiceId === 'string' ? actionData.practiceId : null,
+        title: typeof actionData?.title === 'string' ? actionData.title : null,
+      });
+      return;
+    }
+
     onNavigate('practices');
-  }, [handleCompleteHabit, handleMoodSelect, onNavigate]);
+  }, [handleCompleteHabit, handleMoodSelect, launchPracticeFromDashboard, onNavigate]);
 
   const mapTranscriptToMood = useCallback((transcript: string): string | null => {
     const normalized = transcript.toLowerCase();
@@ -668,7 +696,10 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
         title: 'Complete today\'s practice',
         description: `${remaining} practice${remaining === 1 ? '' : 's'} left to hit your weekly goal.`,
         cta: 'Start a practice',
-        onAction: () => onNavigate('practices')
+        onAction: () => launchPracticeFromDashboard({
+          id: recommendedPractice?.id,
+          title: recommendedPractice?.title || practiceTitle,
+        })
       };
     }
 
@@ -696,7 +727,17 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
       cta: 'Open AI chat',
       onAction: () => onNavigate('chatbot')
     };
-  }, [todayMood, weeklyProgress, profileCompletion, assessmentScores, onNavigate]);
+  }, [
+    todayMood,
+    weeklyProgress,
+    profileCompletion,
+    assessmentScores,
+    onNavigate,
+    launchPracticeFromDashboard,
+    recommendedPractice?.id,
+    recommendedPractice?.title,
+    practiceTitle,
+  ]);
 
   const isLoggingMood = saveMood.isPending;
   const currentStreak = streakInfo.current;
@@ -1030,638 +1071,771 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
 
             {/* Tier 3: The Depth - Existing widgets */}
             <div className="space-y-2">
-            {!isModeDefault && dashboardMode && isModeSectionVisible('adaptive-mode-banner', isVisible('adaptive-mode-banner')) && (
-              <Card className="border-primary/25 bg-primary/5">
-                <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-wide font-semibold text-primary">Adaptive mode</p>
-                    <p className="text-sm text-foreground">
-                      {dashboardMode.message || 'Dashboard is focused to reduce overload right now.'}
+              {false && !isModeDefault && dashboardMode && isModeSectionVisible('adaptive-mode-banner', isVisible('adaptive-mode-banner')) && (
+                <Card className="border-primary/25 bg-primary/5">
+                  <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-primary">Adaptive mode</p>
+                      <p className="text-sm text-foreground">
+                        {dashboardMode.message || 'Dashboard is focused to reduce overload right now.'}
+                      </p>
+                    </div>
+                    {hasCollapsedModeWidgets && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowCollapsedModeWidgets((prev) => !prev)}
+                      >
+                        {showCollapsedModeWidgets ? 'Hide extra widgets' : 'See more widgets'}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {isModeSectionVisible('crisis-follow-up', isVisible('crisis-follow-up')) && recentCrisisEvent && (
+                <CrisisFollowUp
+                  event={recentCrisisEvent}
+                  onRespond={() => {
+                    void refetch();
+                  }}
+                  onNavigate={onNavigate}
+                />
+              )}
+
+              {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour < 12 && (
+                <DashboardCollapsibleSection
+                  title="Morning Check-in"
+                  summary={hasMorningCheckin ? 'Completed' : 'Start your day with a pulse-check'}
+                  icon={<Sunrise className="h-4 w-4" />}
+                  defaultOpen={!hasMorningCheckin}
+                >
+                  {hasMorningCheckin ? (
+                    <p className="text-sm text-muted-foreground">Morning check-in already completed today.</p>
+                  ) : (
+                    <MorningCheckin onComplete={() => void handleCheckinComplete()} />
+                  )}
+                </DashboardCollapsibleSection>
+              )}
+
+              {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour >= 17 && (
+                <DashboardCollapsibleSection
+                  title="Evening Reflection"
+                  summary={hasEveningCheckin ? 'Completed' : 'Wind down with a quick reflection'}
+                  icon={<Moon className="h-4 w-4" />}
+                  defaultOpen={!hasEveningCheckin}
+                >
+                  {hasEveningCheckin ? (
+                    <p className="text-sm text-muted-foreground">Evening reflection already completed today.</p>
+                  ) : (
+                    <EveningCheckin onComplete={() => void handleCheckinComplete()} />
+                  )}
+                </DashboardCollapsibleSection>
+              )}
+
+              {(
+                (isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0)
+                || (isModeSectionVisible('community-insights', isVisible('community-insights')) && Boolean(communityInsights?.metrics.length))
+                || (isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && Boolean(assessmentReminder?.shouldRemind))
+              ) && (
+                  <DashboardCollapsibleSection
+                    title="Insights & Nudges"
+                    summary={`${insightCount} recent signals`}
+                    icon={<Lightbulb className="h-4 w-4" />}
+                    badge={insightCount > 0 ? insightCount : undefined}
+                  >
+                    <div className="space-y-3">
+                      {isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0 && (
+                        <Card className="border-primary/30 bg-primary/5">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              Smart Nudges
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <StaggerContainer staggerDelay={0.08}>
+                              {adaptiveNudges.map((nudge) => (
+                                <StaggerItem key={nudge.id}>
+                                  <div className="rounded-md border bg-background p-3">
+                                    <p className="text-sm text-foreground">{nudge.message}</p>
+                                    {nudge.ctaLabel && nudge.ctaPage && (
+                                      <Button
+                                        variant="link"
+                                        className="px-0 h-auto mt-1"
+                                        onClick={() => onNavigate(nudge.ctaPage)}
+                                      >
+                                        {nudge.ctaLabel}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </StaggerItem>
+                              ))}
+                            </StaggerContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {isModeSectionVisible('community-insights', isVisible('community-insights')) && communityInsights && communityInsights.metrics.length > 0 && (
+                        <Card className="border-slate-300/70 bg-slate-50/60">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-slate-700" />
+                              Community Insights
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <p className="text-sm text-muted-foreground">
+                              Anonymous trends from the community to reduce isolation and normalize progress.
+                            </p>
+
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <StaggerContainer staggerDelay={0.12}>
+                                {communityInsights.metrics.map((metric) => (
+                                  <StaggerItem key={metric.id}>
+                                    <div className="rounded-md border bg-background p-3 space-y-1">
+                                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        {metric.label}
+                                      </p>
+                                      <p className="text-xl font-semibold text-foreground">
+                                        {metric.value}{metric.unit === 'percent' ? '%' : ''}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {metric.description}
+                                      </p>
+                                    </div>
+                                  </StaggerItem>
+                                ))}
+                              </StaggerContainer>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground">
+                              Updated {new Date(communityInsights.generatedAt).toLocaleString()} • sample size up to {Math.max(...communityInsights.metrics.map((metric) => metric.sampleSize), 0)} users
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && assessmentReminder?.shouldRemind && (
+                        <Card className="border-amber-300/70 bg-amber-50/60">
+                          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Assessment Reminder</p>
+                              <h3 className="text-base font-semibold text-foreground">Time for a check-in</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {assessmentReminder.message}
+                              </p>
+                            </div>
+                            <Button
+                              className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                              onClick={() => onNavigate('assessments')}
+                            >
+                              <Bell className="h-4 w-4 mr-2" />
+                              Retake Assessment
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </DashboardCollapsibleSection>
+                )}
+
+              {isModeSectionVisible('gratitude', isVisible('gratitude')) && (
+                <Card className="border-emerald-300/70 bg-emerald-50/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                      <Heart className="h-5 w-5 text-emerald-600" />
+                      Daily Gratitude Prompt
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Name 3 things you&apos;re grateful for today.
                     </p>
-                  </div>
-                  {hasCollapsedModeWidgets && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowCollapsedModeWidgets((prev) => !prev)}
-                    >
-                      {showCollapsedModeWidgets ? 'Hide extra widgets' : 'See more widgets'}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                    <Input
+                      value={gratitudeInput}
+                      onChange={(event) => setGratitudeInput(event.target.value)}
+                      placeholder="coffee, sunshine, a kind conversation"
+                    />
+                    <Input
+                      value={gratitudeNote}
+                      onChange={(event) => setGratitudeNote(event.target.value)}
+                      placeholder="Optional note"
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {gratitudeItemsPreview.length > 0
+                          ? `${gratitudeItemsPreview.length}/3 items ready`
+                          : 'Tip: separate items with commas'}
+                      </p>
+                      <Button
+                        onClick={() => void handleSaveGratitude()}
+                        disabled={isSavingGratitude || gratitudeItemsPreview.length === 0}
+                        className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                      >
+                        {isSavingGratitude ? 'Saving...' : 'Save gratitude entry'}
+                      </Button>
+                    </div>
 
-            {isModeSectionVisible('crisis-follow-up', isVisible('crisis-follow-up')) && recentCrisisEvent && (
-              <CrisisFollowUp
-                event={recentCrisisEvent}
-                onRespond={() => {
-                  void refetch();
-                }}
-                onNavigate={onNavigate}
-              />
-            )}
+                    {gratitudeEntries.length > 0 && (
+                      <div className="pt-2 border-t space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent gratitude</p>
+                        <StaggerContainer staggerDelay={0.1}>
+                          {gratitudeEntries.slice(0, 2).map((entry) => (
+                            <StaggerItem key={entry.id}>
+                              <p className="text-sm text-foreground">
+                                {entry.items.slice(0, 3).join(', ')}
+                              </p>
+                            </StaggerItem>
+                          ))}
+                        </StaggerContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
-            {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour < 12 && (
-              <DashboardCollapsibleSection
-                title="Morning Check-in"
-                summary={hasMorningCheckin ? 'Completed' : 'Start your day with a pulse-check'}
-                icon={<Sunrise className="h-4 w-4" />}
-                defaultOpen={!hasMorningCheckin}
-              >
-                {hasMorningCheckin ? (
-                  <p className="text-sm text-muted-foreground">Morning check-in already completed today.</p>
-                ) : (
-                  <MorningCheckin onComplete={() => void handleCheckinComplete()} />
-                )}
-              </DashboardCollapsibleSection>
-            )}
-
-            {isModeSectionVisible('checkins', isVisible('checkins')) && currentHour >= 17 && (
-              <DashboardCollapsibleSection
-                title="Evening Reflection"
-                summary={hasEveningCheckin ? 'Completed' : 'Wind down with a quick reflection'}
-                icon={<Moon className="h-4 w-4" />}
-                defaultOpen={!hasEveningCheckin}
-              >
-                {hasEveningCheckin ? (
-                  <p className="text-sm text-muted-foreground">Evening reflection already completed today.</p>
-                ) : (
-                  <EveningCheckin onComplete={() => void handleCheckinComplete()} />
-                )}
-              </DashboardCollapsibleSection>
-            )}
-
-            {(
-              (isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0)
-              || (isModeSectionVisible('community-insights', isVisible('community-insights')) && Boolean(communityInsights?.metrics.length))
-              || (isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && Boolean(assessmentReminder?.shouldRemind))
-            ) && (
-              <DashboardCollapsibleSection
-                title="Insights & Nudges"
-                summary={`${insightCount} recent signals`}
-                icon={<Lightbulb className="h-4 w-4" />}
-                badge={insightCount > 0 ? insightCount : undefined}
-              >
-                <div className="space-y-3">
-                  {isModeSectionVisible('smart-nudges', isVisible('smart-nudges')) && adaptiveNudges.length > 0 && (
-                    <Card className="border-primary/30 bg-primary/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-primary" />
-                          Smart Nudges
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {adaptiveNudges.map((nudge) => (
-                          <div key={nudge.id} className="rounded-md border bg-background p-3">
-                            <p className="text-sm text-foreground">{nudge.message}</p>
-                            {nudge.ctaLabel && nudge.ctaPage && (
-                              <Button
-                                variant="link"
-                                className="px-0 h-auto mt-1"
-                                onClick={() => onNavigate(nudge.ctaPage)}
-                              >
-                                {nudge.ctaLabel}
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {isModeSectionVisible('community-insights', isVisible('community-insights')) && communityInsights && communityInsights.metrics.length > 0 && (
-                    <Card className="border-slate-300/70 bg-slate-50/60">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-slate-700" />
-                          Community Insights
+              {isModeSectionVisible('habits', isVisible('habits')) && (
+                <div ref={habitsSectionRef}>
+                  <DashboardCollapsibleSection
+                    title="My Habits"
+                    summary={`${completedHabitsCount}/${totalHabitsCount} completed today`}
+                    icon={<CheckCircle className="h-4 w-4" />}
+                    badge={`${completedHabitsCount}/${totalHabitsCount}`}
+                    defaultOpen={totalHabitsCount === 0}
+                  >
+                    <Card className="border-cyan-300/70 bg-cyan-50/50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                          <Target className="h-5 w-5 text-cyan-700" />
+                          Habit Loops
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <p className="text-sm text-muted-foreground">
-                          Anonymous trends from the community to reduce isolation and normalize progress.
+                          Build cue-based habits you can complete in under five minutes.
                         </p>
 
-                        <div className="grid gap-3 md:grid-cols-3">
-                          {communityInsights.metrics.map((metric) => (
-                            <div key={metric.id} className="rounded-md border bg-background p-3 space-y-1">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                {metric.label}
-                              </p>
-                              <p className="text-xl font-semibold text-foreground">
-                                {metric.value}{metric.unit === 'percent' ? '%' : ''}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {metric.description}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-
-                        <p className="text-xs text-muted-foreground">
-                          Updated {new Date(communityInsights.generatedAt).toLocaleString()} • sample size up to {Math.max(...communityInsights.metrics.map((metric) => metric.sampleSize), 0)} users
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {isModeSectionVisible('assessment-reminder', isVisible('assessment-reminder')) && assessmentReminder?.shouldRemind && (
-                    <Card className="border-amber-300/70 bg-amber-50/60">
-                      <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Assessment Reminder</p>
-                          <h3 className="text-base font-semibold text-foreground">Time for a check-in</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {assessmentReminder.message}
-                          </p>
-                        </div>
-                        <Button
-                          className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
-                          onClick={() => onNavigate('assessments')}
-                        >
-                          <Bell className="h-4 w-4 mr-2" />
-                          Retake Assessment
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              </DashboardCollapsibleSection>
-            )}
-
-            {isModeSectionVisible('gratitude', isVisible('gratitude')) && (
-              <Card className="border-emerald-300/70 bg-emerald-50/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base md:text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-emerald-600" />
-                  Daily Gratitude Prompt
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Name 3 things you&apos;re grateful for today.
-                </p>
-                <Input
-                  value={gratitudeInput}
-                  onChange={(event) => setGratitudeInput(event.target.value)}
-                  placeholder="coffee, sunshine, a kind conversation"
-                />
-                <Input
-                  value={gratitudeNote}
-                  onChange={(event) => setGratitudeNote(event.target.value)}
-                  placeholder="Optional note"
-                />
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {gratitudeItemsPreview.length > 0
-                      ? `${gratitudeItemsPreview.length}/3 items ready`
-                      : 'Tip: separate items with commas'}
-                  </p>
-                  <Button
-                    onClick={() => void handleSaveGratitude()}
-                    disabled={isSavingGratitude || gratitudeItemsPreview.length === 0}
-                    className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
-                  >
-                    {isSavingGratitude ? 'Saving...' : 'Save gratitude entry'}
-                  </Button>
-                </div>
-
-                {gratitudeEntries.length > 0 && (
-                  <div className="pt-2 border-t space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent gratitude</p>
-                    {gratitudeEntries.slice(0, 2).map((entry) => (
-                      <p key={entry.id} className="text-sm text-foreground">
-                        {entry.items.slice(0, 3).join(', ')}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-              </Card>
-            )}
-
-            {isModeSectionVisible('habits', isVisible('habits')) && (
-              <div ref={habitsSectionRef}>
-                <DashboardCollapsibleSection
-                  title="My Habits"
-                  summary={`${completedHabitsCount}/${totalHabitsCount} completed today`}
-                  icon={<CheckCircle className="h-4 w-4" />}
-                  badge={`${completedHabitsCount}/${totalHabitsCount}`}
-                  defaultOpen={totalHabitsCount === 0}
-                >
-                <Card className="border-cyan-300/70 bg-cyan-50/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base md:text-lg flex items-center gap-2">
-                  <Target className="h-5 w-5 text-cyan-700" />
-                  Habit Loops
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Build cue-based habits you can complete in under five minutes.
-                </p>
-
-                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <Input
-                    value={habitTitleInput}
-                    onChange={(event) => setHabitTitleInput(event.target.value)}
-                    placeholder="Habit title (e.g. 3 calming breaths)"
-                  />
-                  <Input
-                    value={habitCueInput}
-                    onChange={(event) => setHabitCueInput(event.target.value)}
-                    placeholder="Cue (e.g. After morning coffee)"
-                  />
-                  <Button
-                    onClick={() => void handleCreateHabit()}
-                    disabled={isSavingHabit || habitTitleInput.trim().length < 3 || habitCueInput.trim().length < 3}
-                    className={device.isMobile ? 'min-h-[44px] touch-manipulation' : ''}
-                  >
-                    {isSavingHabit ? 'Saving...' : 'Add loop'}
-                  </Button>
-                </div>
-
-                {habits.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No active habit loops yet. Add one cue and one tiny action to get started.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {habits.slice(0, 4).map((habit) => {
-                      const completedToday = isHabitCompletedToday(habit.lastCompletedAt);
-                      return (
-                        <div key={habit.id} className="rounded-md border bg-background p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">{habit.title}</p>
-                            <p className="text-xs text-muted-foreground">Cue: {habit.cue}</p>
-                            <p className="text-xs text-muted-foreground">Streak: {habit.streak} day{habit.streak === 1 ? '' : 's'}</p>
-                          </div>
+                        <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                          <Input
+                            value={habitTitleInput}
+                            onChange={(event) => setHabitTitleInput(event.target.value)}
+                            placeholder="Habit title (e.g. 3 calming breaths)"
+                          />
+                          <Input
+                            value={habitCueInput}
+                            onChange={(event) => setHabitCueInput(event.target.value)}
+                            placeholder="Cue (e.g. After morning coffee)"
+                          />
                           <Button
-                            variant={completedToday ? 'secondary' : 'outline'}
-                            onClick={() => void handleCompleteHabit(habit.id)}
-                            disabled={completedToday || isCompletingHabitId === habit.id}
-                            className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation md:w-auto' : ''}
+                            onClick={() => void handleCreateHabit()}
+                            disabled={isSavingHabit || habitTitleInput.trim().length < 3 || habitCueInput.trim().length < 3}
+                            className={device.isMobile ? 'min-h-[44px] touch-manipulation' : ''}
                           >
-                            {completedToday
-                              ? 'Completed today'
-                              : isCompletingHabitId === habit.id
-                                ? 'Saving...'
-                                : 'Mark complete'}
+                            {isSavingHabit ? 'Saving...' : 'Add loop'}
                           </Button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-                </Card>
-                </DashboardCollapsibleSection>
-              </div>
-            )}
 
-            {isModeSectionVisible('intentions-sleep', isVisible('intentions-sleep')) && (
-              <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
-                <DailyIntentionCard
-                  intention={todayIntention}
-                  currentHour={currentHour}
-                  onUpdated={() => {
-                    void refetch();
-                  }}
-                />
-
-                <SleepLogCard
-                  latestLog={latestSleepLog}
-                  stats={sleepStats}
-                  onLogged={() => {
-                    void refetch();
-                  }}
-                />
-              </ResponsiveGrid>
-            )}
-
-            {/* Priority 1: Quick Actions (Visible on all devices) */}
-            {isModeSectionVisible('quick-actions', isVisible('quick-actions')) && (
-              <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base md:text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {device.isMobile ? (
-                  <ResponsiveStack spacing="compact">
-                    <Button
-                      className="w-full justify-between h-auto py-3 text-left"
-                      onClick={() => onNavigate('assessments')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Brain className="h-5 w-5" />
-                        <div>
-                          <div className="font-medium">Take Assessment</div>
-                          <div className="text-xs opacity-90">Get personalized insights</div>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
-                      onClick={() => onNavigate('chatbot')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <MessageCircle className="h-5 w-5" />
-                        <span className="font-medium">Chat with AI</span>
-                      </div>
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
-                      onClick={() => onNavigate('library')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-5 w-5" />
-                        <span className="font-medium">Browse Library</span>
-                      </div>
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
-                      onClick={() => onNavigate('journal')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-5 w-5" />
-                        <span className="font-medium">Journal</span>
-                      </div>
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
-                      onClick={() => onNavigate('progress')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <TrendingUp className="h-5 w-5" />
-                        <span className="font-medium">View Progress</span>
-                      </div>
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-                  </ResponsiveStack>
-                ) : (
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <Button
-                      className="justify-start h-auto py-4 px-4"
-                      onClick={() => onNavigate('assessments')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Brain className="h-5 w-5" />
-                        <div className="text-left">
-                          <div className="font-medium">Take Assessment</div>
-                          <div className="text-xs opacity-90">Get personalized insights</div>
-                        </div>
-                      </div>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto py-4 px-4"
-                      onClick={() => onNavigate('chatbot')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <MessageCircle className="h-5 w-5" />
-                        <span className="font-medium">Chat with AI</span>
-                      </div>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto py-4 px-4"
-                      onClick={() => onNavigate('library')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-5 w-5" />
-                        <span className="font-medium">Browse Library</span>
-                      </div>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto py-4 px-4"
-                      onClick={() => onNavigate('journal')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-5 w-5" />
-                        <span className="font-medium">Journal</span>
-                      </div>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto py-4 px-4"
-                      onClick={() => onNavigate('progress')}
-                    >
-                      <div className="flex items-center gap-3">
-                        <TrendingUp className="h-5 w-5" />
-                        <span className="font-medium">View Progress</span>
-                      </div>
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-              </Card>
-            )}
-
-            {isModeSectionVisible('recommended-next-step', isVisible('recommended-next-step')) && (
-              <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-accent/10">
-              <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6 md:p-5">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">Recommended next step</p>
-                  <h2 className="text-base font-semibold text-foreground md:text-lg">{recommendedAction.title}</h2>
-                  <p className="text-sm text-muted-foreground">{recommendedAction.description}</p>
+                        {habits.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No active habit loops yet. Add one cue and one tiny action to get started.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            <StaggerContainer>
+                              {habits.slice(0, 4).map((habit) => {
+                                const completedToday = isHabitCompletedToday(habit.lastCompletedAt);
+                                return (
+                                  <StaggerItem key={habit.id}>
+                                    <div className="rounded-md border bg-background p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                      <div className="space-y-1">
+                                        <p className="text-sm font-medium text-foreground">{habit.title}</p>
+                                        <p className="text-xs text-muted-foreground">Cue: {habit.cue}</p>
+                                        <p className="text-xs text-muted-foreground">Streak: {habit.streak} day{habit.streak === 1 ? '' : 's'}</p>
+                                      </div>
+                                      <Button
+                                        variant={completedToday ? 'secondary' : 'outline'}
+                                        onClick={() => void handleCompleteHabit(habit.id)}
+                                        disabled={completedToday || isCompletingHabitId === habit.id}
+                                        className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation md:w-auto' : ''}
+                                      >
+                                        {completedToday
+                                          ? 'Completed today'
+                                          : isCompletingHabitId === habit.id
+                                            ? 'Saving...'
+                                            : 'Mark complete'}
+                                      </Button>
+                                    </div>
+                                  </StaggerItem>
+                                );
+                              })}
+                            </StaggerContainer>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </DashboardCollapsibleSection>
                 </div>
-                <Button
-                  className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
-                  onClick={recommendedAction.onAction}
-                >
-                  {recommendedAction.cta}
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </CardContent>
-              </Card>
-            )}
+              )}
 
-            {/* Priority 2: Today's Practice */}
-            {isModeSectionVisible('today-practice', isVisible('today-practice')) && (
-              <DashboardCollapsibleSection
-                title="Recommended Practices"
-                summary="Personalized for your mood"
-                icon={<Headphones className="h-4 w-4" />}
-                defaultOpen={!device.isMobile}
-              >
-              <Card className={device.isMobile ? '' : 'lg:col-span-2'}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <Play className="h-5 w-5 text-primary" />
-                  Today&apos;s Practice
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Primary Practice - Prominent CTA */}
-                <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4">
-                  <div className={device.isMobile ? "space-y-3" : "flex items-start justify-between"}>
-                    <div className="space-y-2 flex-1">
-                      <h3 className="font-semibold text-base md:text-lg">{practiceTitle}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {practiceDescription}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs md:text-sm text-muted-foreground flex-wrap">
-                        {practiceType && <span className="font-medium">{practiceType}</span>}
-                        {practiceDuration && <span>{practiceDuration} min</span>}
-                        {(() => {
-                          const normalizedTags = Array.isArray(practiceTags)
-                            ? practiceTags
-                            : typeof practiceTags === 'string' && practiceTags.trim().length > 0
-                              ? [practiceTags]
-                              : [];
+              {isModeSectionVisible('intentions-sleep', isVisible('intentions-sleep')) && (
+                <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
+                  <DailyIntentionCard
+                    intention={todayIntention}
+                    currentHour={currentHour}
+                    onUpdated={() => {
+                      void refetch();
+                    }}
+                  />
 
-                          return normalizedTags
-                            .slice(0, device.isSmallPhone ? 1 : 2)
-                            .map((tag) => <span key={tag}>• {tag}</span>);
-                        })()}
-                        {(() => {
-                          const normalizedTags = Array.isArray(practiceTags)
-                            ? practiceTags
-                            : typeof practiceTags === 'string' && practiceTags.trim().length > 0
-                              ? [practiceTags]
-                              : [];
+                  <SleepLogCard
+                    latestLog={latestSleepLog}
+                    stats={sleepStats}
+                    onLogged={() => {
+                      void refetch();
+                    }}
+                  />
+                </ResponsiveGrid>
+              )}
 
-                          return device.isSmallPhone && normalizedTags.length > 1 ? (
-                            <span>+{normalizedTags.length - 1}</span>
-                          ) : null;
-                        })()}
-                      </div>
-                      {recommendedPractice?.reason && (
-                        <p className="text-xs text-primary/80 italic mt-2">
-                          💡 {recommendedPractice.reason}
-                        </p>
-                      )}
+              {/* Priority 1: Quick Actions (Visible on all devices) */}
+              {isModeSectionVisible('quick-actions', isVisible('quick-actions')) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base md:text-lg">Quick Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {device.isMobile ? (
+                      <StaggerContainer>
+                        <ResponsiveStack spacing="compact">
+                          <StaggerItem>
+                            <Button
+                              className="w-full justify-between h-auto py-3 text-left"
+                              onClick={() => onNavigate('assessments')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Brain className="h-5 w-5" />
+                                <div>
+                                  <div className="font-medium">Take Assessment</div>
+                                  <div className="text-xs opacity-90">Get personalized insights</div>
+                                </div>
+                              </div>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
+                              onClick={() => onNavigate('chatbot')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <MessageCircle className="h-5 w-5" />
+                                <span className="font-medium">Chat with AI</span>
+                              </div>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
+                              onClick={() => onNavigate('library')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookOpen className="h-5 w-5" />
+                                <span className="font-medium">Browse Library</span>
+                              </div>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
+                              onClick={() => onNavigate('journal')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookOpen className="h-5 w-5" />
+                                <span className="font-medium">Journal</span>
+                              </div>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between h-auto py-3 text-left touch-manipulation min-h-[44px]"
+                              onClick={() => onNavigate('progress')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <TrendingUp className="h-5 w-5" />
+                                <span className="font-medium">View Progress</span>
+                              </div>
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </StaggerItem>
+                        </ResponsiveStack>
+                      </StaggerContainer>
+                    ) : (
+                      <StaggerContainer>
+                        <div className="grid md:grid-cols-2 gap-3">
+                          <StaggerItem>
+                            <Button
+                              className="justify-start h-auto py-4 px-4"
+                              onClick={() => onNavigate('assessments')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Brain className="h-5 w-5" />
+                                <div className="text-left">
+                                  <div className="font-medium">Take Assessment</div>
+                                  <div className="text-xs opacity-90">Get personalized insights</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto py-4 px-4"
+                              onClick={() => onNavigate('chatbot')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <MessageCircle className="h-5 w-5" />
+                                <span className="font-medium">Chat with AI</span>
+                              </div>
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto py-4 px-4"
+                              onClick={() => onNavigate('library')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookOpen className="h-5 w-5" />
+                                <span className="font-medium">Browse Library</span>
+                              </div>
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto py-4 px-4"
+                              onClick={() => onNavigate('journal')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookOpen className="h-5 w-5" />
+                                <span className="font-medium">Journal</span>
+                              </div>
+                            </Button>
+                          </StaggerItem>
+
+                          <StaggerItem>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto py-4 px-4"
+                              onClick={() => onNavigate('progress')}
+                            >
+                              <div className="flex items-center gap-3">
+                                <TrendingUp className="h-5 w-5" />
+                                <span className="font-medium">View Progress</span>
+                              </div>
+                            </Button>
+                          </StaggerItem>
+                        </div>
+                      </StaggerContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {isModeSectionVisible('recommended-next-step', isVisible('recommended-next-step')) && (
+                <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-accent/10">
+                  <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6 md:p-5">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-primary">Recommended next step</p>
+                      <h2 className="text-base font-semibold text-foreground md:text-lg">{recommendedAction.title}</h2>
+                      <p className="text-sm text-muted-foreground">{recommendedAction.description}</p>
                     </div>
                     <Button
-                      onClick={() => onNavigate('practices')}
-                      className={device.isMobile ? "w-full min-h-[44px] touch-manipulation" : ""}
+                      className={device.isMobile ? 'w-full min-h-[44px] touch-manipulation' : ''}
+                      onClick={recommendedAction.onAction}
                     >
-                      Start Practice
+                      {recommendedAction.cta}
+                      <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
+              )}
 
-                {/* Secondary Practices - Collapsible on mobile */}
-                {device.isMobile ? (
-                  <DashboardCollapsibleSection
-                    title="More Practices"
-                    icon={<Heart className="h-4 w-4" />}
-                    defaultOpen={false}
-                    summary="2 additional practices available"
-                  >
-                    <ResponsiveStack spacing="compact">
-                      <Button
-                        variant="outline"
-                        className="justify-start h-auto p-3 text-left w-full min-h-[44px] touch-manipulation"
-                        onClick={() => onNavigate('practices')}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Heart className="h-4 w-4" />
-                            <span className="font-medium text-sm">5-min Mindfulness</span>
+              {/* Priority 2: Today's Practice */}
+              {isModeSectionVisible('today-practice', isVisible('today-practice')) && (
+                <DashboardCollapsibleSection
+                  title="Recommended Practices"
+                  summary="Personalized for your mood"
+                  icon={<Headphones className="h-4 w-4" />}
+                  defaultOpen={!device.isMobile}
+                >
+                  <Card className={device.isMobile ? '' : 'lg:col-span-2'}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                        <Play className="h-5 w-5 text-primary" />
+                        Today&apos;s Practice
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Primary Practice - Prominent CTA */}
+                      <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4">
+                        <div className={device.isMobile ? "space-y-3" : "flex items-start justify-between"}>
+                          <div className="space-y-2 flex-1">
+                            <h3 className="font-semibold text-base md:text-lg">{practiceTitle}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {practiceDescription}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs md:text-sm text-muted-foreground flex-wrap">
+                              {practiceType && <span className="font-medium">{practiceType}</span>}
+                              {practiceDuration && <span>{practiceDuration} min</span>}
+                              {(() => {
+                                const normalizedTags = Array.isArray(practiceTags)
+                                  ? practiceTags
+                                  : typeof practiceTags === 'string' && practiceTags.trim().length > 0
+                                    ? [practiceTags]
+                                    : [];
+
+                                return normalizedTags
+                                  .slice(0, device.isSmallPhone ? 1 : 2)
+                                  .map((tag) => <span key={tag}>• {tag}</span>);
+                              })()}
+                              {(() => {
+                                const normalizedTags = Array.isArray(practiceTags)
+                                  ? practiceTags
+                                  : typeof practiceTags === 'string' && practiceTags.trim().length > 0
+                                    ? [practiceTags]
+                                    : [];
+
+                                return device.isSmallPhone && normalizedTags.length > 1 ? (
+                                  <span>+{normalizedTags.length - 1}</span>
+                                ) : null;
+                              })()}
+                            </div>
+                            {recommendedPractice?.reason && (
+                              <p className="text-xs text-primary/80 italic mt-2">
+                                💡 {recommendedPractice.reason}
+                              </p>
+                            )}
                           </div>
-                          <p className="text-xs text-muted-foreground">Quick reset for busy days</p>
+                          <Button
+                            onClick={() => launchPracticeFromDashboard({
+                              id: recommendedPractice?.id,
+                              title: practiceTitle,
+                            })}
+                            className={device.isMobile ? "w-full min-h-[44px] touch-manipulation" : ""}
+                          >
+                            Start Practice
+                          </Button>
                         </div>
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        className="justify-start h-auto p-3 text-left w-full min-h-[44px] touch-manipulation"
-                        onClick={() => onNavigate('practices')}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Target className="h-4 w-4" />
-                            <span className="font-medium text-sm">Gentle Yoga</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">15-min body & mind</p>
-                        </div>
-                      </Button>
-                    </ResponsiveStack>
-                  </DashboardCollapsibleSection>
-                ) : (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto p-4"
-                      onClick={() => onNavigate('practices')}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Heart className="h-4 w-4" />
-                          <span className="font-medium">5-min Mindfulness</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Quick reset for busy days</p>
                       </div>
-                    </Button>
 
-                    <Button
-                      variant="outline"
-                      className="justify-start h-auto p-4"
-                      onClick={() => onNavigate('practices')}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Target className="h-4 w-4" />
-                          <span className="font-medium">Gentle Yoga</span>
+                      {/* Secondary Practices - Collapsible on mobile */}
+                      {device.isMobile ? (
+                        <DashboardCollapsibleSection
+                          title="More Practices"
+                          icon={<Heart className="h-4 w-4" />}
+                          defaultOpen={false}
+                          summary="2 additional practices available"
+                        >
+                          <ResponsiveStack spacing="compact">
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto p-3 text-left w-full min-h-[44px] touch-manipulation"
+                              onClick={() => launchPracticeFromDashboard({ title: '5-min Mindfulness' })}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Heart className="h-4 w-4" />
+                                  <span className="font-medium text-sm">5-min Mindfulness</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">Quick reset for busy days</p>
+                              </div>
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              className="justify-start h-auto p-3 text-left w-full min-h-[44px] touch-manipulation"
+                              onClick={() => launchPracticeFromDashboard({ title: 'Gentle Yoga' })}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Target className="h-4 w-4" />
+                                  <span className="font-medium text-sm">Gentle Yoga</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">15-min body & mind</p>
+                              </div>
+                            </Button>
+                          </ResponsiveStack>
+                        </DashboardCollapsibleSection>
+                      ) : (
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <Button
+                            variant="outline"
+                            className="justify-start h-auto p-4"
+                            onClick={() => launchPracticeFromDashboard({ title: '5-min Mindfulness' })}
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Heart className="h-4 w-4" />
+                                <span className="font-medium">5-min Mindfulness</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">Quick reset for busy days</p>
+                            </div>
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            className="justify-start h-auto p-4"
+                            onClick={() => launchPracticeFromDashboard({ title: 'Gentle Yoga' })}
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Target className="h-4 w-4" />
+                                <span className="font-medium">Gentle Yoga</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">15-min body & mind</p>
+                            </div>
+                          </Button>
                         </div>
-                        <p className="text-xs text-muted-foreground">15-min body & mind</p>
-                      </div>
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-              </Card>
-              </DashboardCollapsibleSection>
-            )}
+                      )}
+                    </CardContent>
+                  </Card>
+                </DashboardCollapsibleSection>
+              )}
 
-            {/* Priority 3-4: Key Metrics - Horizontal carousel on mobile */}
-            {isModeSectionVisible('assessment-scores', isVisible('assessment-scores')) && assessmentScores && (
-              <>
-                {device.isMobile ? (
-                  <div>
-                    <h2 className="text-lg font-semibold mb-3 px-1">Your Metrics</h2>
-                    <HorizontalScrollContainer snap={true}>
-                      {/* Anxiety Card */}
+              {/* Priority 3-4: Key Metrics - Horizontal carousel on mobile */}
+              {false && isModeSectionVisible('assessment-scores', isVisible('assessment-scores')) && assessmentScores && (
+                <>
+                  {device.isMobile ? (
+                    <div>
+                      <h2 className="text-lg font-semibold mb-3 px-1">Your Metrics</h2>
+                      <HorizontalScrollContainer snap={true}>
+                        {/* Anxiety Card */}
+                        <Card
+                          role="img"
+                          aria-label={`Anxiety level ${formatScore(assessmentScores.anxiety)} percent. ${getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}.`}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Brain className="h-5 w-5 text-primary" />
+                              Anxiety Level
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-3xl font-bold">
+                                  {formatScore(assessmentScores.anxiety)}%
+                                </span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}
+                                </Badge>
+                              </div>
+                              <Progress value={assessmentScores.anxiety || 0} className="h-3" />
+                              <p className="text-sm text-muted-foreground">
+                                Based on your latest assessment
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Stress Card */}
+                        <Card
+                          role="img"
+                          aria-label={`Stress level ${formatScore(assessmentScores.stress)} percent. ${getScoreInterpretation('stress', assessmentScores.stress || 0)}.`}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Target className="h-5 w-5 text-primary" />
+                              Stress Level
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-3xl font-bold">
+                                  {formatScore(assessmentScores.stress)}%
+                                </span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {getScoreInterpretation('stress', assessmentScores.stress || 0)}
+                                </Badge>
+                              </div>
+                              <Progress value={assessmentScores.stress || 0} className="h-3" />
+                              <p className="text-sm text-muted-foreground">
+                                Trending down this week
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Emotional Intelligence Card */}
+                        <Card
+                          role="img"
+                          aria-label={`Emotional intelligence ${formatScore(assessmentScores.emotionalIntelligence)} percent. ${getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}.`}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Sparkles className="h-5 w-5 text-primary" />
+                              Emotional Intelligence
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-3xl font-bold">
+                                  {formatScore(assessmentScores.emotionalIntelligence)}%
+                                </span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}
+                                </Badge>
+                              </div>
+                              <Progress value={assessmentScores.emotionalIntelligence || 0} className="h-3" />
+                              <p className="text-sm text-muted-foreground">
+                                Strong foundation to build on
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </HorizontalScrollContainer>
+                    </div>
+                  ) : (
+                    /* Desktop & Tablet: Grid layout */
+                    <ResponsiveGrid columns="custom" className="md:grid-cols-3" gap="medium">
                       <Card
                         role="img"
                         aria-label={`Anxiety level ${formatScore(assessmentScores.anxiety)} percent. ${getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}.`}
                       >
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-base flex items-center gap-2">
+                          <CardTitle className="text-lg flex items-center gap-2">
                             <Brain className="h-5 w-5 text-primary" />
                             Anxiety Level
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className="text-3xl font-bold">
+                              <span className="text-2xl font-semibold">
                                 {formatScore(assessmentScores.anxiety)}%
                               </span>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge variant="secondary">
                                 {getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}
                               </Badge>
                             </div>
-                            <Progress value={assessmentScores.anxiety || 0} className="h-3" />
+                            <Progress value={assessmentScores.anxiety || 0} className="h-2" />
                             <p className="text-sm text-muted-foreground">
                               Based on your latest assessment
                             </p>
@@ -1669,28 +1843,27 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         </CardContent>
                       </Card>
 
-                      {/* Stress Card */}
                       <Card
                         role="img"
                         aria-label={`Stress level ${formatScore(assessmentScores.stress)} percent. ${getScoreInterpretation('stress', assessmentScores.stress || 0)}.`}
                       >
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-base flex items-center gap-2">
+                          <CardTitle className="text-lg flex items-center gap-2">
                             <Target className="h-5 w-5 text-primary" />
                             Stress Level
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className="text-3xl font-bold">
+                              <span className="text-2xl font-semibold">
                                 {formatScore(assessmentScores.stress)}%
                               </span>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge variant="secondary">
                                 {getScoreInterpretation('stress', assessmentScores.stress || 0)}
                               </Badge>
                             </div>
-                            <Progress value={assessmentScores.stress || 0} className="h-3" />
+                            <Progress value={assessmentScores.stress || 0} className="h-2" />
                             <p className="text-sm text-muted-foreground">
                               Trending down this week
                             </p>
@@ -1698,225 +1871,82 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                         </CardContent>
                       </Card>
 
-                      {/* Emotional Intelligence Card */}
                       <Card
                         role="img"
                         aria-label={`Emotional intelligence ${formatScore(assessmentScores.emotionalIntelligence)} percent. ${getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}.`}
                       >
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-base flex items-center gap-2">
+                          <CardTitle className="text-lg flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-primary" />
                             Emotional Intelligence
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className="text-3xl font-bold">
+                              <span className="text-2xl font-semibold">
                                 {formatScore(assessmentScores.emotionalIntelligence)}%
                               </span>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge variant="secondary">
                                 {getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}
                               </Badge>
                             </div>
-                            <Progress value={assessmentScores.emotionalIntelligence || 0} className="h-3" />
+                            <Progress value={assessmentScores.emotionalIntelligence || 0} className="h-2" />
                             <p className="text-sm text-muted-foreground">
                               Strong foundation to build on
                             </p>
                           </div>
                         </CardContent>
                       </Card>
-                    </HorizontalScrollContainer>
-                  </div>
-                ) : (
-                  /* Desktop & Tablet: Grid layout */
-                  <ResponsiveGrid columns="custom" className="md:grid-cols-3" gap="medium">
-                    <Card
-                      role="img"
-                      aria-label={`Anxiety level ${formatScore(assessmentScores.anxiety)} percent. ${getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}.`}
-                    >
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Brain className="h-5 w-5 text-primary" />
-                          Anxiety Level
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-2xl font-semibold">
-                              {formatScore(assessmentScores.anxiety)}%
-                            </span>
-                            <Badge variant="secondary">
-                              {getScoreInterpretation('anxiety', assessmentScores.anxiety || 0)}
-                            </Badge>
-                          </div>
-                          <Progress value={assessmentScores.anxiety || 0} className="h-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Based on your latest assessment
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    </ResponsiveGrid>
+                  )}
+                </>
+              )}
 
-                    <Card
-                      role="img"
-                      aria-label={`Stress level ${formatScore(assessmentScores.stress)} percent. ${getScoreInterpretation('stress', assessmentScores.stress || 0)}.`}
-                    >
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Target className="h-5 w-5 text-primary" />
-                          Stress Level
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-2xl font-semibold">
-                              {formatScore(assessmentScores.stress)}%
-                            </span>
-                            <Badge variant="secondary">
-                              {getScoreInterpretation('stress', assessmentScores.stress || 0)}
-                            </Badge>
-                          </div>
-                          <Progress value={assessmentScores.stress || 0} className="h-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Trending down this week
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
+              {/* Priority 5: Enhanced AI Insights & This Week */}
+              {(showInsightsWidget || showThisWeekWidget) && (
+                <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
+                  {showInsightsWidget && <EnhancedInsightsCard onNavigate={onNavigate} />}
 
-                    <Card
-                      role="img"
-                      aria-label={`Emotional intelligence ${formatScore(assessmentScores.emotionalIntelligence)} percent. ${getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}.`}
-                    >
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-primary" />
-                          Emotional Intelligence
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-2xl font-semibold">
-                              {formatScore(assessmentScores.emotionalIntelligence)}%
-                            </span>
-                            <Badge variant="secondary">
-                              {getScoreInterpretation('emotionalIntelligence', assessmentScores.emotionalIntelligence || 0)}
-                            </Badge>
-                          </div>
-                          <Progress value={assessmentScores.emotionalIntelligence || 0} className="h-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Strong foundation to build on
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </ResponsiveGrid>
-                )}
-              </>
-            )}
-
-            {/* Priority 5: Enhanced AI Insights & This Week */}
-            {(showInsightsWidget || showThisWeekWidget) && (
-              <ResponsiveGrid columns="custom" className="lg:grid-cols-2" gap="medium">
-                {showInsightsWidget && <EnhancedInsightsCard onNavigate={onNavigate} />}
-
-                {showThisWeekWidget && (
-                  <>
-                    {device.isMobile ? (
-                      <DashboardCollapsibleSection
-                        title="This Week"
-                        icon={<Calendar className="h-5 w-5 text-primary" />}
-                        defaultOpen={false}
-                        summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices • ${streakInfo.current}-day streak` : 'Loading...'}
-                      >
-                        {weeklyProgress ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-sm">Daily practices</span>
-                              </div>
-                              <Badge variant="secondary" className="text-xs">
-                                {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
-                              </Badge>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-sm">Mood check-ins</span>
-                              </div>
-                              <Badge variant="secondary" className="text-xs">
-                                {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
-                              </Badge>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                <span className="text-sm">Assessments</span>
-                              </div>
-                              <Badge variant="secondary" className="text-xs">
-                                {weeklyProgress.assessments.completed} completed
-                              </Badge>
-                            </div>
-
-                            <div className="pt-3 border-t">
-                              <div className="flex items-center gap-2 text-sm">
-                                <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                                <span className="text-muted-foreground">{streakInfo.message}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
-                        )}
-                      </DashboardCollapsibleSection>
-                    ) : (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-primary" />
-                            This Week
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                  {showThisWeekWidget && (
+                    <>
+                      {device.isMobile ? (
+                        <DashboardCollapsibleSection
+                          title="This Week"
+                          icon={<Calendar className="h-5 w-5 text-primary" />}
+                          defaultOpen={false}
+                          summary={weeklyProgress ? `${weeklyProgress.practices.completed}/${weeklyProgress.practices.goal} practices • ${streakInfo.current}-day streak` : 'Loading...'}
+                        >
                           {weeklyProgress ? (
-                            <>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                    <span className="text-sm">Daily practices</span>
-                                  </div>
-                                  <Badge variant="secondary">
-                                    {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
-                                  </Badge>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                  <span className="text-sm">Daily practices</span>
                                 </div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
+                                </Badge>
+                              </div>
 
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                    <span className="text-sm">Mood check-ins</span>
-                                  </div>
-                                  <Badge variant="secondary">
-                                    {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
-                                  </Badge>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  <span className="text-sm">Mood check-ins</span>
                                 </div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
+                                </Badge>
+                              </div>
 
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                    <span className="text-sm">Assessments</span>
-                                  </div>
-                                  <Badge variant="secondary">
-                                    {weeklyProgress.assessments.completed} completed
-                                  </Badge>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                  <span className="text-sm">Assessments</span>
                                 </div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {weeklyProgress.assessments.completed} completed
+                                </Badge>
                               </div>
 
                               <div className="pt-3 border-t">
@@ -1925,58 +1955,112 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
                                   <span className="text-muted-foreground">{streakInfo.message}</span>
                                 </div>
                               </div>
-                            </>
+                            </div>
                           ) : (
                             <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
                           )}
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
-                )}
-              </ResponsiveGrid>
-            )}
+                        </DashboardCollapsibleSection>
+                      ) : (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Calendar className="h-5 w-5 text-primary" />
+                              This Week
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {weeklyProgress ? (
+                              <>
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                      <span className="text-sm">Daily practices</span>
+                                    </div>
+                                    <Badge variant="secondary">
+                                      {weeklyProgress.practices.completed}/{weeklyProgress.practices.goal}
+                                    </Badge>
+                                  </div>
 
-            {/* Navigation Shortcuts - Hide on mobile (use bottom nav instead) */}
-            {isModeSectionVisible('navigation-shortcuts', isVisible('navigation-shortcuts')) && !device.isMobile && (
-              <ResponsiveGrid columns="custom" className="grid-cols-2 md:grid-cols-4" gap="small">
-                <Button
-                  variant="ghost"
-                  className="h-20 flex-col gap-2"
-                  onClick={() => onNavigate('assessments')}
-                >
-                  <Brain className="h-6 w-6 text-primary" />
-                  <span className="text-sm">Assessments</span>
-                </Button>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                      <span className="text-sm">Mood check-ins</span>
+                                    </div>
+                                    <Badge variant="secondary">
+                                      {weeklyProgress.moodCheckins.completed}/{weeklyProgress.moodCheckins.goal}
+                                    </Badge>
+                                  </div>
 
-                <Button
-                  variant="ghost"
-                  className="h-20 flex-col gap-2"
-                  onClick={() => onNavigate('practices')}
-                >
-                  <Heart className="h-6 w-6 text-primary" />
-                  <span className="text-sm">Practices</span>
-                </Button>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                      <span className="text-sm">Assessments</span>
+                                    </div>
+                                    <Badge variant="secondary">
+                                      {weeklyProgress.assessments.completed} completed
+                                    </Badge>
+                                  </div>
+                                </div>
 
-                <Button
-                  variant="ghost"
-                  className="h-20 flex-col gap-2"
-                  onClick={() => onNavigate('library')}
-                >
-                  <BookOpen className="h-6 w-6 text-primary" />
-                  <span className="text-sm">Library</span>
-                </Button>
+                                <div className="pt-3 border-t">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Award className={`h-4 w-4 ${streakInfo.current > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                                    <span className="text-muted-foreground">{streakInfo.message}</span>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-4">Loading progress...</p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
+                  )}
+                </ResponsiveGrid>
+              )}
 
-                <Button
-                  variant="ghost"
-                  className="h-20 flex-col gap-2"
-                  onClick={() => onNavigate('help')}
-                >
-                  <Heart className="h-6 w-6 text-primary" />
-                  <span className="text-sm">Help</span>
-                </Button>
-              </ResponsiveGrid>
-            )}
+              {/* Navigation Shortcuts - Hide on mobile (use bottom nav instead) */}
+              {isModeSectionVisible('navigation-shortcuts', isVisible('navigation-shortcuts')) && !device.isMobile && (
+                <ResponsiveGrid columns="custom" className="grid-cols-2 md:grid-cols-4" gap="small">
+                  <Button
+                    variant="ghost"
+                    className="h-20 flex-col gap-2"
+                    onClick={() => onNavigate('assessments')}
+                  >
+                    <Brain className="h-6 w-6 text-primary" />
+                    <span className="text-sm">Assessments</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="h-20 flex-col gap-2"
+                    onClick={() => onNavigate('practices')}
+                  >
+                    <Heart className="h-6 w-6 text-primary" />
+                    <span className="text-sm">Practices</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="h-20 flex-col gap-2"
+                    onClick={() => onNavigate('library')}
+                  >
+                    <BookOpen className="h-6 w-6 text-primary" />
+                    <span className="text-sm">Library</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="h-20 flex-col gap-2"
+                    onClick={() => onNavigate('help')}
+                  >
+                    <Heart className="h-6 w-6 text-primary" />
+                    <span className="text-sm">Help</span>
+                  </Button>
+                </ResponsiveGrid>
+              )}
 
             </div>
 

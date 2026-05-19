@@ -64,7 +64,7 @@ const DEFAULT_VISIBILITY: WidgetVisibility = {
 	'mood-check': true,
 	'one-thing-today': true,
 	'stats-row': true,
-	'adaptive-mode-banner': true,
+	'adaptive-mode-banner': false,
 	'crisis-follow-up': true,
 	'checkins': true,
 	'smart-nudges': true,
@@ -73,7 +73,7 @@ const DEFAULT_VISIBILITY: WidgetVisibility = {
 	'gratitude': true,
 	'habits': true,
 	'intentions-sleep': true,
-	'assessment-scores': true,
+	'assessment-scores': false,
 	'recommended-next-step': true,
 	'today-practice': true,
 	'quick-actions': true,
@@ -114,7 +114,7 @@ const WIDGET_GROUPS: Array<{ id: string; title: string; widgets: DashboardWidget
 	{
 		id: 'adaptive-support',
 		title: 'Adaptive Support',
-		widgets: ['adaptive-mode-banner', 'crisis-follow-up', 'checkins', 'smart-nudges', 'community-insights', 'assessment-reminder']
+		widgets: ['crisis-follow-up', 'checkins', 'smart-nudges', 'community-insights', 'assessment-reminder']
 	},
 	{
 		id: 'growth',
@@ -124,7 +124,7 @@ const WIDGET_GROUPS: Array<{ id: string; title: string; widgets: DashboardWidget
 	{
 		id: 'insights',
 		title: 'Insights & Progress',
-		widgets: ['assessment-scores', 'recent-insights', 'this-week']
+		widgets: ['recent-insights', 'this-week']
 	},
 	{
 		id: 'navigation',

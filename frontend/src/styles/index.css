@@ -386,6 +386,29 @@
     font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
   }
 
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 320px;
+    overflow-x: clip;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+  }
+
   :root[data-theme-transition] body::before,
   :root[data-theme-transition] body::after {
     content: "";
@@ -5297,6 +5320,87 @@
   --border: #404040;
   --input: #404040;
   --ring: #a3a3a3;
+}
+
+/* Accessibility-safe palette contrast overrides.
+   These keep semantic foreground/background pairs at WCAG AA contrast and keep
+   focus rings above the 3:1 UI-component threshold. */
+:root:not(.a11y-high-contrast):not([data-color-palette]) {
+  --primary: #84633f;
+  --primary-hover: #755735;
+  --ring: #84633f;
+  --muted-foreground: #6d5f56;
+}
+
+:root:not(.a11y-high-contrast):not([data-color-palette])[data-theme="dark"],
+:root:not(.a11y-high-contrast):not([data-color-palette]).dark {
+  --secondary-foreground: #102016;
+  --accent-foreground: #102822;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="ocean"] {
+  --primary: #0e7490;
+  --ring: #0e7490;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="ocean"][data-theme="dark"],
+:root:not(.a11y-high-contrast)[data-color-palette="ocean"].dark {
+  --accent: #22d3ee;
+  --accent-foreground: #164e63;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="forest"] {
+  --primary: #047857;
+  --ring: #047857;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="forest"][data-theme="dark"],
+:root:not(.a11y-high-contrast)[data-color-palette="forest"].dark {
+  --accent: #34d399;
+  --accent-foreground: #064e3b;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="sunset"] {
+  --primary: #c2410c;
+  --ring: #c2410c;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="sunset"][data-theme="dark"],
+:root:not(.a11y-high-contrast)[data-color-palette="sunset"].dark {
+  --primary: #fb923c;
+  --primary-foreground: #1c0f0a;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="lavender"] {
+  --accent-foreground: #2e1065;
+}
+
+:root:not(.a11y-high-contrast)[data-color-palette="lavender"][data-theme="dark"],
+:root:not(.a11y-high-contrast)[data-color-palette="lavender"].dark {
+  --accent-foreground: #16001f;
+}
+
+:root.a11y-high-contrast {
+  color-scheme: dark;
+  --background: oklch(.26 .045 276);
+  --foreground: oklch(.96 .02 266);
+  --card: oklch(.3 .04 278);
+  --card-foreground: oklch(.98 .02 266);
+  --popover: oklch(.27 .04 278);
+  --popover-foreground: oklch(.97 .02 266);
+  --primary: oklch(.7 .17 204);
+  --primary-foreground: oklch(.22 .02 252);
+  --secondary: oklch(.33 .035 288);
+  --secondary-foreground: oklch(.9 .03 268);
+  --muted: oklch(.31 .03 280);
+  --muted-foreground: oklch(.74 .05 278);
+  --accent: oklch(.64 .2 312);
+  --accent-foreground: oklch(.21 .025 268);
+  --destructive: oklch(.58 .24 25.5);
+  --destructive-foreground: oklch(.92 .03 20);
+  --border: oklch(.36 .03 284);
+  --input: oklch(.36 .03 284);
+  --ring: oklch(.68 .18 210);
 }
 
 html {

@@ -1,36 +1,31 @@
-import { 
-  Send,
-  ArrowLeft,
-  MessageCircle,
-  Bot,
-  User,
-  Loader2,
+import {
   AlertTriangle,
-  Phone,
-  X,
+  ArrowLeft,
+  Bot,
+  Download,
+  LifeBuoy,
+  Loader2,
+  Menu,
+  MessageCircle,
   Mic,
   MoreVertical,
-  Menu,
-  Plus,
-  Paperclip,
+  Phone,
+  Send,
+  User,
   Volume2,
   VolumeX,
-  Download,
-  ChevronDown,
-  ChevronUp,
-  ThumbsDown,
-  ThumbsUp,
-  LifeBuoy,
-  PanelLeftClose,
-  PanelLeftOpen,
-  GripVertical
+  X,
 } from 'lucide-react';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
-import { chatApi, conversationsApi } from '../../../services/api';
+import { chatApi, conversationsApi, type ConversationMessage } from '../../../services/api';
 import { parseAssessmentPromptMeta, type AssessmentPromptMeta } from '../../../types/chat';
-import type { ISpeechRecognition, ISpeechRecognitionEvent, ISpeechRecognitionErrorEvent } from '../../../types/speech-recognition';
+import type {
+  ISpeechRecognition,
+  ISpeechRecognitionErrorEvent,
+  ISpeechRecognitionEvent,
+} from '../../../types/speech-recognition';
 import './responsive-chatbot.css';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
@@ -42,11 +37,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../../ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../../ui/sheet';
 import { Textarea } from '../../ui/textarea';
 
 import { ConversationHistorySidebar } from './ConversationHistorySidebar';
-import { EmptyState } from './EmptyState';
 import { ExportDialog } from './ExportDialog';
 import { MarkdownMessage } from './MarkdownMessage';
 import { MessageActions } from './MessageActions';
@@ -69,23 +63,17 @@ interface Message {
   timestamp: Date;
   metadata?: Record<string, unknown> | string | null;
   suggestions?: string[];
-  isTyping?: boolean;
   feedback?: 'liked' | 'disliked' | null;
-  enableTypewriter?: boolean;
-  isExpanded?: boolean;
   assessmentPrompt?: AssessmentPromptMeta | null;
 }
 
-const BREAKPOINTS = {
-  PHONE: 767,
-  TABLET_PORTRAIT: 1023,
-  TABLET_LANDSCAPE: 1199,
+type SpeechWindow = Window & {
+  SpeechRecognition?: new () => ISpeechRecognition;
+  webkitSpeechRecognition?: new () => ISpeechRecognition;
 };
 
-const SIDEBAR_WIDTH_BOUNDS = {
-  MIN: 260,
-  MAX: 560,
-  DEFAULT: 320,
+const BREAKPOINTS = {
+  MOBILE: 900,
 };
 
 const EMPTY_ASSISTANT_FALLBACK = 'I am here with you. Could you share a little more so I can support you better?';
@@ -99,153 +87,119 @@ const resolveNonEmptyContent = (value: unknown, fallback = EMPTY_ASSISTANT_FALLB
   return trimmed.length > 0 ? trimmed : fallback;
 };
 
+const mapConversationMessageType = (message: ConversationMessage): 'user' | 'bot' | 'system' => {
+  if (message.type === 'user' || message.role === 'user') {
+    return 'user';
+  }
+
+  if (message.type === 'system' || message.role === 'system') {
+    return 'system';
+  }
+
+  return 'bot';
+};
+
+const nowMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const buildUserLabel = (user: ResponsiveChatbotProps['user']) =>
+  [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there';
+
 export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }: ResponsiveChatbotProps) {
   const { settings: accessibilitySettings } = useAccessibility();
-  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return true;
-    }
 
-    return localStorage.getItem('mw-chat-sidebar-open') !== 'false';
-  });
-  const [desktopSidebarWidth, setDesktopSidebarWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') {
-      return SIDEBAR_WIDTH_BOUNDS.DEFAULT;
-    }
-
-    const raw = Number(localStorage.getItem('mw-chat-sidebar-width'));
-    if (!Number.isFinite(raw)) {
-      return SIDEBAR_WIDTH_BOUNDS.DEFAULT;
-    }
-
-    return Math.min(SIDEBAR_WIDTH_BOUNDS.MAX, Math.max(SIDEBAR_WIDTH_BOUNDS.MIN, raw));
-  });
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  // State management
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationStarters, setConversationStarters] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [showCrisisWarning, setShowCrisisWarning] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [messageFeedback, setMessageFeedback] = useState<Record<string, 'liked' | 'disliked' | null>>({});
-  const [currentlyTypingMessageId, setCurrentlyTypingMessageId] = useState<string | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showDesktopSidebar, setShowDesktopSidebar] = useState(true);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [showTools, setShowTools] = useState(false);
+  const [showCrisisWarning, setShowCrisisWarning] = useState(false);
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, 'liked' | 'disliked' | null>>({});
   const [feedbackTargetMessageId, setFeedbackTargetMessageId] = useState<string | null>(null);
   const [feedbackNote, setFeedbackNote] = useState('');
-  const [isSubmittingFeedbackNote, setIsSubmittingFeedbackNote] = useState(false);
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceInputSupported, setVoiceInputSupported] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
-  
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    typeof window === 'undefined' ? 1200 : window.innerWidth
+  );
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const initializedForUserRef = useRef<string | null>(null);
-  const proactiveCheckInTimeoutRef = useRef<number | null>(null);
   const currentConversationIdRef = useRef<string | null>(null);
-  const activeRequestIdRef = useRef(0);
-  const isResizingSidebarRef = useRef(false);
+  const userSignatureRef = useRef<string | null>(null);
+  const requestSequenceRef = useRef(0);
 
-  const userSignature = [user?.firstName, user?.lastName, user?.name]
-    .filter(Boolean)
-    .join('|') || 'anonymous';
-  const hasSpeakableMessage = messages.some(
-    (message) => message.type === 'bot' && message.content.trim().length > 0
+  const userLabel = buildUserLabel(user);
+  const userSignature = [user?.firstName, user?.lastName, user?.name].filter(Boolean).join('|') || 'anonymous';
+  const isMobile = viewportWidth <= BREAKPOINTS.MOBILE;
+
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.type === 'bot' && message.content.trim().length > 0),
+    [messages]
   );
 
-  // Responsive helpers
-  const isPhone = viewportWidth <= BREAKPOINTS.PHONE;
-  const isTabletPortrait = viewportWidth > BREAKPOINTS.PHONE && viewportWidth <= BREAKPOINTS.TABLET_PORTRAIT;
-  const isTabletLandscape = viewportWidth > BREAKPOINTS.TABLET_PORTRAIT && viewportWidth <= BREAKPOINTS.TABLET_LANDSCAPE;
-  const isDesktop = viewportWidth > BREAKPOINTS.TABLET_LANDSCAPE;
-  const isMobile = isPhone || isTabletPortrait;
+  const appendSystemMessage = useCallback((content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: nowMessageId(),
+        type: 'system',
+        content,
+        timestamp: new Date(),
+      },
+    ]);
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
 
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
   }, [currentConversationId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    localStorage.setItem('mw-chat-sidebar-open', isDesktopSidebarOpen ? 'true' : 'false');
-  }, [isDesktopSidebarOpen]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    localStorage.setItem('mw-chat-sidebar-width', String(desktopSidebarWidth));
-  }, [desktopSidebarWidth]);
-
-  useEffect(() => {
-    if (!isDesktop && !isTabletLandscape) {
-      if (isResizingSidebarRef.current) {
-        isResizingSidebarRef.current = false;
-        setIsResizingSidebar(false);
-      }
-      return;
-    }
-
-    const stopResize = () => {
-      if (isResizingSidebarRef.current) {
-        isResizingSidebarRef.current = false;
-        setIsResizingSidebar(false);
-      }
+    const onResize = () => {
+      setViewportWidth(window.innerWidth);
     };
 
-    const handlePointerMove = (event: PointerEvent) => {
-      if (!isResizingSidebarRef.current) {
-        return;
-      }
-
-      const nextWidth = Math.min(
-        SIDEBAR_WIDTH_BOUNDS.MAX,
-        Math.max(SIDEBAR_WIDTH_BOUNDS.MIN, event.clientX)
-      );
-      setDesktopSidebarWidth(nextWidth);
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', stopResize);
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopResize);
-    };
-  }, [isDesktop, isTabletLandscape]);
-
-  const startSidebarResize = useCallback(() => {
-    if (!(isDesktop || isTabletLandscape)) {
-      return;
-    }
-
-    isResizingSidebarRef.current = true;
-    setIsResizingSidebar(true);
-  }, [isDesktop, isTabletLandscape]);
-
-  // Handle viewport resize
-  useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
-    if (!isMobile && showTools) {
-      setShowTools(false);
+    if (!isMobile) {
+      setShowMobileSidebar(false);
     }
-  }, [isMobile, showTools]);
+  }, [isMobile]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowJumpToLatest(distanceFromBottom > 120);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(messages.length <= 1 ? 'auto' : 'smooth');
+  }, [messages, scrollToBottom]);
 
   useEffect(() => {
     const textarea = inputRef.current;
@@ -254,150 +208,97 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     }
 
     textarea.style.height = 'auto';
-    const maxHeight = isMobile ? 132 : 120;
-    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${nextHeight}px`;
+    const maxHeight = isMobile ? 160 : 144;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [inputValue, isMobile]);
 
-  // Auto-scroll logic with user override detection
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (!isUserScrolling) {
-      messagesEndRef.current?.scrollIntoView({ behavior });
-    }
-  }, [isUserScrolling]);
+  const loadInitialConversation = useCallback(async () => {
+    try {
+      const [greetingResponse, startersResponse, checkInResponse] = await Promise.all([
+        chatApi.getMoodBasedGreeting(),
+        chatApi.getConversationStarters(),
+        chatApi.getProactiveCheckIn(),
+      ]);
 
-  // Detect user scrolling
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
+      const greetingText =
+        greetingResponse.success && greetingResponse.data?.greeting
+          ? greetingResponse.data.greeting
+          : `Hello ${userLabel}! I am ManaSarathi, your wellbeing companion. Tell me what is on your mind right now.`;
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-      
-      if (!isAtBottom) {
-        setIsUserScrolling(true);
-        setShowJumpToLatest(true);
-      } else {
-        setIsUserScrolling(false);
-        setShowJumpToLatest(false);
-      }
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (!isUserScrolling) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom, isUserScrolling]);
-
-  // Load conversation starters and initial greeting
-  useEffect(() => {
-    if (initializedForUserRef.current === userSignature) {
-      return;
-    }
-    initializedForUserRef.current = userSignature;
-
-    if (proactiveCheckInTimeoutRef.current !== null) {
-      window.clearTimeout(proactiveCheckInTimeoutRef.current);
-      proactiveCheckInTimeoutRef.current = null;
-    }
-
-    const loadInitialData = async () => {
-      try {
-        const greetingResponse = await chatApi.getMoodBasedGreeting();
-        let greetingText = `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm ManaSarathi, your AI wellbeing companion. I'm here to listen, support, and help guide you through your mental health journey. What would you like to talk about today?`;
-        
-        if (greetingResponse.success && greetingResponse.data?.greeting) {
-          greetingText = greetingResponse.data.greeting;
-        }
-
-        const greeting: Message = {
-          id: '1',
+      const initialMessages: Message[] = [
+        {
+          id: nowMessageId(),
           type: 'bot',
           content: greetingText,
           timestamp: new Date(),
-          suggestions: []
-        };
-        setMessages([greeting]);
+        },
+      ];
 
-        const startersResponse = await chatApi.getConversationStarters();
-        if (startersResponse.success && startersResponse.data) {
-          setConversationStarters(startersResponse.data);
-        }
-
-        const checkInResponse = await chatApi.getProactiveCheckIn();
-        if (checkInResponse.success && checkInResponse.data?.shouldCheckIn) {
-          const checkIn = checkInResponse.data;
-          proactiveCheckInTimeoutRef.current = window.setTimeout(() => {
-            const checkInMessage: Message = {
-              id: `checkin-${Date.now()}`,
-              type: 'bot',
-              content: checkIn.message,
-              timestamp: new Date(),
-              suggestions: ['Tell me more', 'I\'m doing okay', 'Not right now']
-            };
-            setMessages(prev => [...prev, checkInMessage]);
-          }, 2000);
-        }
-      } catch (error) {
-        console.error('Failed to load initial data:', error);
-        const fallbackGreeting: Message = {
-          id: '1',
+      if (checkInResponse.success && checkInResponse.data?.shouldCheckIn) {
+        initialMessages.push({
+          id: nowMessageId(),
           type: 'bot',
-          content: `Hello! I'm your AI wellbeing companion. How are you feeling today?`,
+          content: checkInResponse.data.message,
           timestamp: new Date(),
-          suggestions: []
-        };
-        setMessages([fallbackGreeting]);
+          suggestions: ['Tell me more', 'I am okay for now', 'Maybe later'],
+        });
       }
-    };
 
-    loadInitialData();
+      setMessages(initialMessages);
+      setConversationStarters(startersResponse.success && startersResponse.data ? startersResponse.data : []);
+    } catch (error) {
+      console.error('Failed to bootstrap chatbot:', error);
+      setMessages([
+        {
+          id: nowMessageId(),
+          type: 'bot',
+          content: `Hello ${userLabel}! I am here with you. What would help most right now?`,
+          timestamp: new Date(),
+        },
+      ]);
+      setConversationStarters([]);
+    }
+  }, [userLabel]);
 
-    return () => {
-      if (proactiveCheckInTimeoutRef.current !== null) {
-        window.clearTimeout(proactiveCheckInTimeoutRef.current);
-        proactiveCheckInTimeoutRef.current = null;
-      }
-    };
-  }, [user, userSignature]);
-
-  // Initialize speech recognition
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      if (SpeechRecognitionAPI) {
-        const recognition = new SpeechRecognitionAPI();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
+    if (userSignatureRef.current === userSignature) {
+      return;
+    }
 
-        recognition.onresult = (event: ISpeechRecognitionEvent) => {
-          const transcript = event.results[0][0].transcript;
-          setInputValue(transcript);
-          setIsListening(false);
-        };
+    userSignatureRef.current = userSignature;
+    setCurrentConversationId(null);
+    setInputValue('');
+    setMessageFeedback({});
+    void loadInitialConversation();
+  }, [loadInitialConversation, userSignature]);
 
-        recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
-          console.error('Speech recognition error:', event.error);
-          setIsListening(false);
-        };
+  useEffect(() => {
+    const speechWindow = window as SpeechWindow;
+    const SpeechRecognitionApi = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-        
-        recognitionRef.current = recognition;
-        setVoiceInputSupported(true);
-      }
-    } else {
-      setVoiceInputSupported(false);
+    if (SpeechRecognitionApi) {
+      const recognition = new SpeechRecognitionApi();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: ISpeechRecognitionEvent) => {
+        const transcript = event.results?.[0]?.[0]?.transcript || '';
+        setInputValue((prev) => (prev.trim().length > 0 ? `${prev} ${transcript}`.trim() : transcript));
+        setIsListening(false);
+      };
+
+      recognition.onerror = (_event: ISpeechRecognitionErrorEvent) => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      setVoiceInputSupported(true);
     }
 
     if ('speechSynthesis' in window) {
@@ -405,50 +306,22 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
     }
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      if (synthRef.current) {
-        synthRef.current.cancel();
-      }
+      recognitionRef.current?.stop();
+      synthRef.current?.cancel();
     };
   }, []);
 
-  const toggleVoiceInput = () => {
-    if (!recognitionRef.current) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `voice-unsupported-${Date.now()}`,
-          type: 'system',
-          content: 'Voice input is not supported in this browser. Please use Chrome or Edge.',
-          timestamp: new Date(),
-        },
-      ]);
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      recognitionRef.current.start();
-      setIsListening(true);
-    }
-  };
-
   const speakText = (text: string) => {
     if (!synthRef.current) {
-      console.warn('Speech synthesis not supported');
+      appendSystemMessage('Speech output is not supported in this browser.');
       return;
     }
 
     synthRef.current.cancel();
-
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -458,144 +331,196 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   };
 
   const stopSpeaking = () => {
-    if (synthRef.current) {
-      synthRef.current.cancel();
-      setIsSpeaking(false);
-    }
+    synthRef.current?.cancel();
+    setIsSpeaking(false);
   };
 
-  const handleComposerVoiceOutput = () => {
-    if (isSpeaking) {
-      stopSpeaking();
+  const toggleVoiceInput = () => {
+    if (!voiceInputSupported || !recognitionRef.current) {
+      appendSystemMessage('Voice input is not supported in this browser. Try Chrome or Edge.');
       return;
     }
 
-    const speakableMessage = [...messages]
-      .reverse()
-      .find((message) => message.type === 'bot' && message.content.trim().length > 0);
-
-    if (speakableMessage) {
-      speakText(speakableMessage.content);
-    }
-  };
-
-  const sendMessageContent = async (
-    content: string,
-    options?: { showUserMessage?: boolean; conversationId?: string }
-  ) => {
-    if (isTyping || isLoadingConversation) {
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
       return;
     }
 
-    const messageContent = content.trim();
-    if (!messageContent) return;
+    recognitionRef.current.start();
+    setIsListening(true);
+  };
 
-    const shouldShowUserMessage = options?.showUserMessage !== false;
-    if (shouldShowUserMessage) {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        type: 'user',
-        content: messageContent,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, userMessage]);
-      setInputValue('');
+  const pushAssistantReply = useCallback((responseData: Awaited<ReturnType<typeof chatApi.sendMessage>>['data']) => {
+    if (!responseData) {
+      appendSystemMessage('No response payload received from the server.');
+      return;
     }
 
-    setIsUserScrolling(false);
-    setIsTyping(true);
-    const requestId = ++activeRequestIdRef.current;
+    const structuredMessage =
+      typeof responseData.message === 'object' && responseData.message !== null ? responseData.message : null;
 
-    try {
-      const targetConversationId = options?.conversationId ?? currentConversationIdRef.current ?? undefined;
-      const response = await chatApi.sendMessage(messageContent, targetConversationId, {
-        simpleLanguage: accessibilitySettings.simpleLanguage,
-      });
+    const assistantContent = resolveNonEmptyContent(
+      structuredMessage ? structuredMessage.content : responseData.message,
+      'I am having trouble generating a response right now. Please try again.'
+    );
 
-      if (requestId !== activeRequestIdRef.current) {
+    const metadata =
+      structuredMessage && 'metadata' in structuredMessage
+        ? ((structuredMessage.metadata as Record<string, unknown> | string | null) ?? null)
+        : null;
+
+    const assessmentPrompt = parseAssessmentPromptMeta(
+      (responseData.assessmentPrompt as Record<string, unknown> | null | undefined) ?? metadata
+    );
+
+    const persistedId =
+      structuredMessage && 'id' in structuredMessage && structuredMessage.id ? String(structuredMessage.id) : nowMessageId();
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: persistedId,
+        type: 'bot',
+        content: assistantContent,
+        metadata,
+        suggestions: responseData.smartReplies || [],
+        timestamp: new Date(),
+        assessmentPrompt,
+      },
+    ]);
+
+    if (responseData.crisis) {
+      setShowCrisisWarning(true);
+    }
+
+    if (responseData.conversationId) {
+      setCurrentConversationId(responseData.conversationId);
+    }
+  }, [appendSystemMessage]);
+
+  const sendMessageContent = useCallback(
+    async (content: string, options?: { showUserMessage?: boolean; conversationId?: string }) => {
+      if (isSending || isLoadingConversation) {
         return;
       }
 
-      if (response.success && response.data) {
-        const messagePayload = response.data;
-
-        if (messagePayload.conversationId && messagePayload.conversationId !== currentConversationId) {
-          setCurrentConversationId(messagePayload.conversationId);
-        }
-
-        const structuredContent =
-          typeof messagePayload.message === 'object' && messagePayload.message !== null
-            ? messagePayload.message.content
-            : undefined;
-        const structuredMetadata =
-          typeof messagePayload.message === 'object' && messagePayload.message !== null && 'metadata' in messagePayload.message
-            ? ((messagePayload.message.metadata as Record<string, unknown> | string | null) ?? null)
-            : null;
-        const assessmentPrompt = parseAssessmentPromptMeta(
-          (messagePayload.assessmentPrompt as Record<string, unknown> | null | undefined) ?? structuredMetadata
-        );
-        const resolvedContent = resolveNonEmptyContent(
-          structuredContent,
-          'I apologize, but I encountered an issue generating a response.'
-        );
-
-        const smartReplies = messagePayload.smartReplies || [];
-
-        const persistedBotMessageId =
-          typeof messagePayload.message === 'object' &&
-          messagePayload.message !== null &&
-          'id' in messagePayload.message &&
-          messagePayload.message.id
-            ? String(messagePayload.message.id)
-            : (Date.now() + 2).toString();
-        const botResponse: Message = {
-          id: persistedBotMessageId,
-          type: 'bot',
-          content: resolvedContent,
-          metadata: structuredMetadata,
-          timestamp: new Date(),
-          suggestions: smartReplies,
-          enableTypewriter: true,
-          assessmentPrompt,
-        };
-
-        setCurrentlyTypingMessageId(persistedBotMessageId);
-        setMessages(prev => [...prev, botResponse]);
-
-        if (messagePayload.crisis) {
-          setShowCrisisWarning(true);
-        }
-      } else {
-        const fallbackMessage: Message = {
-          id: (Date.now() + 2).toString(),
-          type: 'bot',
-          content: 'I\'m having trouble connecting right now, but I\'m here to listen. Could you tell me more about how you\'re feeling?',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, fallbackMessage]);
+      const cleanContent = content.trim();
+      if (!cleanContent) {
+        return;
       }
-    } catch (error) {
-      console.error('Chat API error:', error);
 
-      const errorMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        type: 'bot',
-        content: 'I\'m experiencing some technical difficulties right now. In the meantime, please know that I\'m here to support you. What would you like to talk about?',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
+      const shouldShowUserMessage = options?.showUserMessage !== false;
+      if (shouldShowUserMessage) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nowMessageId(),
+            type: 'user',
+            content: cleanContent,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+
+      setInputValue('');
+      setIsSending(true);
+      const requestId = ++requestSequenceRef.current;
+
+      try {
+        const response = await chatApi.sendMessage(
+          cleanContent,
+          options?.conversationId ?? currentConversationIdRef.current ?? undefined,
+          {
+            simpleLanguage: accessibilitySettings.simpleLanguage,
+          }
+        );
+
+        if (requestId !== requestSequenceRef.current) {
+          return;
+        }
+
+        if (!response.success || !response.data) {
+          appendSystemMessage(response.error || 'Unable to send message right now.');
+          return;
+        }
+
+        pushAssistantReply(response.data);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        appendSystemMessage('I hit a temporary issue while sending your message. Please try again.');
+      } finally {
+        if (requestId === requestSequenceRef.current) {
+          setIsSending(false);
+        }
+      }
+    },
+    [
+      accessibilitySettings.simpleLanguage,
+      appendSystemMessage,
+      isLoadingConversation,
+      isSending,
+      pushAssistantReply,
+    ]
+  );
 
   const handleSendMessage = async () => {
-    if (isTyping || isLoadingConversation) {
+    await sendMessageContent(inputValue);
+  };
+
+  const handleSelectConversation = async (conversationId: string | null) => {
+    requestSequenceRef.current += 1;
+    setIsSending(false);
+
+    if (conversationId === null) {
+      setCurrentConversationId(null);
+      setInputValue('');
+      setShowMobileSidebar(false);
+      await loadInitialConversation();
       return;
     }
 
-    setShowTools(false);
-    await sendMessageContent(inputValue);
+    setShowMobileSidebar(false);
+    setCurrentConversationId(conversationId);
+    setInputValue('');
+    setIsLoadingConversation(true);
+
+    try {
+      const response = await conversationsApi.getConversation(conversationId);
+      if (!response.success || !response.data?.messages) {
+        appendSystemMessage(response.error || 'Failed to load conversation.');
+        return;
+      }
+
+      const loadedMessages: Message[] = response.data.messages.map((message) => {
+        const type = mapConversationMessageType(message);
+        const parsedPrompt = parseAssessmentPromptMeta(message.metadata ?? null);
+
+        return {
+          id: message.id,
+          type,
+          content: type === 'bot' || type === 'system' ? resolveNonEmptyContent(message.content) : message.content,
+          metadata: message.metadata ?? null,
+          timestamp: new Date(message.createdAt),
+          assessmentPrompt: parsedPrompt,
+          suggestions: [],
+        };
+      });
+
+      setMessages(loadedMessages.length > 0 ? loadedMessages : [
+        {
+          id: nowMessageId(),
+          type: 'system',
+          content: 'This conversation has no messages yet.',
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error('Failed to load selected conversation:', error);
+      appendSystemMessage('Failed to load conversation. Please try again.');
+    } finally {
+      setIsLoadingConversation(false);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -603,285 +528,115 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
   };
 
   const handleLike = async (messageId: string) => {
-    setMessageFeedback(prev => ({ ...prev, [messageId]: 'liked' }));
+    setMessageFeedback((prev) => ({ ...prev, [messageId]: 'liked' }));
     try {
       await chatApi.submitMessageFeedback(messageId, 'liked');
     } catch (error) {
       console.error('Failed to submit like feedback:', error);
-      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
+      setMessageFeedback((prev) => ({ ...prev, [messageId]: null }));
     }
   };
 
+  const handleDislike = (messageId: string) => {
+    setMessageFeedback((prev) => ({ ...prev, [messageId]: 'disliked' }));
+    setFeedbackTargetMessageId(messageId);
+    setFeedbackNote('');
+  };
+
   const submitDislikeFeedback = async (messageId: string, note?: string) => {
+    setIsSubmittingFeedback(true);
     try {
-      setIsSubmittingFeedbackNote(true);
-      const feedbackResponse = await chatApi.submitMessageFeedback(messageId, 'disliked', note);
-      if (feedbackResponse.success && feedbackResponse.data?.repairPrompt) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: `repair-${Date.now()}`,
-            type: 'system',
-            content: feedbackResponse.data.repairPrompt,
-            timestamp: new Date(),
-          },
-        ]);
+      const response = await chatApi.submitMessageFeedback(messageId, 'disliked', note);
+      if (response.success && response.data?.repairPrompt) {
+        appendSystemMessage(response.data.repairPrompt);
       }
     } catch (error) {
       console.error('Failed to submit dislike feedback:', error);
-      setMessageFeedback(prev => ({ ...prev, [messageId]: null }));
+      setMessageFeedback((prev) => ({ ...prev, [messageId]: null }));
     } finally {
-      setIsSubmittingFeedbackNote(false);
+      setIsSubmittingFeedback(false);
       setFeedbackTargetMessageId(null);
       setFeedbackNote('');
     }
   };
 
-  const handleDislike = (messageId: string) => {
-    setMessageFeedback(prev => ({ ...prev, [messageId]: 'disliked' }));
-    setFeedbackTargetMessageId(messageId);
-    setFeedbackNote('');
-  };
-
   const handleRegenerate = async (messageId: string) => {
-    const messageIndex = messages.findIndex((m) => m.id === messageId);
-    if (messageIndex === -1) return;
+    const messageIndex = messages.findIndex((message) => message.id === messageId);
+    if (messageIndex < 0) {
+      return;
+    }
 
-    const userMessages = messages.slice(0, messageIndex).filter((m) => m.type === 'user');
-    if (userMessages.length === 0) return;
+    const previousUserMessage = [...messages.slice(0, messageIndex)]
+      .reverse()
+      .find((message) => message.type === 'user');
 
-    const lastUserMessage = userMessages[userMessages.length - 1];
-    setMessages(prev => prev.filter((m) => m.id !== messageId));
+    if (!previousUserMessage) {
+      return;
+    }
 
-    await sendMessageContent(lastUserMessage.content, {
+    setMessages((prev) => prev.filter((message) => message.id !== messageId));
+    await sendMessageContent(previousUserMessage.content, {
       showUserMessage: false,
-      conversationId: currentConversationId || undefined
+      conversationId: currentConversationIdRef.current ?? undefined,
     });
   };
 
-  const handleSelectConversation = async (conversationId: string | null) => {
-    activeRequestIdRef.current += 1;
-    setIsTyping(false);
-
-    if (conversationId === null) {
-      setCurrentConversationId(null);
-      currentConversationIdRef.current = null;
-      setMessages([]);
-      setInputValue('');
-      setIsLoadingConversation(false);
-      setShowMobileSidebar(false);
-      
-      const greeting: Message = {
-        id: '1',
-        type: 'bot',
-        content: `Hello ${([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'there')}! I'm your AI wellbeing companion. What would you like to talk about today?`,
-        timestamp: new Date(),
-        suggestions: conversationStarters
-      };
-      setMessages([greeting]);
-    } else {
-      setCurrentConversationId(conversationId);
-      currentConversationIdRef.current = conversationId;
-      setInputValue('');
-      setShowMobileSidebar(false);
-      setIsLoadingConversation(true);
-      
-      const loadingMessage: Message = {
-        id: 'loading',
-        type: 'system',
-        content: 'Loading conversation...',
-        timestamp: new Date()
-      };
-      setMessages([loadingMessage]);
-      
-      try {
-        const response = await conversationsApi.getConversation(conversationId);
-        if (response.success && response.data?.messages) {
-          const loadedMessages: Message[] = response.data.messages.map((msg) => ({
-            id: msg.id,
-            type: msg.type as 'user' | 'bot' | 'system',
-            content:
-              msg.type === 'bot' || msg.type === 'system'
-                ? resolveNonEmptyContent(msg.content)
-                : String(msg.content ?? ''),
-            timestamp: new Date(msg.createdAt),
-            metadata: msg.metadata ?? null,
-            assessmentPrompt: parseAssessmentPromptMeta(msg.metadata ?? null),
-            suggestions: [],
-          }));
-          
-          setMessages(loadedMessages);
-        } else {
-          const errorMessage: Message = {
-            id: 'error',
-            type: 'system',
-            content: 'Failed to load conversation. Please try again.',
-            timestamp: new Date()
-          };
-          setMessages([errorMessage]);
-        }
-      } catch (error) {
-        console.error('Error loading conversation:', error);
-        const errorMessage: Message = {
-          id: 'error',
-          type: 'system',
-          content: 'Failed to load conversation. Please try again.',
-          timestamp: new Date()
-        };
-        setMessages([errorMessage]);
-      } finally {
-        setIsLoadingConversation(false);
-      }
-    }
-  };
-
-  const toggleMessageExpansion = (messageId: string) => {
-    setMessages(prev => prev.map(msg =>
-      msg.id === messageId ? { ...msg, isExpanded: !msg.isExpanded } : msg
-    ));
-  };
-
-  const jumpToLatest = () => {
-    setIsUserScrolling(false);
-    setShowJumpToLatest(false);
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  // Message component with long content handling
-  const MessageBubble = ({ message }: { message: Message }) => {
+  const messageBubble = (message: Message) => {
     const isUser = message.type === 'user';
     const isSystem = message.type === 'system';
-    const assessmentPrompt = !isUser && !isSystem
-      ? (message.assessmentPrompt ?? parseAssessmentPromptMeta(message.metadata))
-      : null;
-    const maxLength = isMobile ? 300 : 500;
-    const isLongMessage = message.content.length > maxLength;
-    const shouldTruncate = isLongMessage && !message.isExpanded;
-    const displayContent = shouldTruncate 
-      ? message.content.substring(0, maxLength) + '...'
-      : message.content;
+    const feedback = messageFeedback[message.id] || null;
 
     return (
-      <div className={`flex gap-2 md:gap-3 ${isUser ? 'justify-end' : 'justify-start'} mb-3 md:mb-4 group`}>
+      <article key={message.id} className={`chat-message-row ${isUser ? 'chat-message-row--user' : ''}`}>
         {!isUser && (
-          <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-            isSystem ? 'bg-amber-100' : 'bg-primary/10'
-          }`}>
-            {isSystem ? (
-              <AlertTriangle className="h-3 w-3 md:h-4 md:w-4 text-amber-600" />
-            ) : (
-              <Bot className="h-3 w-3 md:h-4 md:w-4 text-primary" />
-            )}
+          <div className={`chat-avatar ${isSystem ? 'chat-avatar--system' : 'chat-avatar--assistant'}`}>
+            {isSystem ? <AlertTriangle size={14} /> : <Bot size={14} />}
           </div>
         )}
-        
-        <div className={`max-w-[88%] md:max-w-[80%] ${isUser ? 'order-1' : 'order-2'}`}>
-          <div
-            className={`rounded-2xl px-3 py-2 md:px-4 md:py-3 ${
-              isUser
-                ? 'bg-primary text-primary-foreground ml-auto'
-                : isSystem
-                ? 'bg-amber-50 border border-amber-200 text-amber-800'
-                : 'bg-muted'
-            }`}
-          >
-            <MarkdownMessage 
-              content={displayContent} 
-              enableTypewriter={message.enableTypewriter && message.id === currentlyTypingMessageId}
-              typewriterSpeed={20}
-              onTypewriterComplete={() => setCurrentlyTypingMessageId(null)}
-            />
-            
-            {isLongMessage && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2 h-auto p-0 text-xs hover:underline"
-                onClick={() => toggleMessageExpansion(message.id)}
-              >
-                {message.isExpanded ? (
-                  <>
-                    <ChevronUp className="h-3 w-3 mr-1" />
-                    Show less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3 w-3 mr-1" />
-                    Show more
-                  </>
-                )}
-              </Button>
-            )}
+
+        <div className={`chat-bubble-wrap ${isUser ? 'chat-bubble-wrap--user' : ''}`}>
+          <div className={`chat-bubble ${isUser ? 'chat-bubble--user' : isSystem ? 'chat-bubble--system' : 'chat-bubble--assistant'}`}>
+            <MarkdownMessage content={message.content} />
           </div>
 
-          {assessmentPrompt && (
-            <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-              <p className="text-sm text-foreground">{assessmentPrompt.prompt}</p>
-              {typeof assessmentPrompt.daysSinceLastAssessment === 'number' && (
-                <p className="text-xs text-muted-foreground">
-                  Last anxiety assessment was {assessmentPrompt.daysSinceLastAssessment} day(s) ago.
+          {message.assessmentPrompt && (
+            <div className="chat-assessment-card">
+              <p className="chat-assessment-text">{message.assessmentPrompt.prompt}</p>
+              {typeof message.assessmentPrompt.daysSinceLastAssessment === 'number' && (
+                <p className="chat-assessment-subtext">
+                  Last anxiety check: {message.assessmentPrompt.daysSinceLastAssessment} day(s) ago.
                 </p>
               )}
-              <Button size="sm" onClick={() => onNavigate('assessments')} className={isMobile ? 'min-h-[40px]' : ''}>
-                {assessmentPrompt.ctaLabel}
+              <Button size="sm" onClick={() => onNavigate('assessments')}>
+                {message.assessmentPrompt.ctaLabel}
               </Button>
             </div>
           )}
-          
-          <div className={`flex items-center gap-1 md:gap-2 mt-1 text-xs text-muted-foreground ${
-            isUser ? 'justify-end' : 'justify-start'
-          }`}>
-            <span className="text-[10px] md:text-xs">
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+          <div className={`chat-message-meta ${isUser ? 'chat-message-meta--user' : ''}`}>
+            <span>
+              {message.timestamp.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </span>
-            
             {!isUser && !isSystem && (
-              isMobile ? (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 w-8 p-0 ${messageFeedback[message.id] === 'liked' ? 'bg-green-50 text-green-700' : ''}`}
-                    onClick={() => handleLike(message.id)}
-                    title="This was helpful"
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 w-8 p-0 ${messageFeedback[message.id] === 'disliked' ? 'bg-red-50 text-red-700' : ''}`}
-                    onClick={() => handleDislike(message.id)}
-                    title="This wasn't helpful"
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ) : (
-                <MessageActions
-                  messageId={message.id}
-                  content={message.content}
-                  onLike={handleLike}
-                  onDislike={handleDislike}
-                  onRegenerate={handleRegenerate}
-                  onSpeak={speakText}
-                  feedback={messageFeedback[message.id] || null}
-                />
-              )
+              <MessageActions
+                messageId={message.id}
+                content={message.content}
+                onLike={handleLike}
+                onDislike={handleDislike}
+                onRegenerate={handleRegenerate}
+                onSpeak={speakText}
+                feedback={feedback}
+              />
             )}
           </div>
 
-          {/* Smart Reply Chips */}
           {message.suggestions && message.suggestions.length > 0 && (
-            <div className={`flex gap-2 mt-2 md:mt-3 ${isMobile ? 'overflow-x-auto pb-2' : 'flex-wrap'}`}>
-              {message.suggestions.map((suggestion, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs whitespace-nowrap min-h-[44px] md:min-h-0 px-3 md:px-4 rounded-full"
-                  onClick={() => handleSuggestionClick(suggestion)}
-                >
+            <div className="chat-suggestion-row">
+              {message.suggestions.map((suggestion) => (
+                <Button key={`${message.id}-${suggestion}`} variant="outline" size="sm" onClick={() => handleSuggestionClick(suggestion)}>
                   {suggestion}
                 </Button>
               ))}
@@ -890,442 +645,227 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
         </div>
 
         {isUser && (
-          <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-            <User className="h-3 w-3 md:h-4 md:w-4 text-primary-foreground" />
+          <div className="chat-avatar chat-avatar--user">
+            <User size={14} />
           </div>
         )}
-      </div>
+      </article>
     );
   };
 
-  // Topic chips for empty state
-  const TopicChips = () => {
-    if (conversationStarters.length === 0) return null;
-
-    return (
-      <div className="mt-6">
-        <p className="text-sm text-muted-foreground mb-3 text-center">
-          Or choose a topic to get started:
-        </p>
-        <div className={`${
-          isMobile 
-            ? 'flex gap-2 overflow-x-auto pb-2 hide-scrollbar' 
-            : 'grid grid-cols-2 gap-2'
-        }`}>
-          {conversationStarters.map((starter, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              className={`${
-                isMobile 
-                  ? 'flex-shrink-0 whitespace-nowrap min-h-[44px]' 
-                  : 'h-auto py-3'
-              } px-4 text-left justify-start text-sm hover:bg-primary/5 hover:border-primary/50 transition-all`}
-              onClick={() => handleSuggestionClick(starter)}
-            >
-              {starter}
-            </Button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Composer with responsive controls
-  const Composer = () => {
-    return (
-      <div className="flex-shrink-0 border-t p-3 md:p-4 bg-background safe-area-bottom">
-        {/* Tools menu for mobile */}
-        {isMobile && showTools && (
-          <div className="mb-2 flex gap-2 pb-2 border-b">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-h-[44px]"
-              disabled
-              title="Attachments coming soon"
-              onClick={() => {
-                setShowTools(false);
-              }}
-            >
-              <Paperclip className="h-4 w-4 mr-2" />
-              Attach
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-h-[44px]"
-              onClick={() => {
-                setShowTools(false);
-                onNavigate('help');
-              }}
-            >
-              <LifeBuoy className="h-4 w-4 mr-2" />
-              Support
-            </Button>
-          </div>
-        )}
-
-        <div className="flex gap-2 items-end">
-          {isMobile && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-11 w-11 p-0 flex-shrink-0"
-              aria-label={showTools ? 'Hide tools' : 'Show tools'}
-              onClick={() => setShowTools(!showTools)}
-            >
-              <Plus className="h-5 w-5" />
-            </Button>
-          )}
-          
-          <div className="flex-1 relative">
-            <Textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Share what's on your mind..."
-              disabled={isLoadingConversation}
-              className={`pr-20 resize-none ${isMobile ? 'min-h-[44px] max-h-[132px]' : 'min-h-[48px] max-h-[120px]'}`}
-              rows={1}
-              style={{
-                height: 'auto',
-                maxHeight: isMobile ? '132px' : '120px'
-              }}
-            />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-8 w-8 p-0 ${isMobile ? 'min-h-[44px] min-w-[44px]' : ''}`}
-                onClick={handleComposerVoiceOutput}
-                disabled={!isSpeaking && !hasSpeakableMessage}
-                aria-label={isSpeaking ? 'Stop voice output' : 'Read latest assistant message aloud'}
-                title={isSpeaking ? 'Stop speaking' : 'Read latest assistant message'}
-              >
-                {isSpeaking ? (
-                  <VolumeX className="h-4 w-4" />
-                ) : (
-                  <Volume2 className="h-4 w-4" />
-                )}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-8 w-8 p-0 ${isListening ? 'bg-red-100 text-red-600' : ''} ${isMobile ? 'min-h-[44px] min-w-[44px]' : ''}`}
-                onClick={toggleVoiceInput}
-                disabled={!voiceInputSupported || isLoadingConversation}
-                aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
-                title={
-                  !voiceInputSupported
-                    ? 'Voice input is unavailable in this browser'
-                    : isListening
-                    ? 'Stop listening'
-                    : 'Voice input'
-                }
-              >
-                <Mic className={`h-4 w-4 ${isListening ? 'animate-pulse' : ''}`} />
-              </Button>
-            </div>
-          </div>
-          
-          <Button 
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isTyping || isLoadingConversation}
-            size={isMobile ? 'default' : 'sm'}
-            className={`flex-shrink-0 ${isMobile ? 'h-11 w-11 p-0' : ''}`}
-            aria-label={isTyping ? 'Sending message' : isLoadingConversation ? 'Loading conversation' : 'Send message'}
+  const header = (
+    <header className="chat-header">
+      <div className="chat-header-left">
+        {!isModal && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="chat-header-button"
+            onClick={() => {
+              if (isMobile) {
+                setShowMobileSidebar(true);
+                return;
+              }
+              onNavigate('dashboard');
+            }}
           >
-            {isTyping || isLoadingConversation ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {isMobile ? <Menu size={18} /> : <ArrowLeft size={18} />}
           </Button>
-        </div>
-        
-        {/* Crisis support footer on mobile */}
-        {isMobile && (
-          <div className="mt-2 text-center">
-            <button
-              onClick={() => onNavigate('help')}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Need crisis support? <span className="underline">Tap here</span>
-            </button>
-          </div>
         )}
-      </div>
-    );
-  };
 
-  const chatContent = (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className={`flex-shrink-0 border-b ${isMobile ? 'p-3 safe-area-top' : 'p-4'} ${
-        isModal ? 'bg-background' : 'bg-gradient-to-r from-primary/10 to-accent/10'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-            {!isModal && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className={`flex-shrink-0 ${isMobile ? 'h-9 w-9 p-0' : ''}`}
-                onClick={() => isMobile || isTabletPortrait ? setShowMobileSidebar(true) : onNavigate('dashboard')}
-              >
-                {isMobile || isTabletPortrait ? <Menu className="h-5 w-5" /> : <ArrowLeft className="h-4 w-4" />}
-              </Button>
-            )}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className={`bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 ${isMobile ? 'w-7 h-7' : 'w-8 h-8'}`}>
-                <MessageCircle className={`text-primary ${isMobile ? 'h-3 w-3' : 'h-4 w-4'}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className={`font-semibold truncate ${isMobile ? 'text-sm' : 'text-base'}`}>
-                  AI Wellbeing Companion
-                </h1>
-                <p className={`text-muted-foreground truncate ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
-                  Always here to listen
-                </p>
-              </div>
+        <div className="chat-brand-mark">
+          <MessageCircle size={16} />
+        </div>
+
+        <div className="chat-header-copy">
+          <h1>ManaSarathi Chat</h1>
+          <p>Grounded support, tailored to your context</p>
+        </div>
+      </div>
+
+      <div className="chat-header-actions">
+        {!isModal && !isMobile && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDesktopSidebar((prev) => !prev)}
+            className="chat-header-button"
+          >
+            {showDesktopSidebar ? 'Hide history' : 'Show history'}
+          </Button>
+        )}
+
+        {isModal && onClose && (
+          <Button variant="ghost" size="sm" className="chat-header-button" onClick={onClose}>
+            <X size={18} />
+          </Button>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="chat-header-button">
+              <MoreVertical size={18} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setShowExportDialog(true)}>
+              <Download size={16} className="mr-2" />
+              Export chat
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onNavigate('help')}>
+              <LifeBuoy size={16} className="mr-2" />
+              Crisis resources
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  );
+
+  const composer = (
+    <div className="chat-composer">
+      <Textarea
+        ref={inputRef}
+        value={inputValue}
+        onChange={(event) => setInputValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            void handleSendMessage();
+          }
+        }}
+        placeholder="Share what is happening right now..."
+        className="chat-composer-input"
+        disabled={isLoadingConversation}
+        rows={1}
+      />
+
+      <div className="chat-composer-actions">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (isSpeaking) {
+              stopSpeaking();
+              return;
+            }
+
+            if (latestAssistantMessage) {
+              speakText(latestAssistantMessage.content);
+            }
+          }}
+          disabled={!isSpeaking && !latestAssistantMessage}
+          aria-label={isSpeaking ? 'Stop reading aloud' : 'Read latest assistant message aloud'}
+        >
+          {isSpeaking ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleVoiceInput}
+          disabled={!voiceInputSupported || isLoadingConversation}
+          className={isListening ? 'chat-mic-active' : ''}
+          aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+        >
+          <Mic size={18} />
+        </Button>
+
+        <Button
+          size="sm"
+          onClick={() => void handleSendMessage()}
+          disabled={inputValue.trim().length === 0 || isSending || isLoadingConversation}
+          aria-label="Send message"
+        >
+          {isSending || isLoadingConversation ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const mainPanel = (
+    <section className="chat-main-panel">
+      {header}
+
+      <div ref={messagesContainerRef} className="chat-message-scroll">
+        {messages.length === 0 ? (
+          <div className="chat-empty-state">
+            <div className="chat-empty-mark">
+              <MessageCircle size={22} />
+            </div>
+            <h2>Start your conversation</h2>
+            <p>You can ask for emotional support, reflection prompts, practical coping tools, or daily planning.</p>
+            <div className="chat-empty-starters">
+              {conversationStarters.map((starter) => (
+                <Button key={starter} variant="outline" onClick={() => handleSuggestionClick(starter)}>
+                  {starter}
+                </Button>
+              ))}
             </div>
           </div>
-          
-          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            {!isModal && (isDesktop || isTabletLandscape) && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 md:px-3"
-                onClick={() => setIsDesktopSidebarOpen((prev) => !prev)}
-                aria-label={isDesktopSidebarOpen ? 'Hide conversations sidebar' : 'Show conversations sidebar'}
-              >
-                {isDesktopSidebarOpen ? (
-                  <>
-                    <PanelLeftClose className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Hide</span>
-                  </>
-                ) : (
-                  <>
-                    <PanelLeftOpen className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Conversations</span>
-                  </>
-                )}
-              </Button>
-            )}
-            {isModal && onClose && (
-              <Button variant="ghost" size="sm" onClick={onClose} className={isMobile ? 'h-9 w-9 p-0' : ''}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className={isMobile ? 'h-9 w-9 p-0' : ''}>
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className={isMobile ? 'min-w-[200px]' : ''}>
-                <DropdownMenuItem onClick={() => setShowExportDialog(true)}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Chat
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onNavigate('help')}>
-                  <LifeBuoy className="h-4 w-4 mr-2" />
-                  Crisis Resources
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div 
-        ref={messagesContainerRef}
-        className={`flex-1 overflow-y-auto ${isMobile ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}
-      >
-        {messages.length === 0 ? (
-          <EmptyState 
-            onStarterClick={handleSuggestionClick}
-            starters={conversationStarters.length > 0 ? conversationStarters : undefined}
-          />
         ) : (
           <>
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
-
-            {messages.length === 1 && <TopicChips />}
+            {messages.map((message) => messageBubble(message))}
+            {isSending && (
+              <div className="chat-typing-row">
+                <div className="chat-avatar chat-avatar--assistant">
+                  <Bot size={14} />
+                </div>
+                <div className="chat-typing-pill" aria-label="Assistant is typing">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            )}
           </>
         )}
-        
-        {/* Typing Indicator */}
-        {isTyping && (
-          <div className={`flex gap-2 md:gap-3 justify-start`}>
-            <div className={`rounded-full bg-primary/10 flex items-center justify-center ${isMobile ? 'w-7 h-7' : 'w-8 h-8'}`}>
-              <Bot className={`text-primary ${isMobile ? 'h-3 w-3' : 'h-4 w-4'}`} />
-            </div>
-            <div className="bg-muted rounded-2xl px-3 md:px-4 py-2 md:py-3">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </div>
-          </div>
-        )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Jump to latest button */}
       {showJumpToLatest && (
-        <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-10">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="shadow-lg rounded-full"
-            onClick={jumpToLatest}
-          >
-            <ChevronDown className="h-4 w-4 mr-1" />
+        <div className="chat-jump-wrap">
+          <Button variant="secondary" size="sm" onClick={() => scrollToBottom('smooth')}>
             Jump to latest
           </Button>
         </div>
       )}
 
-      {/* Composer */}
-      <Composer />
-    </div>
-  );
-
-  const feedbackDialog = (
-    <Dialog
-      open={feedbackTargetMessageId !== null}
-      onOpenChange={(open) => {
-        if (open) {
-          return;
-        }
-
-        if (feedbackTargetMessageId) {
-          setMessageFeedback(prev => ({ ...prev, [feedbackTargetMessageId]: null }));
-        }
-
-        setFeedbackTargetMessageId(null);
-        setFeedbackNote('');
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Help Us Improve This Reply</DialogTitle>
-          <DialogDescription>
-            Share what would have been more helpful. This is optional.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          value={feedbackNote}
-          onChange={(event) => setFeedbackNote(event.target.value)}
-          placeholder="Example: I needed clearer next steps."
-          rows={4}
-          maxLength={400}
-        />
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              if (!feedbackTargetMessageId) {
-                return;
-              }
-              void submitDislikeFeedback(feedbackTargetMessageId);
-            }}
-            disabled={isSubmittingFeedbackNote}
-          >
-            Skip
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              if (!feedbackTargetMessageId) {
-                return;
-              }
-
-              const note = feedbackNote.trim();
-              void submitDislikeFeedback(feedbackTargetMessageId, note.length > 0 ? note : undefined);
-            }}
-            disabled={isSubmittingFeedbackNote}
-          >
-            {isSubmittingFeedbackNote ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              'Send Feedback'
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {composer}
+    </section>
   );
 
   return (
     <>
       {isModal ? (
-        <div className="flex flex-col h-full">{chatContent}</div>
+        <div className="chat-modal-shell">{mainPanel}</div>
       ) : (
-        <div className="min-h-screen bg-background flex h-screen">
-          {/* Desktop / Tablet landscape sidebar */}
-          {(isDesktop || isTabletLandscape) && isDesktopSidebarOpen && (
-            <>
-              <div
-                className="border-r flex-shrink-0"
-                style={{ width: desktopSidebarWidth }}
-              >
-                <ConversationHistorySidebar
-                  activeConversationId={currentConversationId}
-                  onSelectConversation={handleSelectConversation}
-                  className="h-screen"
-                  showCloseButton
-                  onCloseSidebar={() => setIsDesktopSidebarOpen(false)}
-                />
-              </div>
-              <button
-                type="button"
-                className={`chat-sidebar-resizer ${isResizingSidebar ? 'chat-sidebar-resizer--active' : ''}`}
-                onPointerDown={startSidebarResize}
-                aria-label="Resize conversation sidebar"
-                title="Drag to resize sidebar"
-              >
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </>
+        <div className="chatbot-redesign-shell">
+          {!isMobile && showDesktopSidebar && (
+            <aside className="chat-history-sidebar">
+              <ConversationHistorySidebar
+                activeConversationId={currentConversationId}
+                onSelectConversation={handleSelectConversation}
+                className="h-full"
+                showCloseButton
+                onCloseSidebar={() => setShowDesktopSidebar(false)}
+              />
+            </aside>
           )}
 
-          {/* Mobile/Tablet Portrait Sidebar - Drawer */}
-          {(isMobile || isTabletPortrait) && (
+          {isMobile && (
             <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
-              <SheetContent 
-                side="left" 
-                className={`p-0 ${isMobile ? 'w-[85vw] max-w-[320px]' : 'w-80'}`}
-                aria-describedby="conversation-drawer-description"
-              >
-                <SheetTitle className="sr-only">Conversation History</SheetTitle>
-                <SheetDescription id="conversation-drawer-description" className="sr-only">
-                  Browse and manage your conversation history
+              <SheetContent side="left" className="p-0 w-[min(88vw,22rem)]" aria-describedby="chat-history-drawer-description">
+                <SheetTitle className="sr-only">Conversation history</SheetTitle>
+                <SheetDescription id="chat-history-drawer-description" className="sr-only">
+                  Browse and switch between previous conversations.
                 </SheetDescription>
                 <ConversationHistorySidebar
                   activeConversationId={currentConversationId}
                   onSelectConversation={(conversationId) => {
-                    handleSelectConversation(conversationId);
+                    void handleSelectConversation(conversationId);
                     setShowMobileSidebar(false);
                   }}
                   className="h-full"
@@ -1336,69 +876,48 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
             </Sheet>
           )}
 
-          {/* Main Chat Area */}
-          <div className="flex-1 flex flex-col h-screen relative">
-            {chatContent}
-          </div>
+          {mainPanel}
         </div>
       )}
 
-      {/* Crisis Warning Modal */}
       {showCrisisWarning && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 safe-area-insets">
-          <Card className={`w-full ${isMobile ? 'max-w-sm' : 'max-w-md'}`}>
+        <div className="chat-crisis-overlay" role="dialog" aria-modal="true">
+          <Card className="chat-crisis-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <AlertTriangle className="h-5 w-5" />
-                We Care About Your Safety
+              <CardTitle className="chat-crisis-title">
+                <AlertTriangle size={18} />
+                We care about your safety
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className={`text-muted-foreground ${isMobile ? 'text-sm' : ''}`}>
-                It sounds like you might be going through something serious. We want to help you connect 
-                with immediate professional support.
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Your message may indicate urgent distress. If you are in immediate danger, call emergency services now.
               </p>
-              
+
               <div className="space-y-2">
-                <Button 
-                  className={`w-full ${isMobile ? 'min-h-[48px]' : ''}`}
-                  onClick={() => window.open('tel:988')}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call 988 (Crisis Lifeline)
+                <Button className="w-full" onClick={() => window.open('tel:988', '_self')}>
+                  <Phone size={16} className="mr-2" />
+                  Call 988 crisis lifeline
                 </Button>
-                
-                <Button 
-                  variant="outline" 
-                  className={`w-full ${isMobile ? 'min-h-[48px]' : ''}`}
+                <Button
+                  variant="outline"
+                  className="w-full"
                   onClick={() => {
                     setShowCrisisWarning(false);
                     onNavigate('help');
                   }}
                 >
-                  View Crisis Resources
+                  Open crisis resources
                 </Button>
-                
-                <Button 
-                  variant="ghost" 
-                  className={`w-full ${isMobile ? 'min-h-[48px]' : ''}`}
-                  onClick={() => setShowCrisisWarning(false)}
-                >
-                  Continue Conversation
+                <Button variant="ghost" className="w-full" onClick={() => setShowCrisisWarning(false)}>
+                  Continue conversation
                 </Button>
-              </div>
-
-              <div className={`text-muted-foreground space-y-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                <p>• National Suicide Prevention Lifeline: 988</p>
-                <p>• Crisis Text Line: Text HOME to 741741</p>
-                <p>• Emergency Services: 911</p>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Export Dialog */}
       {currentConversationId && (
         <ExportDialog
           open={showExportDialog}
@@ -1408,8 +927,75 @@ export function ResponsiveChatbot({ user, onNavigate, isModal = false, onClose }
           messageCount={messages.length}
         />
       )}
-      {feedbackDialog}
 
+      <Dialog
+        open={feedbackTargetMessageId !== null}
+        onOpenChange={(isOpen) => {
+          if (isOpen) {
+            return;
+          }
+
+          if (feedbackTargetMessageId) {
+            setMessageFeedback((prev) => ({ ...prev, [feedbackTargetMessageId]: null }));
+          }
+          setFeedbackTargetMessageId(null);
+          setFeedbackNote('');
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Help improve this response</DialogTitle>
+            <DialogDescription>
+              Tell us what would have made this reply more useful. This is optional.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Textarea
+            value={feedbackNote}
+            onChange={(event) => setFeedbackNote(event.target.value)}
+            rows={4}
+            maxLength={400}
+            placeholder="Example: I needed more actionable steps."
+          />
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmittingFeedback}
+              onClick={() => {
+                if (!feedbackTargetMessageId) {
+                  return;
+                }
+                void submitDislikeFeedback(feedbackTargetMessageId);
+              }}
+            >
+              Skip
+            </Button>
+            <Button
+              type="button"
+              disabled={isSubmittingFeedback}
+              onClick={() => {
+                if (!feedbackTargetMessageId) {
+                  return;
+                }
+
+                const note = feedbackNote.trim();
+                void submitDislikeFeedback(feedbackTargetMessageId, note.length > 0 ? note : undefined);
+              }}
+            >
+              {isSubmittingFeedback ? (
+                <>
+                  <Loader2 size={16} className="mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                'Send feedback'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

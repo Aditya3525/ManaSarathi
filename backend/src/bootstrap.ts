@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 const envPath = process.env.DOTENV_CONFIG_PATH || path.join(__dirname, '../.env');
 dotenv.config({ path: envPath });
 
+// NEW: Validate environment variables early
+import { enforceEnvironmentValidation } from './utils/envValidation';
+enforceEnvironmentValidation();
+
 const databaseUrl = (process.env.DATABASE_URL || '').trim();
 if (databaseUrl.startsWith('file:')) {
 	const rawPath = databaseUrl.slice('file:'.length);

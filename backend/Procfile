@@ -1,2 +1,2 @@
 web: npm start
-release: npm run db:generate:auto:if-needed && npm run db:push:auto
+release: npm run db:generate:auto:if-needed && npm run db:push:auto && npm run seed:deploy

@@ -49,6 +49,20 @@ import { getSessionSecret } from './config/auth';
 import { getAllowedProductionOrigins, isAllowedFrontendOrigin } from './config/allowedOrigins';
 import { logger, refreshLogLevelFromEnv } from './utils/logger';
 import { llmService } from './services/llmProvider';
+// NEW: Import security middlewares
+import { jwtAutoRefresh } from './middleware/jwtRefresh';
+import { csrfProtection, exposeCsrfToken } from './middleware/csrf';
+import { sanitizeInputs } from './middleware/sanitization';
+import { requestTimeout } from './middleware/timeoutAndCircuitBreaker';
+import {
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+  verificationResendLimiter,
+  oauthLimiter,
+} from './middleware/authRateLimits';
+// NEW: Import graceful shutdown
+import { setupGracefulShutdown, requestTracker } from './utils/gracefulShutdown';
 
 refreshLogLevelFromEnv();
 
@@ -98,10 +112,32 @@ const httpLogger = pinoHttp({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
+
 app.use(compression());
 app.use(httpLogger);
 app.use(systemHealthMiddleware); // Track API response times and system metrics
+
+// NEW: Security middlewares - Request timeout and sanitization
+app.use(requestTimeout({ timeout: 30000 })); // 30 second request timeout
+// NEW: Request tracking for graceful shutdown
+app.use(requestTracker());
+
 app.use((req, res, next) => {
   res.locals.requestId = (req as any).id;
   try {
@@ -110,6 +146,7 @@ app.use((req, res, next) => {
   } catch { }
   next();
 });
+
 // CORS must come before rate limiter so rate-limited 429 responses still carry CORS headers
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -123,7 +160,8 @@ app.use(cors({
     : true, // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Platform'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Platform', 'X-CSRF-Token'],
+  exposedHeaders: ['X-New-Token', 'X-CSRF-Token'],
 }));
 
 logger.info({ origins: getAllowedProductionOrigins() }, 'configured production CORS origins');
@@ -133,25 +171,36 @@ if (process.env.NODE_ENV === 'production') {
   app.use(limiter);
 }
 
-// Session middleware (required for passport)
+// Session middleware (required for passport) - NOW WITH ENHANCED SECURITY
 app.use(session({
   secret: getSessionSecret(),
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true, // Prevent client-side JS access
+    sameSite: 'strict', // CSRF protection - strict in all environments
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    domain: process.env.NODE_ENV === 'production'
+      ? process.env.COOKIE_DOMAIN || undefined
+      : undefined,
+  },
 }));
 
 // Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
 
+// NEW: JWT auto-refresh middleware
+app.use(jwtAutoRefresh);
+
+// NEW: CSRF protection middleware
+app.use(csrfProtection);
+app.use(exposeCsrfToken);
+
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(sanitizeInputs());
 app.use(noStoreApiResponses);
 
 // Ensure uploads directory exists
@@ -260,10 +309,13 @@ app.use(errorHandler);
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅ Server ready at http://localhost:${PORT}\n`);
     startHealthMonitoring(60000);
   });
+
+  // NEW: Setup graceful shutdown handlers
+  setupGracefulShutdown(server);
 }
 
 export default app;

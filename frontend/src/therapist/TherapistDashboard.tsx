@@ -250,7 +250,7 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                     </div>
                 </header>
                 <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                         {[1, 2, 3, 4].map((item) => (
                             <Card key={item}>
                                 <CardContent className="pt-5 pb-4">
@@ -291,7 +291,7 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                 {/* ── OVERVIEW TAB ─────────────────────────────────────── */}
                 {tab === 'overview' && stats && (
                     <>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                             {[
                                 { label: 'Pending', value: stats.pending, color: 'text-yellow-600', bg: 'bg-yellow-50' },
                                 { label: 'Confirmed', value: stats.confirmed, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -404,16 +404,16 @@ export function TherapistDashboard({ onLogout, therapistName }: TherapistDashboa
                 {/* ── BOOKINGS TAB ─────────────────────────────────────── */}
                 {tab === 'bookings' && (
                     <>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-[220px]">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 items-center gap-2">
                                 <h2 className="text-lg font-semibold">Booking Requests</h2>
                                 <Button size="sm" variant="ghost" onClick={() => void refetchAll()} className="h-8 w-8 p-0" title="Refresh bookings">
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                                 <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
-                                    <SelectTrigger className="w-[140px]">
+                                    <SelectTrigger className="w-full sm:w-[140px]">
                                         <SelectValue placeholder="Date range" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -857,25 +857,25 @@ function AvailabilityAdder({ onAdd, days }: { onAdd: (day: string, startTime: st
     const [endTime, setEndTime] = useState('17:00');
 
     return (
-        <div className="flex flex-wrap gap-2 items-end">
-            <div className="space-y-1">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+            <div className="min-w-0 space-y-1">
                 <Label className="text-xs">Day</Label>
                 <Select value={day} onValueChange={setDay}>
-                    <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                     </SelectContent>
                 </Select>
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
                 <Label className="text-xs">Start</Label>
-                <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-[120px]" />
+                <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full" />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
                 <Label className="text-xs">End</Label>
-                <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-[120px]" />
+                <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full" />
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => onAdd(day, startTime, endTime)}>
+            <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => onAdd(day, startTime, endTime)}>
                 <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
         </div>

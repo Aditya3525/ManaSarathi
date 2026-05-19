@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { Input } from '../../ui/input';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../../ui/sheet';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 
 import { ConversationHistorySidebar } from './ConversationHistorySidebar';
 import { EmptyState } from './EmptyState';
@@ -1054,9 +1055,13 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
           />
         ) : (
           <>
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
+            <StaggerContainer staggerDelay={0.1}>
+              {messages.map((message) => (
+                <StaggerItem key={message.id}>
+                  <MessageBubble message={message} />
+                </StaggerItem>
+              ))}
+            </StaggerContainer>
 
             {/* Conversation Starters - Show when just initial greeting */}
             {messages.length === 1 && conversationStarters.length > 0 && (
@@ -1065,19 +1070,22 @@ export function Chatbot({ user, onNavigate, isModal = false, onClose }: ChatbotP
                   Or choose a topic to get started:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  {conversationStarters.map((starter, index) => (
-                    <Button
-                  key={index}
-                  variant="outline"
-                  className="h-auto py-3 px-4 text-left justify-start text-sm hover:bg-primary/5 hover:border-primary/50 transition-all"
-                  onClick={() => handleSuggestionClick(starter)}
-                >
-                  {starter}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
+                  <StaggerContainer staggerDelay={0.08}>
+                    {conversationStarters.map((starter, index) => (
+                      <StaggerItem key={index}>
+                        <Button
+                          variant="outline"
+                          className="h-auto py-3 px-4 text-left justify-start text-sm hover:bg-primary/5 hover:border-primary/50 transition-all"
+                          onClick={() => handleSuggestionClick(starter)}
+                        >
+                          {starter}
+                        </Button>
+                      </StaggerItem>
+                    ))}
+                  </StaggerContainer>
+                </div>
+              </div>
+            )}
           </>
         )}
         

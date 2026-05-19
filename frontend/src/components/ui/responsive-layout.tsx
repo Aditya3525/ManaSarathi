@@ -31,7 +31,7 @@ export function ResponsiveContainer({
   };
 
   return (
-    <div className={cn(spacingClasses[spacing], className)}>
+    <div className={cn('min-w-0', spacingClasses[spacing], className)}>
       {children}
     </div>
   );
@@ -78,7 +78,7 @@ export function ResponsiveGrid({
 
   return (
     <div className={cn(
-      'grid',
+      'grid min-w-0',
       columnClasses,
       gapClasses[gap],
       className
@@ -113,7 +113,7 @@ export function ResponsiveStack({
   };
 
   return (
-    <div className={cn('flex flex-col', spacingClasses[spacing], className)}>
+    <div className={cn('flex min-w-0 flex-col', spacingClasses[spacing], className)}>
       {children}
     </div>
   );
@@ -148,7 +148,7 @@ export function ResponsiveCollapsibleSection({
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="min-w-0 overflow-hidden rounded-lg border">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors"
@@ -218,7 +218,7 @@ export function HorizontalScrollContainer({
       className
     )}>
       <div className={cn(
-        'flex gap-4',
+        'flex min-w-0 gap-4',
         snap && 'scroll-px-4'
       )}>
         {React.Children.map(children, (child, index) => (

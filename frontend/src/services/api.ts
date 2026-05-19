@@ -259,6 +259,7 @@ export interface DashboardSummaryData {
     createdAt: string;
   }>;
   recommendedPractice: {
+    id?: string;
     title: string;
     description: string | null;
     type: string;

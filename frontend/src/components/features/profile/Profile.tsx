@@ -44,6 +44,8 @@ import {
 } from '../../ui/sheet';
 import { Switch } from '../../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
+import { SubscriptionPlans } from '../subscription';
 import { LanguageSelector } from '../LanguageSelector';
 
 interface ProfileUser {
@@ -58,6 +60,7 @@ interface ProfileUser {
   lastName?: string;
   approach?: 'western' | 'eastern' | 'hybrid';
   securityQuestion?: string | null;
+  isPremium?: boolean;
 }
 
 interface ProfileProps {
@@ -663,8 +666,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
           {/* Mobile: Horizontal scrollable tabs / Desktop: Full grid */}
           <div className={device.isMobile ? "overflow-x-auto -mx-4 px-4" : ""}>
             <TabsList className={device.isMobile 
-              ? "inline-flex w-auto min-w-full justify-start gap-1" 
-              : "grid w-full grid-cols-5"
+              ? "inline-flex w-auto min-w-full justify-start gap-1 h-auto overflow-x-auto" 
+              : "flex w-full h-auto flex-wrap lg:flex-nowrap gap-1 md:gap-2"
             }>
               <TabsTrigger 
                 value="personal" 
@@ -691,6 +694,12 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 Accessibility
               </TabsTrigger>
               <TabsTrigger 
+                value="subscription"
+                className={device.isMobile ? "flex-shrink-0 px-4 min-h-[44px]" : ""}
+              >
+                Subscription
+              </TabsTrigger>
+              <TabsTrigger 
                 value="account"
                 className={device.isMobile ? "flex-shrink-0 px-4 min-h-[44px]" : ""}
               >
@@ -699,8 +708,15 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
             </TabsList>
           </div>
 
+          {/* Subscription Information Tab */}
+          <TabsContent value="subscription" className="space-y-4 md:space-y-6">
+            <SubscriptionPlans userIsPremium={user?.isPremium} />
+          </TabsContent>
+
           {/* Personal Information Tab */}
           <TabsContent value="personal" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.1}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <div className={device.isMobile 
@@ -867,8 +883,10 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 )}
               </CardContent>
             </Card>
+              </StaggerItem>
 
             {/* Language Preferences Card */}
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -891,10 +909,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Privacy & Data Tab */}
           <TabsContent value="privacy" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1020,8 +1042,10 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Alert>
               </CardContent>
             </Card>
+              </StaggerItem>
 
             {/* Connected Devices */}
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1031,47 +1055,54 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {connectedDevices.map((connectedDevice, index) => (
-                    <div 
-                      key={index} 
-                      className={`flex items-center justify-between p-3 rounded-lg border ${device.isMobile ? 'min-h-[60px]' : ''}`}
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {getDeviceIcon(connectedDevice.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{connectedDevice.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Last active: {connectedDevice.lastActive}
-                          </p>
+                  <StaggerContainer staggerDelay={0.06}>
+                    {connectedDevices.map((connectedDevice, index) => (
+                      <StaggerItem key={index}>
+                        <div 
+                          className={`flex items-center justify-between p-3 rounded-lg border ${device.isMobile ? 'min-h-[60px]' : ''}`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {getDeviceIcon(connectedDevice.type)}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{connectedDevice.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Last active: {connectedDevice.lastActive}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {connectedDevice.current && (
+                              <Badge variant="default">Current</Badge>
+                            )}
+                            {!connectedDevice.current && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled
+                                className={device.isMobile ? "min-h-[40px]" : ""}
+                              >
+                                Unavailable
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {connectedDevice.current && (
-                          <Badge variant="default">Current</Badge>
-                        )}
-                        {!connectedDevice.current && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            disabled
-                            className={device.isMobile ? "min-h-[40px]" : ""}
-                          >
-                            Unavailable
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      </StaggerItem>
+                    ))}
+                  </StaggerContainer>
                   <p className="text-xs text-muted-foreground">
                     Device session revocation is temporarily unavailable in this build.
                   </p>
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Notifications Tab */}
           <TabsContent value="notifications" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1230,10 +1261,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Accessibility Tab */}
           <TabsContent value="accessibility" className="space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1490,15 +1525,19 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Account Management Tab */}
           <TabsContent value="account" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Download className="h-5 w-5 text-primary" />
-                  Export Your Data
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Download className="h-5 w-5 text-primary" />
+                      Export Your Data
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1612,12 +1651,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquareLock className="h-5 w-5 text-primary" />
-                  Password Recovery
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquareLock className="h-5 w-5 text-primary" />
+                      Password Recovery
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1691,12 +1732,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <KeyRound className="h-5 w-5 text-primary" />
-                  Update Security Question
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <KeyRound className="h-5 w-5 text-primary" />
+                      Update Security Question
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1790,12 +1833,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                  Change Your Approach
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      Change Your Approach
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1874,11 +1919,13 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card className="border-red-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-red-600">
-                  <Trash2 className="h-5 w-5" />
+              <StaggerItem>
+                <Card className="border-red-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-red-600">
+                      <Trash2 className="h-5 w-5" />
                   Danger Zone
                 </CardTitle>
               </CardHeader>
@@ -1907,6 +1954,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
         </Tabs>
 

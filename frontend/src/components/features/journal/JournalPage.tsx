@@ -8,6 +8,7 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Textarea } from '../../ui/textarea';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 
 import { JournalInsight } from './JournalInsight';
 import { WritingPrompt } from './WritingPrompt';
@@ -232,58 +233,62 @@ export function JournalPage({ user, onNavigate }: JournalPageProps) {
               <p className="text-sm text-muted-foreground">No entries yet. Start with a short reflection above.</p>
             )}
 
-            {entries.map((entry) => {
-              const isExpanded = expandedEntryId === entry.id;
-              const preview = entry.content.length > 220 ? `${entry.content.slice(0, 220)}...` : entry.content;
-              const tags = Array.isArray(entry.tags) ? entry.tags : [];
+            <StaggerContainer staggerDelay={0.1}>
+              {entries.map((entry) => {
+                const isExpanded = expandedEntryId === entry.id;
+                const preview = entry.content.length > 220 ? `${entry.content.slice(0, 220)}...` : entry.content;
+                const tags = Array.isArray(entry.tags) ? entry.tags : [];
 
-              return (
-                <div key={entry.id} className="rounded-lg border border-border/70 p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(entry.createdAt).toLocaleString()}
+                return (
+                  <StaggerItem key={entry.id}>
+                    <div className="rounded-lg border border-border/70 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(entry.createdAt).toLocaleString()}
+                          </p>
+                          {entry.prompt && <p className="text-xs text-primary">Prompt: {entry.prompt}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {entry.mood && <Badge variant="secondary">{entry.mood}</Badge>}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteEntry.mutate(entry.id)}
+                            disabled={deleteEntry.isPending}
+                            aria-label="Delete journal entry"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                        {isExpanded ? entry.content : preview}
                       </p>
-                      {entry.prompt && <p className="text-xs text-primary">Prompt: {entry.prompt}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {entry.mood && <Badge variant="secondary">{entry.mood}</Badge>}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteEntry.mutate(entry.id)}
-                        disabled={deleteEntry.isPending}
-                        aria-label="Delete journal entry"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-                  </div>
 
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {isExpanded ? entry.content : preview}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {tags.slice(0, 6).map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {entry.content.length > 220 && (
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0"
-                        onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
-                      >
-                        {isExpanded ? 'Show less' : 'Read more'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {tags.slice(0, 6).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {entry.content.length > 220 && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0"
+                            onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
+                          >
+                            {isExpanded ? 'Show less' : 'Read more'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </StaggerItem>
+                );
+              })}
+            </StaggerContainer>
           </CardContent>
         </Card>
 

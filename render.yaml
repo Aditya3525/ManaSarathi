@@ -6,7 +6,7 @@ services:
     region: oregon
     plan: starter
     rootDir: backend
-    buildCommand: npm install --include=dev && npm run db:generate && npm run db:push:auto && npm run build && npm run seed:production
+    buildCommand: npm install --include=dev && npm run db:generate && npm run db:push:auto && npm run build && npm run seed:deploy
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

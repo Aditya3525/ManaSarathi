@@ -141,6 +141,7 @@
 .bg-violet-600 { background-color: #7c3aed; }
 .bg-white\/10 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 10%, transparent); }
 .bg-white\/20 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 20%, transparent); }
+.bg-white\/40 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 40%, transparent); }
 .bg-white\/5 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 5%, transparent); }
 .bg-white\/50 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 50%, transparent); }
 .bg-white\/60 { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 60%, transparent); }
@@ -277,6 +278,7 @@
 .from-blue-500\/5 { --tw-gradient-from: color-mix(in oklab, #3b82f6 5%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .from-blue-600 { --tw-gradient-from: #2563eb; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .from-blue-900 { --tw-gradient-from: #1e3a8a; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
+.from-card { --tw-gradient-from: var(--card); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .from-cyan-50\/70 { --tw-gradient-from: color-mix(in oklab, #ecfeff 70%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .from-cyan-500 { --tw-gradient-from: #06b6d4; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .from-emerald-50 { --tw-gradient-from: #ecfdf5; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
@@ -369,6 +371,7 @@
 .hover\:bg-muted\/30:hover { background-color: var(--muted); background-color: color-mix(in oklab, var(--muted) 30%, transparent); }
 .hover\:bg-primary\/10:hover { background-color: var(--primary); background-color: color-mix(in oklab, var(--primary) 10%, transparent); }
 .hover\:bg-primary\/5:hover { background-color: var(--primary); background-color: color-mix(in oklab, var(--primary) 5%, transparent); }
+.hover\:bg-purple-100:hover { background-color: #f3e8ff; }
 .hover\:bg-purple-700:hover { background-color: #7e22ce; }
 .hover\:bg-red-50:hover { background-color: #fef2f2; }
 .hover\:bg-red-700:hover { background-color: #b91c1c; }
@@ -378,6 +381,7 @@
 .hover\:bg-rose-50:hover { background-color: #fff1f2; }
 .hover\:bg-secondary\/90:hover { background-color: var(--secondary); background-color: color-mix(in oklab, var(--secondary) 90%, transparent); }
 .hover\:bg-slate-200:hover { background-color: #e2e8f0; }
+.hover\:bg-slate-700:hover { background-color: #334155; }
 .hover\:bg-transparent:hover { background-color: transparent; }
 .hover\:bg-white\/10:hover { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 10%, transparent); }
 .hover\:bg-white\/20:hover { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 20%, transparent); }
@@ -386,6 +390,7 @@
 .hover\:bg-white\/90:hover { background-color: #ffffff; background-color: color-mix(in oklab, #ffffff 90%, transparent); }
 .hover\:bg-yellow-500\/10:hover { background-color: #eab308; background-color: color-mix(in oklab, #eab308 10%, transparent); }
 .hover\:bg-yellow-600:hover { background-color: #ca8a04; }
+.hover\:border-border:hover { border-color: var(--border); }
 .hover\:border-indigo-400:hover { border-color: #818cf8; }
 .hover\:border-indigo-500:hover { border-color: #6366f1; }
 .hover\:border-primary:hover { border-color: var(--primary); }
@@ -394,6 +399,7 @@
 .hover\:border-primary\/50:hover { border-color: var(--primary); border-color: color-mix(in oklab, var(--primary) 50%, transparent); }
 .hover\:from-blue-700:hover { --tw-gradient-from: #1d4ed8; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .hover\:from-indigo-50:hover { --tw-gradient-from: #eef2ff; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
+.hover\:from-primary\/90:hover { --tw-gradient-from: color-mix(in oklab, var(--primary) 90%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .hover\:from-purple-100:hover { --tw-gradient-from: #f3e8ff; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
 .hover\:text-blue-900:hover { color: #1e3a8a; }
 .hover\:text-destructive:hover { color: var(--destructive); }
@@ -405,6 +411,7 @@
 .hover\:text-white:hover { color: #ffffff; }
 .hover\:to-pink-100:hover { --tw-gradient-to: #fce7f3; }
 .hover\:to-purple-50:hover { --tw-gradient-to: #faf5ff; }
+.hover\:to-purple-600\/90:hover { --tw-gradient-to: color-mix(in oklab, #9333ea 90%, transparent); }
 .hover\:to-purple-700:hover { --tw-gradient-to: #7e22ce; }
 .text-amber-100 { color: #fef3c7; }
 .text-amber-300 { color: #fcd34d; }
@@ -468,6 +475,7 @@
 .text-primary-foreground\/80 { color: var(--primary-foreground); color: color-mix(in oklab, var(--primary-foreground) 80%, transparent); }
 .text-primary-foreground\/90 { color: var(--primary-foreground); color: color-mix(in oklab, var(--primary-foreground) 90%, transparent); }
 .text-primary\/10 { color: var(--primary); color: color-mix(in oklab, var(--primary) 10%, transparent); }
+.text-primary\/40 { color: var(--primary); color: color-mix(in oklab, var(--primary) 40%, transparent); }
 .text-primary\/60 { color: var(--primary); color: color-mix(in oklab, var(--primary) 60%, transparent); }
 .text-primary\/70 { color: var(--primary); color: color-mix(in oklab, var(--primary) 70%, transparent); }
 .text-primary\/80 { color: var(--primary); color: color-mix(in oklab, var(--primary) 80%, transparent); }
@@ -527,6 +535,7 @@
 .to-blue-500\/10 { --tw-gradient-to: color-mix(in oklab, #3b82f6 10%, transparent); }
 .to-blue-500\/5 { --tw-gradient-to: color-mix(in oklab, #3b82f6 5%, transparent); }
 .to-blue-600 { --tw-gradient-to: #2563eb; }
+.to-card\/50 { --tw-gradient-to: color-mix(in oklab, var(--card) 50%, transparent); }
 .to-cyan-500 { --tw-gradient-to: #06b6d4; }
 .to-cyan-500\/10 { --tw-gradient-to: color-mix(in oklab, #06b6d4 10%, transparent); }
 .to-cyan-500\/5 { --tw-gradient-to: color-mix(in oklab, #06b6d4 5%, transparent); }

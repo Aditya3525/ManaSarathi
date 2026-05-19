@@ -27,6 +27,12 @@ const deleteJournalSchema = z.object({
   id: z.string().min(1)
 });
 
+const updateJournalEntrySchema = z.object({
+  content: z.string().min(1).max(8000).optional(),
+  mood: z.string().max(64).optional().nullable(),
+  tags: z.array(z.string().min(1).max(40)).max(10).optional()
+});
+
 const normalizeEmotionFromMood = (mood?: string | null): string => {
   const lower = (mood || '').trim().toLowerCase();
   if (['anxious', 'anxiety', 'panic', 'worry'].includes(lower)) return 'anxiety';
@@ -180,6 +186,64 @@ export const getWeeklyReflection = async (req: any, res: Response) => {
   } catch (error) {
     console.error('Error getting weekly reflection:', error);
     return res.status(500).json({ success: false, error: 'Failed to get weekly reflection' });
+  }
+};
+
+/**
+ * PUT /api/journal/:id
+ */
+export const updateJournalEntry = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const validation = updateJournalEntrySchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid journal entry payload',
+        details: formatZodErrors(validation.error)
+      });
+    }
+
+    // Verify ownership
+    const existing = await prisma.journalEntry.findFirst({
+      where: { id, userId },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Journal entry not found' });
+    }
+
+    const { content, mood, tags } = validation.data;
+    const updateData: any = {};
+
+    if (content !== undefined) updateData.content = content;
+    if (mood !== undefined) updateData.mood = mood;
+    if (tags !== undefined) {
+      const providedTags = Array.isArray(tags) ? tags : [];
+      const resolvedTags = providedTags.length > 0
+        ? providedTags
+        : content !== undefined
+          ? journalService.extractTags(content)
+          : [];
+
+      updateData.tags = resolvedTags.length > 0 ? resolvedTags : null;
+    }
+
+    const updated = await prisma.journalEntry.update({
+      where: { id },
+      data: updateData
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Error updating journal entry:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update journal entry' });
   }
 };
 

@@ -40,9 +40,10 @@ import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { HeroSection } from './HeroSection';
 import { MetricsSection } from './MetricsSection';
 import { TestimonialsSection } from './TestimonialsSection';
+import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD } from './defaultCredentials';
 
 interface LandingPageProps {
-  onSignUp: (userData: { name: string; email: string; password: string }) => void;
+  onSignUp: (userData: { email: string; password: string }) => void;
   onLogin: (credentials: { email: string; password: string }) => void;
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
@@ -84,11 +85,12 @@ export function LandingPage({
   const device = useDevice();
   const analytics = useAnalytics();
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+
   const [password, setPassword] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [loginEmail, setLoginEmail] = useState(DEMO_LOGIN_EMAIL);
+  const [loginPassword, setLoginPassword] = useState(DEMO_LOGIN_PASSWORD);
+  const [adminEmail, setAdminEmail] = useState(DEMO_LOGIN_EMAIL);
+  const [adminPassword, setAdminPassword] = useState(DEMO_LOGIN_PASSWORD);
   const [activeModal, setActiveModal] = useState<null | 'start' | 'signup' | 'login' | 'admin'>(null);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -137,6 +139,20 @@ export function LandingPage({
   const isSignupOpen = activeModal === 'signup';
   const isLoginOpen = activeModal === 'login';
   const isAdminOpen = activeModal === 'admin';
+
+  useEffect(() => {
+    if (isLoginOpen) {
+      setLoginEmail(DEMO_LOGIN_EMAIL);
+      setLoginPassword(DEMO_LOGIN_PASSWORD);
+    }
+  }, [isLoginOpen]);
+
+  useEffect(() => {
+    if (isAdminOpen) {
+      setAdminEmail(DEMO_LOGIN_EMAIL);
+      setAdminPassword(DEMO_LOGIN_PASSWORD);
+    }
+  }, [isAdminOpen]);
 
   useEffect(() => {
     if (loginError?.suggestion !== 'choose_admin_or_user') {
@@ -338,7 +354,7 @@ export function LandingPage({
 
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && email && password) {
+    if (email && password) {
       if (!isValidSignupEmail) {
         setSignupValidationError(signupEmailValidation.message || 'Please enter a valid email address.');
         analytics.trackFormSubmit('signup', false);
@@ -351,15 +367,15 @@ export function LandingPage({
       }
       setSignupValidationError(null);
       analytics.trackFormSubmit('signup', true);
-      onSignUp({ name, email, password });
+      onSignUp({ email, password });
     }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && loginPassword) {
+    if (loginEmail && loginPassword) {
       analytics.trackFormSubmit('login', true);
-      onLogin({ email, password: loginPassword });
+      onLogin({ email: loginEmail, password: loginPassword });
     }
   };
 
@@ -1375,10 +1391,7 @@ export function LandingPage({
             <DialogDescription>Get personalized support, assessments, and daily nudges.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="signup-name">Full name</Label>
-              <Input id="signup-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" required />
-            </div>
+
 
             <div className="space-y-2">
               <Label htmlFor="signup-email">Email</Label>
@@ -1479,9 +1492,9 @@ export function LandingPage({
               <Input
                 id="login-email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder={DEMO_LOGIN_EMAIL}
                 autoComplete="email"
                 required
               />

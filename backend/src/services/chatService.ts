@@ -358,6 +358,53 @@ export class ChatService {
 
       // Get user context and latest wellbeing metrics
       const userContext = await this.getUserContext(userId);
+
+      // --- PREMIUM PAYWALL CHECK ---
+      const userForPaywall = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isPremium: true }
+      });
+
+      if (!userForPaywall?.isPremium) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const messageCount = await prisma.chatMessage.count({
+          where: {
+            userId,
+            type: 'user',
+            createdAt: { gte: startOfToday }
+          }
+        });
+
+        // Limit to 5 free messages per day
+        if (messageCount >= 5) {
+          const paywallResponse = "You've reached your daily limit of 5 free AI therapy messages. Please upgrade to MaanSarathi Premium from your Subscription settings to unlock unlimited AI conversations, deeper personalized insights, and premium therapeutic exercises.";
+          
+          const botMessage = await this.saveChatMessage(
+            userId,
+            paywallResponse,
+            'system',
+            { isPaywall: true },
+            activeConversationId
+          );
+          
+          if (activeConversationId) {
+             await conversationService.updateLastMessageTime(activeConversationId);
+          }
+          
+          return {
+            response: paywallResponse,
+            provider: 'system',
+            model: 'paywall',
+            botMessage,
+            context: 'paywall',
+            conversationId: activeConversationId,
+            conversationTitle: generatedTitle
+          };
+        }
+      }
+      // -----------------------------
       if (options.simpleLanguage) {
         userContext.simpleLanguage = true;
       }

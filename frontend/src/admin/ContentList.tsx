@@ -64,7 +64,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [filterApproach, setFilterApproach] = useState<string>('all');
+  const [filterApproach, setFilterApproach] = useState<string>('hybrid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
   // Bulk selection state
@@ -318,7 +318,7 @@ export const ContentList: React.FC<ContentListProps> = ({
                          item.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesApproach = filterApproach === 'all' || item.approach === filterApproach;
+    const matchesApproach = filterApproach === 'hybrid' || item.approach === filterApproach;
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'published' && item.isPublished) ||
                          (filterStatus === 'draft' && !item.isPublished);
@@ -389,13 +389,12 @@ export const ContentList: React.FC<ContentListProps> = ({
 
             <Select value={filterApproach} onValueChange={setFilterApproach}>
               <SelectTrigger className="h-11">
-                <SelectValue placeholder="All Approaches" />
+                <SelectValue placeholder="Hybrid (All)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Approaches</SelectItem>
                 <SelectItem value="western">Western</SelectItem>
                 <SelectItem value="eastern">Eastern</SelectItem>
-                <SelectItem value="hybrid">Hybrid</SelectItem>
+                <SelectItem value="hybrid">Hybrid (All)</SelectItem>
               </SelectContent>
             </Select>
 

@@ -25,7 +25,8 @@ import {
   Grid3x3,
   List,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Timer
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,6 +41,7 @@ import { Input } from '../../ui/input';
 import {
   ResponsiveContainer
 } from '../../ui/responsive-layout';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 import {
   Sheet,
   SheetContent,
@@ -294,6 +296,9 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
   const [selectedApproach, setSelectedApproach] = useState<'all' | 'western' | 'eastern' | 'hybrid'>(user?.approach || 'all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // empty => all
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]); // empty => all
+  const [selectedDuration, setSelectedDuration] = useState<string>('all');
+  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(device.isMobile ? 'list' : 'grid');
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [isActiveFiltersExpanded, setIsActiveFiltersExpanded] = useState(true);
@@ -309,6 +314,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<LibraryItem | null>(null);
+  const [activeStory, setActiveStory] = useState<LibraryItem | null>(null);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
 
   const loadRecommendations = useCallback(async () => {
@@ -403,6 +409,15 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
     } catch {
       // Ignore cancellation or capability errors.
     }
+  };
+
+  const openLibraryItem = (item: LibraryItem) => {
+    if (item.displayType === 'story') {
+      setActiveStory(item);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setActiveItem(item);
   };
 
   const applyFeaturedCollection = (query: string) => {
@@ -549,7 +564,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
           const embeddedUrl = extractFirstUrlFromText(contentValue);
           const externalUrl = sourceUrl || (isProbablyUrl(contentValue) ? contentValue : embeddedUrl);
           const textualBody = isTextualDisplayType(displayType)
-            ? (externalUrl ? (item.description || null) : (contentValue || item.description || null))
+            ? (!isProbablyUrl(contentValue) && contentValue ? contentValue : (item.description || null))
             : null;
 
           let media: LibraryItem['media'] = null;
@@ -640,6 +655,20 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
     { id: 'resource', label: 'Guide/Tool', icon: FileText }
   ];
 
+  const durations = [
+    { id: 'all', label: 'Any Duration' },
+    { id: 'short', label: '5-10 minutes' },
+    { id: 'medium', label: '10-20 minutes' },
+    { id: 'long', label: '20+ minutes' }
+  ];
+
+  const difficulties = [
+    { id: 'all', label: 'All Levels', icon: Layers },
+    { id: 'Beginner', label: 'Beginner', icon: Layers },
+    { id: 'Intermediate', label: 'Intermediate', icon: Layers },
+    { id: 'Advanced', label: 'Advanced', icon: Layers }
+  ];
+
   const filteredContent = contentItems.filter((item) => {
     const q = searchQuery.toLowerCase();
     const matchesSearch =
@@ -652,10 +681,19 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
     const matchesType =
       selectedTypes.length === 0 || selectedTypes.includes(item.displayType);
     const matchesApproach =
-      selectedApproach === 'all' ||
+      selectedApproach === 'hybrid' || selectedApproach === 'all' ||
       (item.approach && item.approach === selectedApproach) ||
-      item.approach === 'all';
-    return matchesSearch && matchesCategory && matchesType && matchesApproach;
+      item.approach === 'all' || item.approach === 'hybrid';
+      
+    const durationMins = item.durationSeconds ? item.durationSeconds / 60 : 0;
+    const matchesDuration = selectedDuration === 'all' || 
+      (selectedDuration === 'short' && durationMins <= 10) ||
+      (selectedDuration === 'medium' && durationMins > 10 && durationMins <= 20) ||
+      (selectedDuration === 'long' && durationMins > 20);
+      
+    const matchesDifficulty = selectedDifficulties.length === 0 || selectedDifficulties.includes(item.difficulty || 'Beginner');
+
+    return matchesSearch && matchesCategory && matchesType && matchesApproach && matchesDuration && matchesDifficulty;
   });
 
   const getRelevanceScore = (item: LibraryItem) => {
@@ -666,7 +704,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
       if ((item.description || '').toLowerCase().includes(query)) score += 20;
       if (item.tags.some((tag) => tag.toLowerCase().includes(query))) score += 15;
     }
-    if (selectedApproach !== 'all' && item.approach === selectedApproach) score += 12;
+    if (selectedApproach !== 'hybrid' && selectedApproach !== 'all' && item.approach === selectedApproach) score += 12;
     if (item.immediateRelief) score += 6;
     score += item.rating || 0;
     return score;
@@ -687,13 +725,15 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
   });
 
   // Count active filters
-  const activeFilterCount = selectedCategories.length + selectedTypes.length + (selectedApproach !== 'all' ? 1 : 0);
+  const activeFilterCount = selectedCategories.length + selectedTypes.length + selectedDifficulties.length + (selectedApproach !== 'hybrid' && selectedApproach !== 'all' ? 1 : 0) + (selectedDuration !== 'all' ? 1 : 0);
 
   // Clear all filters
   const clearAllFilters = () => {
     setSelectedCategories([]);
     setSelectedTypes([]);
-    setSelectedApproach(user?.approach || 'all');
+    setSelectedApproach('hybrid');
+    setSelectedDuration('all');
+    setSelectedDifficulties([]);
     setSearchQuery('');
   };
 
@@ -703,7 +743,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
     setList(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
-  useEffect(() => { setAnimateKey(k => k + 1); }, [searchQuery, selectedCategories, selectedTypes, selectedApproach]);
+  useEffect(() => { setAnimateKey(k => k + 1); }, [searchQuery, selectedCategories, selectedTypes, selectedApproach, selectedDuration, selectedDifficulties]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -774,6 +814,78 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
   const featuredRecommendation = recommendedItems[0] ?? null;
   const recommendedRowItems = recommendedItems.slice(1);
   const quickReliefItems = sortedContent.filter((item) => item.immediateRelief).slice(0, 8);
+
+  if (activeStory) {
+    const storyBody = typeof activeStory.body === 'string' && activeStory.body.trim()
+      ? activeStory.body.trim()
+      : activeStory.description || 'This story is being prepared.';
+    const storySourceHost = getSourceHostLabel(activeStory.externalUrl);
+
+    return (
+      <ResponsiveContainer>
+        <div className="min-h-screen bg-background page-enter">
+          <div className="border-b bg-gradient-to-r from-amber-50 via-background to-primary/5">
+            <div className={`mx-auto max-w-3xl ${device.isMobile ? 'px-4 py-5' : 'px-6 py-8'}`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveStory(null)}
+                className="mb-6 min-h-[44px]"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Library
+              </Button>
+
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={getTypeColor('story')}>
+                    <BookOpen className="h-3.5 w-3.5 mr-1" />
+                    Story
+                  </Badge>
+                  {activeStory.category && <Badge variant="outline">{activeStory.category}</Badge>}
+                  {activeStory.durationLabel && (
+                    <Badge variant="outline">
+                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      {activeStory.durationLabel}
+                    </Badge>
+                  )}
+                </div>
+
+                <h1 className={device.isMobile ? 'text-3xl font-bold leading-tight' : 'text-5xl font-bold leading-tight'}>
+                  {activeStory.title}
+                </h1>
+                {activeStory.description && (
+                  <p className="text-lg leading-relaxed text-muted-foreground">
+                    {activeStory.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <main className={`mx-auto max-w-3xl ${device.isMobile ? 'px-4 py-8' : 'px-6 py-12'}`}>
+            <article className="prose prose-slate max-w-none whitespace-pre-wrap text-base leading-8 md:text-lg">
+              {storyBody}
+            </article>
+
+            {activeStory.externalUrl && (
+              <div className="mt-10 border-t pt-6">
+                <a
+                  href={activeStory.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Source: {storySourceHost || 'External source'}
+                </a>
+              </div>
+            )}
+          </main>
+        </div>
+      </ResponsiveContainer>
+    );
+  }
 
   return (
     <ResponsiveContainer>
@@ -1071,14 +1183,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold">Approach</h3>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={selectedApproach === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedApproach('all')}
-                    className="min-h-[44px]"
-                  >
-                    All Approaches
-                  </Button>
+
                   <Button
                     variant={selectedApproach === 'western' ? 'default' : 'outline'}
                     size="sm"
@@ -1098,15 +1203,74 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                     Eastern
                   </Button>
                   <Button
-                    variant={selectedApproach === 'hybrid' ? 'default' : 'outline'}
+                    variant={selectedApproach === 'hybrid' || selectedApproach === 'all' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedApproach('hybrid')}
                     className="min-h-[44px] flex items-center gap-2"
                   >
                     <Users className="h-4 w-4" />
-                    Hybrid
+                    Hybrid (All)
                   </Button>
                 </div>
+              </div>
+
+              {/* Advanced Filters */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className="flex items-center justify-between w-full text-sm font-semibold"
+                >
+                  <span>Advanced Filters</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showAdvancedFilters && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                    {/* Duration */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase">Duration</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {durations.map(d => {
+                          const active = selectedDuration === d.id;
+                          return (
+                            <Button
+                              key={d.id}
+                              variant={active ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setSelectedDuration(d.id)}
+                              className="min-h-[44px] flex items-center gap-2"
+                            >
+                              <Timer className="h-4 w-4" />
+                              {d.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* Difficulty */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase">Difficulty</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {difficulties.map(d => {
+                          const Icon = d.icon;
+                          const active = selectedDifficulties.length === 0 ? d.id === 'all' : selectedDifficulties.includes(d.id);
+                          return (
+                            <Button
+                              key={d.id}
+                              variant={active ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => toggleMulti(d.id, selectedDifficulties, setSelectedDifficulties)}
+                              className="min-h-[44px] flex items-center gap-2"
+                            >
+                              <Icon className="h-4 w-4" />
+                              {d.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -1182,13 +1346,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase">Approach</span>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={selectedApproach === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedApproach('all')}
-                  >
-                    All
-                  </Button>
+
                   <Button
                     variant={selectedApproach === 'western' ? 'default' : 'outline'}
                     size="sm"
@@ -1208,14 +1366,59 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                     Eastern
                   </Button>
                   <Button
-                    variant={selectedApproach === 'hybrid' ? 'default' : 'outline'}
+                    variant={selectedApproach === 'hybrid' || selectedApproach === 'all' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedApproach('hybrid')}
                     className="flex items-center gap-1"
                   >
                     <Users className="h-3 w-3" />
-                    Hybrid
+                    Hybrid (All)
                   </Button>
+                </div>
+              </div>
+
+              {/* Duration */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Duration</span>
+                <div className="flex flex-wrap gap-2">
+                  {durations.map(d => {
+                    const active = selectedDuration === d.id;
+                    return (
+                      <Button
+                        key={d.id}
+                        variant={active ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSelectedDuration(d.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Timer className="h-3 w-3" />
+                        {d.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              {/* Difficulty */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Difficulty</span>
+                <div className="flex flex-wrap gap-2">
+                  {difficulties.map(d => {
+                    const Icon = d.icon;
+                    const active = selectedDifficulties.length === 0 ? d.id === 'all' : selectedDifficulties.includes(d.id);
+                    return (
+                      <Button
+                        key={d.id}
+                        variant={active ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => toggleMulti(d.id, selectedDifficulties, setSelectedDifficulties)}
+                        className="flex items-center gap-1"
+                      >
+                        <Icon className="h-3 w-3" />
+                        {d.label}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1339,77 +1542,35 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
               )}
 
               {!recommendationLoading && recommendedItems.length > 0 && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {recommendedItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setActiveItem(item)}
-                      className="text-left rounded-lg border bg-background p-3 hover:shadow-sm transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-sm line-clamp-2">{item.title}</h3>
-                        <Badge className={`${getTypeColor(item.displayType)} text-xs`}>{item.displayType}</Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.description || 'Personalized wellbeing suggestion'}</p>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5" />
-                        <span>{item.durationLabel || 'Quick read'}</span>
-                        {item.immediateRelief && <Badge className="bg-rose-100 text-rose-700">Quick Relief</Badge>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <StaggerContainer staggerDelay={0.08}>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {recommendedItems.map((item) => (
+                      <StaggerItem key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => openLibraryItem(item)}
+                          className="text-left rounded-lg border bg-background p-3 hover:shadow-sm transition-shadow"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-semibold text-sm line-clamp-2">{item.title}</h3>
+                            <Badge className={`${getTypeColor(item.displayType)} text-xs`}>{item.displayType}</Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.description || 'Personalized wellbeing suggestion'}</p>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{item.durationLabel || 'Quick read'}</span>
+                            {item.immediateRelief && <Badge className="bg-rose-100 text-rose-700">Quick Relief</Badge>}
+                          </div>
+                        </button>
+                      </StaggerItem>
+                    ))}
+                  </div>
+                </StaggerContainer>
               )}
             </CardContent>
           </Card>
         )}
 
-        {!loading && !error && (
-          <div className="mb-8 space-y-6">
-            {featuredRecommendation && (
-              <FeaturedBanner
-                title={featuredRecommendation.title}
-                description={featuredRecommendation.description || 'A personalized pick for your wellbeing right now.'}
-                thumbnail={featuredRecommendation.thumbnail}
-                duration={featuredRecommendation.durationLabel}
-                type={featuredRecommendation.displayType}
-                onPlay={() => setActiveItem(featuredRecommendation)}
-              />
-            )}
-
-            {recommendedRowItems.length > 0 && (
-              <ContentRow title="Recommended For You" subtitle="Based on your mood and history">
-                {recommendedRowItems.map((item) => (
-                  <ContentCard
-                    key={item.id}
-                    title={item.title}
-                    thumbnail={item.thumbnail}
-                    type={item.displayType}
-                    duration={item.durationLabel}
-                    difficulty={item.difficulty}
-                    onClick={() => setActiveItem(item)}
-                  />
-                ))}
-              </ContentRow>
-            )}
-
-            {quickReliefItems.length > 0 && (
-              <ContentRow title="Quick Relief" subtitle="Short exercises for right now">
-                {quickReliefItems.map((item) => (
-                  <ContentCard
-                    key={item.id}
-                    title={item.title}
-                    thumbnail={item.thumbnail}
-                    type={item.displayType}
-                    duration={item.durationLabel}
-                    onClick={() => setActiveItem(item)}
-                  />
-                ))}
-              </ContentRow>
-            )}
-          </div>
-        )}
 
         {!loading && !error && sortedContent.length > 0 && (
           <div className="mb-4 mt-6 space-y-1">
@@ -1487,11 +1648,11 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setActiveItem(item)}
+                  onClick={() => openLibraryItem(item)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      setActiveItem(item);
+                      openLibraryItem(item);
                     }
                   }}
                   className="flex gap-3 p-3 hover:shadow-md transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1604,7 +1765,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                         className="flex-1 min-h-[44px]"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveItem(item);
+                          openLibraryItem(item);
                         }}
                       >
                         {primaryActionIcon}
@@ -1645,11 +1806,11 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setActiveItem(item)}
+                  onClick={() => openLibraryItem(item)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      setActiveItem(item);
+                      openLibraryItem(item);
                     }
                   }}
                   className="overflow-hidden group hover:shadow-lg transition-all duration-300 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1693,7 +1854,7 @@ export function ContentLibrary({ onNavigate, user }: ContentLibraryProps) {
                       aria-label={primaryActionLabel}
                       onClick={(event) => {
                         event.stopPropagation();
-                        setActiveItem(item);
+                        openLibraryItem(item);
                       }}
                     >
                       {primaryActionIcon}

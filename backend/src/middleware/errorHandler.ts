@@ -124,21 +124,29 @@ export const errorHandler = (err: any, req: Request, res: Response, _next: NextF
 
   // Special handling for ValidationError to include field-specific errors
   if (err instanceof ValidationError) {
-    res.status(statusCode).json({
+    const body: any = {
       success: false,
       error: message,
       errors: err.errors,
       requestId,
-      ...(process.env.NODE_ENV === 'development' && { stack: err?.stack })
-    });
+    };
+    // Expose stack only when explicitly enabled for debugging
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_STACK === 'true') {
+      body.stack = err?.stack;
+    }
+    res.status(statusCode).json(body);
     return;
   }
 
-  res.status(statusCode).json({
+  const responseBody: any = {
     success: false,
     error: message,
     code,
     requestId,
-    ...(process.env.NODE_ENV === 'development' && { stack: err?.stack })
-  });
+  };
+  // Expose stack only when explicitly enabled for debugging
+  if (process.env.NODE_ENV === 'development' && process.env.DEBUG_STACK === 'true') {
+    responseBody.stack = err?.stack;
+  }
+  res.status(statusCode).json(responseBody);
 };

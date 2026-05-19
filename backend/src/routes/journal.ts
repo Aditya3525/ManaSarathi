@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth';
 import {
   createJournalEntry,
   deleteJournalEntry,
+  updateJournalEntry,
   getJournalEntries,
   getJournalPrompt,
   getWeeklyReflection
@@ -16,6 +17,7 @@ router.post('/', createJournalEntry);
 router.get('/', getJournalEntries);
 router.get('/prompts', getJournalPrompt);
 router.get('/reflection', getWeeklyReflection);
+router.put('/:id', updateJournalEntry);
 router.delete('/:id', deleteJournalEntry);
 
 export default router;

@@ -549,17 +549,16 @@ export const PracticeForm: React.FC<PracticeFormProps> = ({ existing, onSaved, o
         <div className="space-y-2">
           <Label htmlFor="approach">Approach</Label>
           <Select
-            value={formData.approach || 'All'}
+            value={formData.approach || 'Hybrid'}
             onValueChange={(value) => handleInputChange('approach', value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select approach" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="All">All Approaches</SelectItem>
               <SelectItem value="Western">Western</SelectItem>
               <SelectItem value="Eastern">Eastern</SelectItem>
-              <SelectItem value="Hybrid">Hybrid</SelectItem>
+              <SelectItem value="Hybrid">Hybrid (All)</SelectItem>
             </SelectContent>
           </Select>
         </div>

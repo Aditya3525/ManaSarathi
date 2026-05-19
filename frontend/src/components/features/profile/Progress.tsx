@@ -34,6 +34,7 @@ import { ErrorBoundary } from '../../ui/error-boundary';
 import { Progress as ProgressBar } from '../../ui/progress';
 import { Skeleton } from '../../ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 import { friendlyAssessmentLabel, isHigherScoreBetter } from '../assessment/assessmentUtils';
 import {
   AssessmentComparisonChart,
@@ -1095,88 +1096,98 @@ export function Progress({ user, onNavigate }: ProgressProps) {
 
             <TabsContent value="overview" className="flex flex-col gap-4">
               {/* Flexible Grid Layout - Auto-adjusting bubbles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-max">
-                {/* Metric Cards - Flexible sizing */}
-                <Card className="hover:shadow-md transition-shadow flex flex-col">
-                  <CardContent className="p-4 flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-orange-500/10 rounded-lg">
-                        <Flame className="h-5 w-5 text-orange-500" />
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {currentStreak > 0 ? 'Active' : 'Start'}
-                      </Badge>
-                    </div>
-                    <div className="text-2xl font-bold text-orange-600 mb-1">{currentStreak}</div>
-                    <div className="text-xs text-muted-foreground mb-2">Day Streak</div>
-                    <ProgressBar
-                      value={currentStreakPercent}
-                      className="h-1"
-                      indicatorClassName="bg-orange-500"
-                    />
-                  </CardContent>
-                </Card>
+              <StaggerContainer staggerDelay={0.12}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-max">
+                  {/* Metric Cards - Flexible sizing */}
+                  <StaggerItem>
+                    <Card className="hover:shadow-md transition-shadow flex flex-col">
+                      <CardContent className="p-4 flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2 bg-orange-500/10 rounded-lg">
+                            <Flame className="h-5 w-5 text-orange-500" />
+                          </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {currentStreak > 0 ? 'Active' : 'Start'}
+                          </Badge>
+                        </div>
+                        <div className="text-2xl font-bold text-orange-600 mb-1">{currentStreak}</div>
+                        <div className="text-xs text-muted-foreground mb-2">Day Streak</div>
+                        <ProgressBar
+                          value={currentStreakPercent}
+                          className="h-1"
+                          indicatorClassName="bg-orange-500"
+                        />
+                      </CardContent>
+                    </Card>
+                  </StaggerItem>
 
-                <Card className="hover:shadow-md transition-shadow flex flex-col">
-                  <CardContent className="p-4 flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Heart className="h-5 w-5 text-primary" />
-                      </div>
-                      <Badge variant="secondary" className="text-xs">This Week</Badge>
-                    </div>
-                    <div className="text-2xl font-bold text-primary mb-1">{moodCheckinsWeek}</div>
-                    <div className="text-xs text-muted-foreground mb-2">Check-ins</div>
-                    <ProgressBar
-                      value={weekCheckinsPercent}
-                      className="h-1"
-                      indicatorClassName="bg-primary"
-                    />
-                  </CardContent>
-                </Card>
+                  <StaggerItem>
+                    <Card className="hover:shadow-md transition-shadow flex flex-col">
+                      <CardContent className="p-4 flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <Heart className="h-5 w-5 text-primary" />
+                          </div>
+                          <Badge variant="secondary" className="text-xs">This Week</Badge>
+                        </div>
+                        <div className="text-2xl font-bold text-primary mb-1">{moodCheckinsWeek}</div>
+                        <div className="text-xs text-muted-foreground mb-2">Check-ins</div>
+                        <ProgressBar
+                          value={weekCheckinsPercent}
+                          className="h-1"
+                          indicatorClassName="bg-primary"
+                        />
+                      </CardContent>
+                    </Card>
+                  </StaggerItem>
 
-                <Card className="hover:shadow-md transition-shadow flex flex-col">
-                  <CardContent className="p-4 flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-green-500/10 rounded-lg">
-                        <Target className="h-5 w-5 text-green-500" />
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {`${Math.round(modulesCompletionPercent)}%`}
-                      </Badge>
-                    </div>
-                    <div className="text-2xl font-bold text-green-600 mb-1">
-                      {modulesCompleted}/{totalModules || 2}
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-2">Modules Done</div>
-                    <ProgressBar
-                      value={modulesCompletionPercent}
-                      className="h-1"
-                      indicatorClassName="bg-green-500"
-                    />
-                  </CardContent>
-                </Card>
+                  <StaggerItem>
+                    <Card className="hover:shadow-md transition-shadow flex flex-col">
+                      <CardContent className="p-4 flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2 bg-green-500/10 rounded-lg">
+                            <Target className="h-5 w-5 text-green-500" />
+                          </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {`${Math.round(modulesCompletionPercent)}%`}
+                          </Badge>
+                        </div>
+                        <div className="text-2xl font-bold text-green-600 mb-1">
+                          {modulesCompleted}/{totalModules || 2}
+                        </div>
+                        <div className="text-xs text-muted-foreground mb-2">Modules Done</div>
+                        <ProgressBar
+                          value={modulesCompletionPercent}
+                          className="h-1"
+                          indicatorClassName="bg-green-500"
+                        />
+                      </CardContent>
+                    </Card>
+                  </StaggerItem>
 
-                <Card className="hover:shadow-md transition-shadow flex flex-col">
-                  <CardContent className="p-4 flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-yellow-500/10 rounded-lg">
-                        <Star className="h-5 w-5 text-yellow-500" />
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {averageMoodScore >= 4 ? 'Great' : averageMoodScore >= 3 ? 'Good' : 'Fair'}
-                      </Badge>
-                    </div>
-                    <div className="text-2xl font-bold text-yellow-600 mb-1">{averageMoodDisplay}</div>
-                    <div className="text-xs text-muted-foreground mb-2">Avg Mood</div>
-                    <ProgressBar
-                      value={averageMoodPercent}
-                      className="h-1"
-                      indicatorClassName="bg-yellow-500"
-                    />
-                  </CardContent>
-                </Card>
-              </div>
+                  <StaggerItem>
+                    <Card className="hover:shadow-md transition-shadow flex flex-col">
+                      <CardContent className="p-4 flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2 bg-yellow-500/10 rounded-lg">
+                            <Star className="h-5 w-5 text-yellow-500" />
+                          </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {averageMoodScore >= 4 ? 'Great' : averageMoodScore >= 3 ? 'Good' : 'Fair'}
+                          </Badge>
+                        </div>
+                        <div className="text-2xl font-bold text-yellow-600 mb-1">{averageMoodDisplay}</div>
+                        <div className="text-xs text-muted-foreground mb-2">Avg Mood</div>
+                        <ProgressBar
+                          value={averageMoodPercent}
+                          className="h-1"
+                          indicatorClassName="bg-yellow-500"
+                        />
+                      </CardContent>
+                    </Card>
+                  </StaggerItem>
+                </div>
+              </StaggerContainer>
 
               <ProgressNarrative
                 dominantMood={dominantMoodSummary.mood}
@@ -1200,18 +1211,19 @@ export function Progress({ user, onNavigate }: ProgressProps) {
                   <CardContent className="pt-0 flex-1 min-h-0">
                     {activityItems.length ? (
                       <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
-                        {activityItems.slice(0, 5).map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                          >
-                            <div className={`w-2 h-2 rounded-full ${ACTIVITY_COLORS[item.type]} mt-2 flex-shrink-0`} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{item.label}</p>
-                              <p className="text-xs text-muted-foreground">{formatRelativeDate(item.date)}</p>
-                            </div>
-                          </div>
-                        ))}
+                        <StaggerContainer staggerDelay={0.08}>
+                          {activityItems.slice(0, 5).map((item) => (
+                            <StaggerItem key={item.id}>
+                              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                                <div className={`w-2 h-2 rounded-full ${ACTIVITY_COLORS[item.type]} mt-2 flex-shrink-0`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{item.label}</p>
+                                  <p className="text-xs text-muted-foreground">{formatRelativeDate(item.date)}</p>
+                                </div>
+                              </div>
+                            </StaggerItem>
+                          ))}
+                        </StaggerContainer>
                       </div>
                     ) : (
                       <div className="text-center py-8">

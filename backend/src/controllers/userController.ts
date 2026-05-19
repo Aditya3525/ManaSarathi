@@ -245,6 +245,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         emergencyPhone: true,
         dataConsent: true,
         clinicianSharing: true,
+        isPremium: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -328,6 +329,13 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
     // Add optional fields if provided
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
+    if (firstName && lastName) {
+      updateData.name = `${firstName} ${lastName}`.trim();
+    } else if (firstName) {
+      updateData.name = firstName;
+    } else if (lastName) {
+      updateData.name = lastName;
+    }
     if (birthday) {
       const d = new Date(birthday);
       if (!isNaN(d.getTime())) {
@@ -366,6 +374,7 @@ export const completeOnboarding = async (req: AuthRequest, res: Response) => {
         emergencyPhone: true,
         dataConsent: true,
         clinicianSharing: true,
+        isPremium: true,
         createdAt: true,
         updatedAt: true,
       },

@@ -1,41 +1,41 @@
-/* Foundation design tokens mapped to the existing semantic variables.
-   This keeps Tailwind-compatible utility classes working unchanged. */
+/* Foundation design tokens: UI UX Pro Max + Soft Editorial Wellness System
+   Warm, calming colors with elegant typography for therapeutic wellbeing app */
 
 :root {
   color-scheme: light;
 
-  /* Warm neutral 9-step scale */
-  --neutral-50: #fdfbf7;
-  --neutral-100: #f7f2ea;
-  --neutral-200: #ece5da;
-  --neutral-300: #ddd3c5;
-  --neutral-400: #b9ac9b;
-  --neutral-500: #948576;
-  --neutral-600: #706456;
-  --neutral-700: #554b3f;
-  --neutral-800: #3a332c;
-  --neutral-900: #1a1a2e;
+  /* Warm neutral 9-step scale with wellness focus */
+  --neutral-50: #fefcfb;
+  --neutral-100: #f9f5f1;
+  --neutral-200: #f0eae3;
+  --neutral-300: #e4dcd4;
+  --neutral-400: #c9bcac;
+  --neutral-500: #a8988a;
+  --neutral-600: #8a7a6f;
+  --neutral-700: #6d5f56;
+  --neutral-800: #523f38;
+  --neutral-900: #2d1f1a;
 
-  /* Semantic aliases */
+  /* Semantic aliases - Soft Editorial Wellness */
   --color-surface: var(--neutral-50);
   --color-on-surface: var(--neutral-900);
-  --color-surface-raised: #ffffff;
-  --color-primary: #3b82a0;
+  --color-surface-raised: #faf8f6;
+  --color-primary: #9b7c5a;
   --color-on-primary: #ffffff;
-  --color-secondary: #e8f0e4;
-  --color-on-secondary: #2f3a3f;
+  --color-secondary: #a8c9a4;
+  --color-on-secondary: #2d3a29;
   --color-muted: #f5f0eb;
-  --color-on-muted: #6b7280;
+  --color-on-muted: #8a7a6f;
   --color-accent: #b8d4c8;
-  --color-on-accent: #1f2937;
-  --color-destructive: #d04545;
+  --color-on-accent: #1f3c34;
+  --color-destructive: #c85a5a;
   --color-on-destructive: #ffffff;
-  --color-success: #2f9f68;
-  --color-on-success: #04140b;
-  --color-warning: #d88a2b;
-  --color-on-warning: #2d1a06;
-  --color-info: #327ea8;
-  --color-on-info: #02131f;
+  --color-success: #6fbd8f;
+  --color-on-success: #0f2c1a;
+  --color-warning: #d4a574;
+  --color-on-warning: #3d2410;
+  --color-info: #7fa3c2;
+  --color-on-info: #1a2d3f;
 
   /* 4px spacing scale */
   --space-1: 4px;
@@ -85,13 +85,13 @@
   --card-foreground: var(--color-on-surface);
   --popover: var(--color-surface-raised);
   --popover-foreground: var(--color-on-surface);
-  --primary: var(--color-primary);
+  --primary: #9b7c5a;
   --primary-foreground: var(--color-on-primary);
-  --primary-hover: #357c93;
-  --secondary: var(--color-secondary);
+  --primary-hover: #8a6f50;
+  --secondary: #a8c9a4;
   --secondary-foreground: var(--color-on-secondary);
-  --tertiary: #8f79ca;
-  --tertiary-foreground: #1a1230;
+  --tertiary: #c8b5a0;
+  --tertiary-foreground: #2d1f1a;
   --muted: var(--color-muted);
   --muted-foreground: var(--color-on-muted);
   --accent: var(--color-accent);
@@ -168,69 +168,69 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --neutral-50: #f3f5f6;
-    --neutral-100: #e5e8eb;
-    --neutral-200: #ccd2d9;
-    --neutral-300: #a8b1bc;
-    --neutral-400: #7a8694;
-    --neutral-500: #58616d;
-    --neutral-600: #3b424b;
-    --neutral-700: #2b2f35;
-    --neutral-800: #1c1f22;
-    --neutral-900: #121416;
+    --neutral-50: #f0e8e3;
+    --neutral-100: #e0d3ca;
+    --neutral-200: #c9b8ad;
+    --neutral-300: #a89d92;
+    --neutral-400: #8a7a6f;
+    --neutral-500: #6d5f56;
+    --neutral-600: #523f38;
+    --neutral-700: #3d302a;
+    --neutral-800: #2d1f1a;
+    --neutral-900: #1a0f0a;
 
-    --color-surface: var(--neutral-900);
-    --color-on-surface: #f5f6f7;
-    --color-surface-raised: var(--neutral-800);
-    --color-primary: #4ba3c3;
-    --color-on-primary: #08151d;
-    --color-secondary: #6ee7b7;
-    --color-on-secondary: #0f2e20;
-    --color-muted: #1a1d20;
-    --color-on-muted: #a0a4a8;
-    --color-accent: #a78bfa;
-    --color-on-accent: #f5f6f7;
-    --color-destructive: #f87171;
-    --color-on-destructive: #2f0c0c;
-    --color-success: #22c55e;
-    --color-on-success: #05140a;
-    --color-warning: #f59e0b;
-    --color-on-warning: #231405;
-    --color-info: #38bdf8;
-    --color-on-info: #04111a;
+    --color-surface: #1a0f0a;
+    --color-on-surface: #f0e8e3;
+    --color-surface-raised: #2d1f1a;
+    --color-primary: #c9a572;
+    --color-on-primary: #1a0f0a;
+    --color-secondary: #7fa97b;
+    --color-on-secondary: #e8f2e5;
+    --color-muted: #2d1f1a;
+    --color-on-muted: #b8a89a;
+    --color-accent: #8aada3;
+    --color-on-accent: #f0f5f2;
+    --color-destructive: #e08080;
+    --color-on-destructive: #1a0f0a;
+    --color-success: #7fcd9f;
+    --color-on-success: #051f13;
+    --color-warning: #e4b89a;
+    --color-on-warning: #2a1a0a;
+    --color-info: #9fb3cf;
+    --color-on-info: #0d1820;
 
-    --border: #2b2e31;
-    --input: #2b2e31;
-    --input-background: #1a1d20;
-    --switch-background: #36414f;
-    --ring: #7dd3fc;
+    --border: #3d302a;
+    --input: #3d302a;
+    --input-background: #2d1f1a;
+    --switch-background: #523f38;
+    --ring: #c9a572;
 
-    --tertiary: #a78bfa;
-    --tertiary-foreground: #140c2c;
+    --tertiary: #d4c4b0;
+    --tertiary-foreground: #2d1f1a;
 
-    --chart-1: #4ba3c3;
-    --chart-2: #6ee7b7;
-    --chart-3: #a78bfa;
-    --chart-4: #38bdf8;
-    --chart-5: #f87171;
+    --chart-1: #c9a572;
+    --chart-2: #7fa97b;
+    --chart-3: #8aada3;
+    --chart-4: #9fb3cf;
+    --chart-5: #e08080;
 
-    --sidebar: #16191c;
-    --sidebar-foreground: #f5f6f7;
-    --sidebar-primary: #4ba3c3;
-    --sidebar-primary-foreground: #08151d;
-    --sidebar-accent: #6ee7b7;
-    --sidebar-accent-foreground: #10251a;
-    --sidebar-border: #2b2e31;
-    --sidebar-ring: #7dd3fc;
+    --sidebar: #1a0f0a;
+    --sidebar-foreground: #f0e8e3;
+    --sidebar-primary: #c9a572;
+    --sidebar-primary-foreground: #1a0f0a;
+    --sidebar-accent: #7fa97b;
+    --sidebar-accent-foreground: #1a2c23;
+    --sidebar-border: #3d302a;
+    --sidebar-ring: #c9a572;
 
-    --gradient-calm-sky: linear-gradient(135deg, #4ba3c3, #6ee7b7);
-    --gradient-healing-glow: linear-gradient(135deg, #4ba3c3, #a78bfa);
-    --gradient-ai-aura: linear-gradient(135deg, #6ee7b7, #38bdf8);
+    --gradient-calm-sky: linear-gradient(135deg, #c9a572, #7fa97b);
+    --gradient-healing-glow: linear-gradient(135deg, #c9a572, #8aada3);
+    --gradient-ai-aura: linear-gradient(135deg, #7fa97b, #9fb3cf);
 
-    --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
-    --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
-    --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.4), 0 12px 40px rgba(0, 0, 0, 0.5);
-    --elevation-4: 0 8px 24px rgba(0, 0, 0, 0.48), 0 16px 56px rgba(0, 0, 0, 0.55);
+    --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+    --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.5), 0 12px 40px rgba(0, 0, 0, 0.6);
+    --elevation-4: 0 8px 24px rgba(0, 0, 0, 0.6), 0 16px 56px rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -238,67 +238,67 @@
 .dark {
   color-scheme: dark;
 
-  --neutral-50: #f3f5f6;
-  --neutral-100: #e5e8eb;
-  --neutral-200: #ccd2d9;
-  --neutral-300: #a8b1bc;
-  --neutral-400: #7a8694;
-  --neutral-500: #58616d;
-  --neutral-600: #3b424b;
-  --neutral-700: #2b2f35;
-  --neutral-800: #1c1f22;
-  --neutral-900: #121416;
+  --neutral-50: #f0e8e3;
+  --neutral-100: #e0d3ca;
+  --neutral-200: #c9b8ad;
+  --neutral-300: #a89d92;
+  --neutral-400: #8a7a6f;
+  --neutral-500: #6d5f56;
+  --neutral-600: #523f38;
+  --neutral-700: #3d302a;
+  --neutral-800: #2d1f1a;
+  --neutral-900: #1a0f0a;
 
-  --color-surface: var(--neutral-900);
-  --color-on-surface: #f5f6f7;
-  --color-surface-raised: var(--neutral-800);
-  --color-primary: #4ba3c3;
-  --color-on-primary: #08151d;
-  --color-secondary: #6ee7b7;
-  --color-on-secondary: #0f2e20;
-  --color-muted: #1a1d20;
-  --color-on-muted: #a0a4a8;
-  --color-accent: #a78bfa;
-  --color-on-accent: #f5f6f7;
-  --color-destructive: #f87171;
-  --color-on-destructive: #2f0c0c;
-  --color-success: #22c55e;
-  --color-on-success: #05140a;
-  --color-warning: #f59e0b;
-  --color-on-warning: #231405;
-  --color-info: #38bdf8;
-  --color-on-info: #04111a;
+  --color-surface: #1a0f0a;
+  --color-on-surface: #f0e8e3;
+  --color-surface-raised: #2d1f1a;
+  --color-primary: #c9a572;
+  --color-on-primary: #1a0f0a;
+  --color-secondary: #7fa97b;
+  --color-on-secondary: #e8f2e5;
+  --color-muted: #2d1f1a;
+  --color-on-muted: #b8a89a;
+  --color-accent: #8aada3;
+  --color-on-accent: #f0f5f2;
+  --color-destructive: #e08080;
+  --color-on-destructive: #1a0f0a;
+  --color-success: #7fcd9f;
+  --color-on-success: #051f13;
+  --color-warning: #e4b89a;
+  --color-on-warning: #2a1a0a;
+  --color-info: #9fb3cf;
+  --color-on-info: #0d1820;
 
-  --border: #2b2e31;
-  --input: #2b2e31;
-  --input-background: #1a1d20;
-  --switch-background: #36414f;
-  --ring: #7dd3fc;
+  --border: #3d302a;
+  --input: #3d302a;
+  --input-background: #2d1f1a;
+  --switch-background: #523f38;
+  --ring: #c9a572;
 
-  --tertiary: #a78bfa;
-  --tertiary-foreground: #140c2c;
+  --tertiary: #d4c4b0;
+  --tertiary-foreground: #2d1f1a;
 
-  --chart-1: #4ba3c3;
-  --chart-2: #6ee7b7;
-  --chart-3: #a78bfa;
-  --chart-4: #38bdf8;
-  --chart-5: #f87171;
+  --chart-1: #c9a572;
+  --chart-2: #7fa97b;
+  --chart-3: #8aada3;
+  --chart-4: #9fb3cf;
+  --chart-5: #e08080;
 
-  --sidebar: #16191c;
-  --sidebar-foreground: #f5f6f7;
-  --sidebar-primary: #4ba3c3;
-  --sidebar-primary-foreground: #08151d;
-  --sidebar-accent: #6ee7b7;
-  --sidebar-accent-foreground: #10251a;
-  --sidebar-border: #2b2e31;
-  --sidebar-ring: #7dd3fc;
+  --sidebar: #1a0f0a;
+  --sidebar-foreground: #f0e8e3;
+  --sidebar-primary: #c9a572;
+  --sidebar-primary-foreground: #1a0f0a;
+  --sidebar-accent: #7fa97b;
+  --sidebar-accent-foreground: #1a2c23;
+  --sidebar-border: #3d302a;
+  --sidebar-ring: #c9a572;
 
-  --gradient-calm-sky: linear-gradient(135deg, #4ba3c3, #6ee7b7);
-  --gradient-healing-glow: linear-gradient(135deg, #4ba3c3, #a78bfa);
-  --gradient-ai-aura: linear-gradient(135deg, #6ee7b7, #38bdf8);
+  --gradient-calm-sky: linear-gradient(135deg, #c9a572, #7fa97b);
+  --gradient-healing-glow: linear-gradient(135deg, #c9a572, #8aada3);
+  --gradient-ai-aura: linear-gradient(135deg, #7fa97b, #9fb3cf);
 
-  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
-  --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.4), 0 12px 40px rgba(0, 0, 0, 0.5);
-  --elevation-4: 0 8px 24px rgba(0, 0, 0, 0.48), 0 16px 56px rgba(0, 0, 0, 0.55);
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.5), 0 12px 40px rgba(0, 0, 0, 0.6);
+  --elevation-4: 0 8px 24px rgba(0, 0, 0, 0.6), 0 16px 56px rgba(0, 0, 0, 0.7);
 }
