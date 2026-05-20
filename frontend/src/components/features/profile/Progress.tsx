@@ -980,7 +980,7 @@ export function Progress({ user, onNavigate }: ProgressProps) {
   }, [sortedAssessmentHistory]);
 
   const userGreeting = useMemo(() => {
-    const name = user?.firstName || user?.name;
+    const name = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name;
     return name ? `Keep going, ${name}!` : "You're building something meaningful.";
   }, [user]);
 

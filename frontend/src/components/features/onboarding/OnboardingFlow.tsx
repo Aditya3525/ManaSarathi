@@ -256,7 +256,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
               <Heart className="h-10 w-10 text-primary" />
             </div>
             <div className="space-y-4">
-              <h2 className="text-2xl">Welcome, {([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name)}! 👋</h2>
+              <h2 className="text-2xl">Welcome, {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}! 👋</h2>
               <p className="text-muted-foreground text-lg">
                 We&apos;re here to support your wellbeing journey. This quick setup will help us personalize your experience.
               </p>
@@ -684,7 +684,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
           <div className="space-y-6">
             <SecurityQuestionSetup
               onComplete={handleSecurityQuestionComplete}
-              userName={user?.firstName || user?.name}
+              userName={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}
               isSubmitting={isSavingSecurityQuestion}
               error={securityQuestionError}
               variant="card"

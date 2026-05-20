@@ -11,14 +11,6 @@ import { STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_REGEX } from '../../shared/aut
  */
 export const registerSchema = z.object({
   body: z.object({
-    name: z
-      .string({
-        required_error: 'Name is required',
-      })
-      .min(2, 'Name must be at least 2 characters')
-      .max(50, 'Name must not exceed 50 characters')
-      .trim(),
-
     email: z
       .string({
         required_error: 'Email is required',

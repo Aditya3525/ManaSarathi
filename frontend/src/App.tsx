@@ -614,7 +614,7 @@ function AppInner() {
     }
   };
 
-  const signUp = async (userData: { name: string; email: string; password: string }) => {
+  const signUp = async (userData: { email: string; password: string }) => {
     try {
       setAuthError(null);
 
@@ -1223,7 +1223,7 @@ function AppInner() {
         return (
           <OverallAssessmentInvite
             onDecision={handleAssessmentInviteDecision}
-            userName={user?.firstName || user?.name}
+            userName={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}
           />
         );
       case 'assessment-selection':

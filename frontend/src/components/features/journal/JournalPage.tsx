@@ -118,7 +118,7 @@ export function JournalPage({ user, onNavigate }: JournalPageProps) {
             <div className="min-w-0">
               <h1 className="text-xl md:text-2xl font-bold truncate">Your Journal</h1>
               <p className="text-sm text-muted-foreground truncate">
-                {user?.firstName || user?.name || 'You'} • {streak}-day reflection streak
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'You'} • {streak}-day reflection streak
               </p>
             </div>
           </div>

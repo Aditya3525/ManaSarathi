@@ -975,7 +975,7 @@ export function Dashboard({ user: userProp, onNavigate, onLogout, showTour = fal
             {/* Tier 1: The Breathe Zone - Always visible */}
             <div className="space-y-4 page-enter">
               {isModeSectionVisible('greeting-header', isVisible('greeting-header')) && (
-                <GreetingHeader userName={user?.name || user?.firstName || undefined} />
+                <GreetingHeader userName={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || undefined} />
               )}
 
               {isModeSectionVisible('mood-check', isVisible('mood-check')) && (

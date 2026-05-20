@@ -43,7 +43,7 @@ import { TestimonialsSection } from './TestimonialsSection';
 import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD } from './defaultCredentials';
 
 interface LandingPageProps {
-  onSignUp: (userData: { name: string; email: string; password: string }) => void;
+  onSignUp: (userData: { email: string; password: string }) => void;
   onLogin: (credentials: { email: string; password: string }) => void;
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
@@ -85,7 +85,6 @@ export function LandingPage({
   const device = useDevice();
   const analytics = useAnalytics();
   const [email, setEmail] = useState('');
-  const [signupName, setSignupName] = useState('');
 
   const [password, setPassword] = useState('');
   const [loginEmail, setLoginEmail] = useState(DEMO_LOGIN_EMAIL);
@@ -355,11 +354,6 @@ export function LandingPage({
 
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signupName.trim()) {
-      setSignupValidationError('Name is required.');
-      analytics.trackFormSubmit('signup', false);
-      return;
-    }
     if (email && password) {
       if (!isValidSignupEmail) {
         setSignupValidationError(signupEmailValidation.message || 'Please enter a valid email address.');
@@ -373,7 +367,7 @@ export function LandingPage({
       }
       setSignupValidationError(null);
       analytics.trackFormSubmit('signup', true);
-      onSignUp({ name: signupName.trim(), email, password });
+      onSignUp({ email, password });
     }
   };
 
@@ -1397,24 +1391,6 @@ export function LandingPage({
             <DialogDescription>Get personalized support, assessments, and daily nudges.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSignUp} className="space-y-4">
-
-            <div className="space-y-2">
-              <Label htmlFor="signup-name">Name</Label>
-              <Input
-                id="signup-name"
-                type="text"
-                value={signupName}
-                onChange={(e) => {
-                  setSignupName(e.target.value);
-                  if (signupValidationError) setSignupValidationError(null);
-                }}
-                placeholder="Enter your name"
-                autoComplete="name"
-                required
-              />
-            </div>
-
-
             <div className="space-y-2">
               <Label htmlFor="signup-email">Email</Label>
               <Input
@@ -1472,7 +1448,7 @@ export function LandingPage({
             {(signupValidationError || authError) && <p className="text-sm text-destructive" role="alert">{signupValidationError || authError}</p>}
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="submit" className="flex-1" disabled={!signupName.trim() || !isStrongSignupPassword || !isValidSignupEmail}>
+              <Button type="submit" className="flex-1" disabled={!isStrongSignupPassword || !isValidSignupEmail}>
                 Get started
               </Button>
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>
