@@ -1,15 +1,16 @@
 import { Loader2 } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Textarea } from '../components/ui/textarea';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
+
+import { adminFetch } from './adminApi';
 
 export interface ContentRecord {
   id: string;
@@ -26,6 +27,7 @@ export interface ContentRecord {
   duration?: number;
   tags?: string[];
   isPublished: boolean;
+  scheduledPublishAt?: string | null;
   // New metadata fields
   contentType?: string;
   intensityLevel?: 'low' | 'medium' | 'high';
@@ -37,6 +39,16 @@ export interface ContentRecord {
   createdAt?: string;
   updatedAt?: string;
 }
+
+type YouTubeSearchResult = {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  durationMinutes: number | null;
+  channelTitle: string | null;
+  url: string;
+};
 
 interface ContentFormProps {
   existing?: ContentRecord;
@@ -52,6 +64,9 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   const [fileNames, setFileNames] = useState<{ media?: string; thumbnail?: string }>({});
   const [metaLoading, setMetaLoading] = useState(false);
   const [youtubeInput, setYoutubeInput] = useState('');
+  const [youtubeSearchQuery, setYoutubeSearchQuery] = useState('');
+  const [youtubeSearching, setYoutubeSearching] = useState(false);
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeSearchResult[]>([]);
   const [formData, setFormData] = useState<Partial<ContentRecord>>({
     title: '',
     type: 'article',
@@ -66,6 +81,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
     duration: 0,
     tags: [],
     isPublished: false,
+    scheduledPublishAt: null,
     // New metadata fields
     contentType: '',
     intensityLevel: 'medium',
@@ -101,7 +117,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
     }
   }, [existing, selectedType]);
 
-  type FieldValue = string | number | boolean | string[] | undefined;
+  type FieldValue = string | number | boolean | string[] | null | undefined;
   const handleInputChange = (field: keyof ContentRecord, value: FieldValue) => {
     setFormData(prev => ({
       ...prev,
@@ -112,6 +128,15 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   const handleTagsChange = (tagsString: string) => {
     const tags = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
     handleInputChange('tags', tags);
+  };
+
+  const toDateTimeLocalValue = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const pad = (part: number) => String(part).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
   function extractYouTubeId(raw?: string) {
@@ -130,11 +155,9 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   }
 
   const fetchYouTubeFull = async (id: string, force = false) => {
-    console.log('ContentForm fetchYouTubeFull called with id:', id, 'force:', force);
     setMetaLoading(true);
     try {
       const resp = await adminFetch(`${getApiBaseUrl()}/admin/media/metadata?type=youtube&value=${encodeURIComponent(id)}`, { credentials: 'include' });
-      console.log('ContentForm metadata response status:', resp.status);
       if (!resp.ok) {
         let msg = `Metadata request failed (${resp.status})`;
         try {
@@ -146,12 +169,10 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         return;
       }
       const json = await resp.json();
-      console.log('ContentForm metadata response:', json);
       if (!json.success) {
         push({ type: 'error', title: 'YouTube Metadata', description: json.error || 'Failed to fetch video data' });
         return;
       }
-      console.log('ContentForm setting form data with duration:', json.durationMinutes, 'current duration:', formData.duration);
       setFormData(prev => ({
         ...prev,
         title: prev.title?.trim() ? prev.title : (json.title || prev.title),
@@ -174,7 +195,6 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
   const lastFetchedId = useRef<string>('');
   useEffect(() => {
     const raw = youtubeInput.trim();
-    console.log('ContentForm YouTube URL changed:', raw);
     if (!raw) {
       lastFetchedId.current = '';
       return;
@@ -182,7 +202,6 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
     if (ytDebounceRef.current) clearTimeout(ytDebounceRef.current);
     ytDebounceRef.current = setTimeout(() => {
       const id = extractYouTubeId(raw);
-      console.log('ContentForm extracted YouTube ID:', id);
       if (!id) return;
       if (lastFetchedId.current === id) return;
       lastFetchedId.current = id;
@@ -222,6 +241,55 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         setFormData(prev => ({ ...prev, duration: json.durationMinutes }));
       }
     } catch (_) { /* ignore */ }
+  };
+
+  const runYouTubeSearch = async () => {
+    const query = youtubeSearchQuery.trim();
+    if (!query) {
+      push({ type: 'error', title: 'YouTube Search', description: 'Enter a search query first' });
+      return;
+    }
+
+    setYoutubeSearching(true);
+    try {
+      const resp = await adminFetch(
+        `${getApiBaseUrl()}/admin/youtube/search?query=${encodeURIComponent(query)}&limit=8`,
+        { credentials: 'include' }
+      );
+      if (!resp.ok) {
+        throw new Error(`Search failed (${resp.status})`);
+      }
+      const json = await resp.json();
+      const data = Array.isArray(json?.data) ? (json.data as YouTubeSearchResult[]) : [];
+      setYoutubeResults(data);
+      if (!data.length) {
+        push({ type: 'error', title: 'YouTube Search', description: 'No matching videos found' });
+      }
+    } catch (error) {
+      console.error('YouTube search error:', error);
+      push({
+        type: 'error',
+        title: 'YouTube Search',
+        description: error instanceof Error ? error.message : 'Failed to search YouTube',
+      });
+    } finally {
+      setYoutubeSearching(false);
+    }
+  };
+
+  const applyYouTubeResult = (result: YouTubeSearchResult) => {
+    setYoutubeInput(result.url);
+    handleInputChange('youtubeUrl', result.url);
+
+    setFormData(prev => ({
+      ...prev,
+      title: prev.title?.trim() ? prev.title : result.title,
+      description: prev.description?.trim() ? prev.description : (result.description || prev.description),
+      thumbnailUrl: prev.thumbnailUrl?.trim() ? prev.thumbnailUrl : (result.thumbnail || prev.thumbnailUrl),
+      duration: (!prev.duration || prev.duration <= 1 || prev.duration === 5) && result.durationMinutes
+        ? result.durationMinutes
+        : prev.duration,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -311,7 +379,7 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         title: formData.title,
         type: formData.type,
         category: formData.category || 'General',
-        approach: formData.approach || 'all',
+        approach: formData.approach || 'hybrid',
         content: mediaContent,
         description: formData.description,
         youtubeUrl: updated.youtubeUrl || (youtubeVideoId ?? formData.youtubeUrl),
@@ -319,7 +387,11 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         duration: formData.duration && formData.duration > 0 ? formData.duration : (updated.duration as number | undefined),
         difficulty: formData.difficulty,
         tags: Array.isArray(formData.tags) ? formData.tags : [],
-        isPublished: formData.isPublished || false
+        isPublished: formData.isPublished || false,
+        scheduledPublishAt:
+          formData.scheduledPublishAt && !Number.isNaN(new Date(formData.scheduledPublishAt).getTime())
+            ? new Date(formData.scheduledPublishAt).toISOString()
+            : null,
       };
 
       const finalPayload = { ...updated, ...payload };
@@ -403,17 +475,16 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
         <div className="space-y-2">
           <Label htmlFor="approach">Approach</Label>
           <Select
-            value={formData.approach || 'all'}
+            value={formData.approach || 'hybrid'}
             onValueChange={(value) => handleInputChange('approach', value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select approach" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Approaches</SelectItem>
               <SelectItem value="western">Western</SelectItem>
               <SelectItem value="eastern">Eastern</SelectItem>
-              <SelectItem value="hybrid">Hybrid</SelectItem>
+              <SelectItem value="hybrid">Hybrid (All)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -662,6 +733,57 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
               <p className="text-xs text-muted-foreground">
                 {metaLoading ? 'Fetching metadata…' : 'Title, description, thumbnail & duration will auto-fill.'}
               </p>
+
+              <div className="space-y-2 rounded-md border p-3">
+                <Label htmlFor="youtubeSearch">Search YouTube</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="youtubeSearch"
+                    value={youtubeSearchQuery}
+                    onChange={(e) => setYoutubeSearchQuery(e.target.value)}
+                    placeholder="Search videos by topic"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void runYouTubeSearch();
+                      }
+                    }}
+                  />
+                  <Button type="button" onClick={() => void runYouTubeSearch()} disabled={youtubeSearching}>
+                    {youtubeSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Search
+                  </Button>
+                </div>
+
+                {youtubeResults.length > 0 && (
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {youtubeResults.map((result) => (
+                      <div key={result.id} className="flex items-start justify-between gap-3 rounded-md border p-2">
+                        <div className="flex min-w-0 gap-3">
+                          {result.thumbnail && (
+                            <img
+                              src={result.thumbnail}
+                              alt={result.title}
+                              className="h-16 w-24 shrink-0 rounded object-cover"
+                            />
+                          )}
+                          <div className="min-w-0 space-y-1">
+                            <p className="truncate text-sm font-medium">{result.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {[result.channelTitle, result.durationMinutes ? `${result.durationMinutes} min` : null]
+                                .filter(Boolean)
+                                .join(' • ')}
+                            </p>
+                          </div>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" onClick={() => applyYouTubeResult(result)}>
+                          Use
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           
@@ -819,6 +941,19 @@ export const ContentForm: React.FC<ContentFormProps> = ({ existing, selectedType
           onCheckedChange={(checked) => handleInputChange('isPublished', checked)}
         />
         <Label htmlFor="isPublished">Published</Label>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="scheduledPublishAt">Schedule Publish (optional)</Label>
+        <Input
+          id="scheduledPublishAt"
+          type="datetime-local"
+          value={toDateTimeLocalValue(formData.scheduledPublishAt)}
+          onChange={(e) => handleInputChange('scheduledPublishAt', e.target.value || null)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave empty to publish manually using the switch.
+        </p>
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">

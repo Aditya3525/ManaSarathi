@@ -2,11 +2,12 @@
 import { CheckCircle2, XCircle, Loader2, AlertCircle, Database, Brain, Shield, Activity, MessageSquare, FileText, Copy, Check, Youtube, KeyRound } from 'lucide-react';
 import React, { useState } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { getApiBaseUrl } from '../config/apiConfig';
+
+import { adminFetch } from './adminApi';
 
 interface TestResult {
   name: string;

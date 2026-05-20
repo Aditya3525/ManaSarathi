@@ -457,9 +457,12 @@ export function TherapistForm({
                       <Label htmlFor="phone">Phone</Label>
                       <Input
                         id="phone"
+                        type="tel"
+                        inputMode="tel"
+                        maxLength={10}
                         value={formData.phone || ''}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="(555) 123-4567"
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                        placeholder="e.g. 9876543210"
                       />
                     </div>
                   </div>

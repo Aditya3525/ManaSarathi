@@ -1,7 +1,8 @@
+import { Brain, MessageSquare, CheckCircle2, Heart } from 'lucide-react';
 import React from 'react';
-import { Brain, TrendingUp, MessageSquare, CheckCircle2, Heart } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+
 import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 
 interface ConversationSummaryWidgetProps {
   summary: {
@@ -14,7 +15,7 @@ interface ConversationSummaryWidgetProps {
   };
 }
 
-export function ConversationSummaryWidget({ summary }: ConversationSummaryWidgetProps) {
+export function ChatConversationSummaryWidget({ summary }: ConversationSummaryWidgetProps) {
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment.toLowerCase()) {
       case 'positive':
@@ -132,3 +133,6 @@ export function ConversationSummaryWidget({ summary }: ConversationSummaryWidget
     </Card>
   );
 }
+
+// Backward-compatible alias.
+export { ChatConversationSummaryWidget as ConversationSummaryWidget };

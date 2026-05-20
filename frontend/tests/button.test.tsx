@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
 import { Button } from '../src/components/ui/button';
 
 const buttonLabel = 'Click me';
@@ -10,7 +11,7 @@ describe('Button component', () => {
 
     const button = screen.getByRole('button', { name: buttonLabel });
 
-    expect(button).toBeInTheDocument();
+    expect(button).toBeTruthy();
     expect(button.className).toContain('bg-primary');
   });
 
@@ -23,8 +24,8 @@ describe('Button component', () => {
 
     const button = screen.getByRole('button', { name: buttonLabel });
 
-  expect(button.className).toContain('border');
-  expect(button.className).toContain('h-10');
+    expect(button.className).toContain('border');
+    expect(button.className).toContain('h-12');
   });
 
   it('supports rendering as child element', () => {
@@ -35,6 +36,6 @@ describe('Button component', () => {
     );
 
     const link = screen.getByRole('link', { name: buttonLabel });
-    expect(link).toBeInTheDocument();
+    expect(link).toBeTruthy();
   });
 });

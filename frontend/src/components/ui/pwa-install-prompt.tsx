@@ -76,11 +76,7 @@ export function PWAInstallPrompt() {
       await deferredPrompt.prompt();
       const choiceResult = await deferredPrompt.userChoice;
 
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
+      void choiceResult;
 
       setDeferredPrompt(null);
       setShowPrompt(false);
@@ -109,7 +105,7 @@ export function PWAInstallPrompt() {
             
             <div className="flex-1 space-y-2">
               <div>
-                <h3 className="font-semibold text-sm">Install MaanSarathi</h3>
+                <h3 className="font-semibold text-sm">Install ManaSarathi</h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isIOS 
                     ? 'Tap the share button and select "Add to Home Screen" for quick access'
@@ -178,7 +174,6 @@ export function useIsInstalled() {
     // Listen for app installed event
     const handleAppInstalled = () => {
       setIsInstalled(true);
-      console.log('App was installed');
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);

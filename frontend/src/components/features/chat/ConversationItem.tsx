@@ -73,14 +73,13 @@ export function ConversationItem({
 
   if (isEditing) {
     return (
-      <div className="px-3 py-2 group relative">
+      <div className="group relative px-3 py-2">
         <Input
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={handleRename}
           onKeyDown={handleKeyDown}
-          className="h-8 text-sm"
-          autoFocus
+          className="h-8 w-full text-sm"
           maxLength={100}
         />
       </div>
@@ -90,13 +89,21 @@ export function ConversationItem({
   return (
     <div
       className={`
-        px-3 py-2 rounded-lg cursor-pointer group relative
+        group relative cursor-pointer rounded-lg px-3 py-2
         transition-all duration-200 hover:bg-accent/50
         ${isActive ? 'bg-accent text-accent-foreground' : ''}
       `}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-medium truncate">
@@ -125,13 +132,13 @@ export function ConversationItem({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 shrink-0 bg-muted/50 hover:bg-muted"
+              className="h-8 w-8 shrink-0 bg-muted/50 p-0 hover:bg-muted"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-[min(12rem,calc(100vw-2rem))]">
             <DropdownMenuItem
               onClick={(e) => {
                 e.stopPropagation();

@@ -11,7 +11,7 @@ export interface AnalyticsEvent {
 export function useAnalytics() {
   const trackEvent = useCallback((eventData: AnalyticsEvent) => {
     // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('📊 Analytics Event:', eventData);
     }
 
@@ -33,7 +33,7 @@ export function useAnalytics() {
   }, []);
 
   const trackPageView = useCallback((page: string, title?: string) => {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('📄 Page View:', { page, title });
     }
 

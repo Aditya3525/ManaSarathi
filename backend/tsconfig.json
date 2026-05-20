@@ -19,10 +19,8 @@
     "noImplicitThis": true,
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "node",
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,

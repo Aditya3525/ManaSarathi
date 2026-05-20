@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { createRequestLogger } from '../utils/logger';
 import { z } from 'zod';
-import { ValidationError, NotFoundError } from '../shared/errors/AppError';
+import { ValidationError } from '../shared/errors/AppError';
 import { formatZodErrors } from '../utils/zodHelpers';
 
 // Validation schemas
@@ -39,7 +39,7 @@ export const createSupportTicket = async (req: any, res: Response) => {
     });
 
     if (!user) {
-      throw new NotFoundError('User not found');
+      return res.status(404).json({ success: false, error: 'User not found' });
     }
 
     // Auto-escalate CRISIS tickets
@@ -78,7 +78,7 @@ export const createSupportTicket = async (req: any, res: Response) => {
     });
   } catch (error) {
     log.error({ err: error }, 'Failed to create support ticket');
-    if (error instanceof ValidationError || error instanceof NotFoundError) {
+    if (error instanceof ValidationError) {
       throw error;
     }
     res.status(500).json({ success: false, error: 'Failed to create support ticket' });
@@ -158,7 +158,7 @@ export const getTicketById = async (req: any, res: Response) => {
     });
 
     if (!ticket) {
-      throw new NotFoundError('Support ticket not found');
+      return res.status(404).json({ success: false, error: 'Support ticket not found' });
     }
 
     log.info({ ticketId: id }, 'Fetched support ticket details');
@@ -169,9 +169,6 @@ export const getTicketById = async (req: any, res: Response) => {
     });
   } catch (error) {
     log.error({ err: error }, 'Failed to fetch ticket');
-    if (error instanceof NotFoundError) {
-      throw error;
-    }
     res.status(500).json({ success: false, error: 'Failed to fetch support ticket' });
   }
 };
@@ -197,7 +194,7 @@ export const acknowledgeTicket = async (req: any, res: Response) => {
     });
 
     if (!ticket) {
-      throw new NotFoundError('Support ticket not found');
+      return res.status(404).json({ success: false, error: 'Support ticket not found' });
     }
 
     const updatedTicket = await prisma.supportTicket.update({
@@ -217,9 +214,6 @@ export const acknowledgeTicket = async (req: any, res: Response) => {
     });
   } catch (error) {
     log.error({ err: error }, 'Failed to acknowledge ticket');
-    if (error instanceof NotFoundError) {
-      throw error;
-    }
     res.status(500).json({ success: false, error: 'Failed to close ticket' });
   }
 };

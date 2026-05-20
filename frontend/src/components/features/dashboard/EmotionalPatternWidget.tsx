@@ -283,9 +283,9 @@ export const EmotionalPatternWidget: React.FC<EmotionalPatternWidgetProps> = ({ 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
             <p className="text-sm text-blue-900">
               {positivePercent >= 50 ? (
-                <span>💙 You're expressing mostly positive emotions. Keep nurturing what's working!</span>
+                <span>💙 You&apos;re expressing mostly positive emotions. Keep nurturing what&apos;s working!</span>
               ) : negativePercent >= 50 ? (
-                <span>🌟 You're navigating challenging emotions. Consider trying a mindfulness exercise.</span>
+                <span>🌟 You&apos;re navigating challenging emotions. Consider trying a mindfulness exercise.</span>
               ) : (
                 <span>⚖️ Your emotional tone is balanced. Keep checking in with yourself regularly.</span>
               )}

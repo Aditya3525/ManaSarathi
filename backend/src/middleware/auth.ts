@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, User } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { User } from '@prisma/client';
+import prisma from '../config/database';
+import { getJwtSecret } from '../config/auth';
 
 interface AuthRequest extends Request {
   user?: User;
@@ -27,8 +27,7 @@ export const authenticate = async (
     }
 
     const token = authHeader.substring(7);
-    // Use the same fallback as generateToken() in authController so tokens can always be verified
-    const secret = process.env.JWT_SECRET || 'dev-fallback-secret';
+    const secret = getJwtSecret();
 
     const decoded = jwt.verify(token, secret) as JwtPayload;
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });

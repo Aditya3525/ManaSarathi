@@ -1,212 +1,295 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { createRequestLogger } from '../utils/logger';
-import { z } from 'zod';
-import { ValidationError, NotFoundError } from '../shared/errors/AppError';
-import { formatZodErrors } from '../utils/zodHelpers';
 
-// Validation schema for safety plan
-const safetyPlanSchema = z.object({
-  warningSignsJson: z.string().optional(),
-  copingStrategiesJson: z.string().optional(),
-  contactsJson: z.string().optional(),
-  therapistName: z.string().optional(),
-  therapistPhone: z.string().optional(),
-  psychiatristName: z.string().optional(),
-  psychiatristPhone: z.string().optional(),
-  emergencyRoom: z.string().optional(),
-  crisisLine: z.string().optional(),
-  safeEnvironmentJson: z.string().optional(),
-  reasonsToLiveJson: z.string().optional()
-});
+const parseArrayInput = (value: unknown): unknown[] => {
+	if (Array.isArray(value)) {
+		return value;
+	}
 
-// Map onboarding country names to DB country codes
-const countryNameToCode: Record<string, string> = {
-  'India': 'IN',
-  'United States': 'US',
-  'United Kingdom': 'UK',
-  'Canada': 'CA',
-  'Australia': 'AU',
-  'Germany': 'DE',
-  'France': 'FR',
-  'Spain': 'ES',
-  'Brazil': 'BR',
-  'Japan': 'JP',
-  'Singapore': 'SG',
-  'United Arab Emirates': 'AE',
+	if (typeof value === 'string' && value.trim().length > 0) {
+		try {
+			const parsed = JSON.parse(value);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	return [];
 };
 
+const toJsonString = (value: unknown): string => JSON.stringify(parseArrayInput(value));
+
+const getUserId = (req: any): string | null => req.user?.id ?? null;
+
 /**
- * Get all active crisis resources
+ * Public crisis resources endpoint.
  * GET /api/crisis/resources
  */
 export const getCrisisResources = async (req: Request, res: Response) => {
-  const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({
-    controller: 'crisis',
-    action: 'getResources'
-  });
+	const requestId = (req as any).id ?? res.locals.requestId;
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'getResources'
+	});
 
-  try {
-    const rawCountry = (req.query.country as string) || 'US';
-    // Resolve country name to code (e.g., 'India' → 'IN'), or use as-is if already a code
-    const country = countryNameToCode[rawCountry] || rawCountry;
+	try {
+		const country = typeof req.query.country === 'string' ? req.query.country.trim() : undefined;
+		const includeInactive = String(req.query.includeInactive ?? '').toLowerCase() === 'true';
 
-    const resources = await prisma.crisisResource.findMany({
-      where: {
-        isActive: true,
-        country
-      },
-      orderBy: { order: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        phoneNumber: true,
-        textNumber: true,
-        website: true,
-        description: true,
-        availability: true,
-        language: true,
-        tags: true
-      }
-    });
+		const resources = await prisma.crisisResource.findMany({
+			where: {
+				...(country ? { country } : {}),
+				...(includeInactive ? {} : { isActive: true })
+			},
+			orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
+		});
 
-    log.info({ count: resources.length, country }, 'Fetched crisis resources');
-
-    res.json({
-      success: true,
-      data: { resources }
-    });
-  } catch (error) {
-    log.error({ err: error }, 'Failed to fetch crisis resources');
-    res.status(500).json({ success: false, error: 'Failed to fetch crisis resources' });
-  }
+		res.json({
+			success: true,
+			data: { resources }
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to fetch crisis resources');
+		res.status(500).json({ success: false, error: 'Failed to fetch crisis resources' });
+	}
 };
 
 /**
- * Create or update user's safety plan
+ * Create or update safety plan for the authenticated user.
  * POST /api/crisis/safety-plan
  */
 export const createOrUpdateSafetyPlan = async (req: any, res: Response) => {
-  const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({
-    controller: 'crisis',
-    action: 'saveSafetyPlan',
-    userId: req.user.id
-  });
+	const requestId = req.id ?? res.locals.requestId;
+	const userId = getUserId(req);
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'createOrUpdateSafetyPlan',
+		userId
+	});
 
-  try {
-    const validation = safetyPlanSchema.safeParse(req.body);
-    if (!validation.success) {
-      throw new ValidationError(formatZodErrors(validation.error), 'Invalid safety plan data');
-    }
+	if (!userId) {
+		res.status(401).json({ success: false, error: 'Authentication required' });
+		return;
+	}
 
-    const userId = req.user.id;
-    const data = validation.data;
+	try {
+		const contactsArray = parseArrayInput(req.body?.contactsJson);
+		const therapistName = typeof req.body?.therapistName === 'string' ? req.body.therapistName : null;
+		const therapistPhone = typeof req.body?.therapistPhone === 'string' ? req.body.therapistPhone : null;
+		const psychiatristName = typeof req.body?.psychiatristName === 'string' ? req.body.psychiatristName : null;
+		const psychiatristPhone = typeof req.body?.psychiatristPhone === 'string' ? req.body.psychiatristPhone : null;
+		const emergencyRoom = typeof req.body?.emergencyRoom === 'string' ? req.body.emergencyRoom : null;
+		const crisisLine = typeof req.body?.crisisLine === 'string' ? req.body.crisisLine : '988';
 
-    const safetyPlan = await prisma.safetyPlan.upsert({
-      where: { userId },
-      create: {
-        userId,
-        ...data
-      },
-      update: data
-    });
+		const safetyPlan = await prisma.safetyPlan.upsert({
+			where: { userId },
+			create: {
+				userId,
+				warningSignsJson: toJsonString(req.body?.warningSignsJson),
+				copingStrategiesJson: toJsonString(req.body?.copingStrategiesJson),
+				contactsJson: JSON.stringify(contactsArray),
+				therapistName,
+				therapistPhone,
+				psychiatristName,
+				psychiatristPhone,
+				emergencyRoom,
+				crisisLine,
+				safeEnvironmentJson: toJsonString(req.body?.safeEnvironmentJson),
+				reasonsToLiveJson: toJsonString(req.body?.reasonsToLiveJson)
+			},
+			update: {
+				warningSignsJson: toJsonString(req.body?.warningSignsJson),
+				copingStrategiesJson: toJsonString(req.body?.copingStrategiesJson),
+				contactsJson: JSON.stringify(contactsArray),
+				therapistName,
+				therapistPhone,
+				psychiatristName,
+				psychiatristPhone,
+				emergencyRoom,
+				crisisLine,
+				safeEnvironmentJson: toJsonString(req.body?.safeEnvironmentJson),
+				reasonsToLiveJson: toJsonString(req.body?.reasonsToLiveJson)
+			}
+		});
 
-    log.info({ safetyPlanId: safetyPlan.id }, 'Safety plan saved');
-
-    res.json({
-      success: true,
-      data: { safetyPlan },
-      message: 'Safety plan saved successfully'
-    });
-  } catch (error) {
-    log.error({ err: error }, 'Failed to save safety plan');
-    if (error instanceof ValidationError) {
-      throw error;
-    }
-    res.status(500).json({ success: false, error: 'Failed to save safety plan' });
-  }
+		res.json({
+			success: true,
+			data: { safetyPlan },
+			message: 'Safety plan saved successfully'
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to save safety plan');
+		res.status(500).json({ success: false, error: 'Failed to save safety plan' });
+	}
 };
 
 /**
- * Get user's safety plan
+ * Get safety plan for authenticated user.
  * GET /api/crisis/safety-plan
  */
 export const getSafetyPlan = async (req: any, res: Response) => {
-  const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({
-    controller: 'crisis',
-    action: 'getSafetyPlan',
-    userId: req.user.id
-  });
+	const requestId = req.id ?? res.locals.requestId;
+	const userId = getUserId(req);
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'getSafetyPlan',
+		userId
+	});
 
-  try {
-    const userId = req.user.id;
+	if (!userId) {
+		res.status(401).json({ success: false, error: 'Authentication required' });
+		return;
+	}
 
-    const safetyPlan = await prisma.safetyPlan.findUnique({
-      where: { userId }
-    });
+	try {
+		const safetyPlan = await prisma.safetyPlan.findUnique({
+			where: { userId }
+		});
 
-    if (!safetyPlan) {
-      // Return empty template if no plan exists
-      res.json({
-        success: true,
-        data: {
-          safetyPlan: {
-            userId,
-            warningSignsJson: '[]',
-            copingStrategiesJson: '[]',
-            contactsJson: '[]',
-            safeEnvironmentJson: '[]',
-            reasonsToLiveJson: '[]',
-            crisisLine: '988'
-          }
-        }
-      });
-      return;
-    }
+		if (!safetyPlan) {
+			res.status(404).json({ success: false, error: 'Safety plan not found' });
+			return;
+		}
 
-    log.info({ safetyPlanId: safetyPlan.id }, 'Fetched safety plan');
-
-    res.json({
-      success: true,
-      data: { safetyPlan }
-    });
-  } catch (error) {
-    log.error({ err: error }, 'Failed to fetch safety plan');
-    res.status(500).json({ success: false, error: 'Failed to fetch safety plan' });
-  }
+		res.json({
+			success: true,
+			data: { safetyPlan }
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to fetch safety plan');
+		res.status(500).json({ success: false, error: 'Failed to fetch safety plan' });
+	}
 };
 
 /**
- * Delete user's safety plan
+ * Delete safety plan for authenticated user.
  * DELETE /api/crisis/safety-plan
  */
 export const deleteSafetyPlan = async (req: any, res: Response) => {
-  const requestId = (req as any).id ?? res.locals.requestId;
-  const log = createRequestLogger(requestId).child({
-    controller: 'crisis',
-    action: 'deleteSafetyPlan',
-    userId: req.user.id
-  });
+	const requestId = req.id ?? res.locals.requestId;
+	const userId = getUserId(req);
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'deleteSafetyPlan',
+		userId
+	});
 
-  try {
-    const userId = req.user.id;
+	if (!userId) {
+		res.status(401).json({ success: false, error: 'Authentication required' });
+		return;
+	}
 
-    await prisma.safetyPlan.deleteMany({
-      where: { userId }
-    });
+	try {
+		await prisma.safetyPlan.deleteMany({ where: { userId } });
 
-    log.info('Safety plan deleted');
+		res.json({
+			success: true,
+			message: 'Safety plan deleted successfully'
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to delete safety plan');
+		res.status(500).json({ success: false, error: 'Failed to delete safety plan' });
+	}
+};
 
-    res.json({
-      success: true,
-      message: 'Safety plan deleted successfully'
-    });
-  } catch (error) {
-    log.error({ err: error }, 'Failed to delete safety plan');
-    res.status(500).json({ success: false, error: 'Failed to delete safety plan' });
-  }
+/**
+ * Get unresolved recent crisis events requiring follow-up.
+ * GET /api/crisis/recent-events
+ */
+export const getRecentCrisisEvents = async (req: any, res: Response) => {
+	const requestId = req.id ?? res.locals.requestId;
+	const userId = getUserId(req);
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'getRecentCrisisEvents',
+		userId
+	});
+
+	if (!userId) {
+		res.status(401).json({ success: false, error: 'Authentication required' });
+		return;
+	}
+
+	try {
+		const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+		const events = await prisma.crisisEvent.findMany({
+			where: {
+				userId,
+				detectedAt: { gte: since },
+				resolved: false,
+				followUpResponse: null
+			},
+			orderBy: { detectedAt: 'desc' },
+			take: 5
+		});
+
+		res.json({
+			success: true,
+			data: events
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to fetch recent crisis events');
+		res.status(500).json({ success: false, error: 'Failed to fetch recent crisis events' });
+	}
+};
+
+/**
+ * Save follow-up response for a crisis event.
+ * POST /api/crisis/follow-up
+ */
+export const submitCrisisFollowUp = async (req: any, res: Response) => {
+	const requestId = req.id ?? res.locals.requestId;
+	const userId = getUserId(req);
+	const log = createRequestLogger(requestId).child({
+		controller: 'crisis',
+		action: 'submitCrisisFollowUp',
+		userId
+	});
+
+	if (!userId) {
+		res.status(401).json({ success: false, error: 'Authentication required' });
+		return;
+	}
+
+	try {
+		const eventId = typeof req.body?.eventId === 'string' ? req.body.eventId : '';
+		const response = req.body?.response as 'better' | 'same' | 'struggling' | undefined;
+
+		if (!eventId || !response || !['better', 'same', 'struggling'].includes(response)) {
+			res.status(400).json({ success: false, error: 'Invalid follow-up payload' });
+			return;
+		}
+
+		const existingEvent = await prisma.crisisEvent.findFirst({
+			where: {
+				id: eventId,
+				userId
+			}
+		});
+
+		if (!existingEvent) {
+			res.status(404).json({ success: false, error: 'Crisis event not found' });
+			return;
+		}
+
+		const updatedEvent = await prisma.crisisEvent.update({
+			where: { id: eventId },
+			data: {
+				followUpResponse: response,
+				resolved: response === 'better' ? true : existingEvent.resolved,
+				resolvedAt: response === 'better' ? new Date() : existingEvent.resolvedAt
+			}
+		});
+
+		res.json({
+			success: true,
+			data: updatedEvent,
+			message: 'Follow-up saved'
+		});
+	} catch (error) {
+		log.error({ err: error }, 'Failed to save crisis follow-up');
+		res.status(500).json({ success: false, error: 'Failed to save follow-up response' });
+	}
 };

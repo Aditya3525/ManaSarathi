@@ -1,24 +1,15 @@
 /**
- * Service Worker for MaanSarathi PWA
+ * Service Worker for ManaSarathi PWA
  * Provides offline capability and caching strategies
  */
 
-const CACHE_NAME = 'MaanSarathi-v1.0.1';
-const API_CACHE_NAME = 'MaanSarathi-api-v1.0.1';
+const CACHE_NAME = 'ManaSarathi-v1.0.9';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
-  '/',
   '/index.html',
   '/favicon.svg',
   '/manifest.json',
-];
-
-// API endpoints to cache
-const API_ROUTES = [
-  '/api/users/me',
-  '/api/assessments/definitions',
-  '/api/plans/modules',
 ];
 
 // Install event - cache static assets
@@ -42,7 +33,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME && cacheName !== API_CACHE_NAME) {
+          if (cacheName.startsWith('ManaSarathi-') && cacheName !== CACHE_NAME) {
             console.log('[ServiceWorker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -65,11 +56,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - Network First, fallback to cache
+  // Ignore unsupported schemes (e.g., chrome-extension://) to avoid Cache API runtime errors.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
+  // Never cache API responses. They may contain private mental-health data and
+  // must always come from the network/backend auth layer.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      networkFirstStrategy(request, API_CACHE_NAME)
-    );
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Never cache HTML/document requests; always go to network first to avoid stale bundles.
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -84,6 +85,10 @@ self.addEventListener('fetch', (event) => {
  * Good for static assets that don't change often
  */
 async function cacheFirstStrategy(request, cacheName) {
+  if (!isCacheableRequest(request)) {
+    return fetch(request);
+  }
+
   try {
     const cachedResponse = await caches.match(request);
     
@@ -114,34 +119,12 @@ async function cacheFirstStrategy(request, cacheName) {
   }
 }
 
-/**
- * Network First Strategy
- * Good for API requests where fresh data is important
- */
-async function networkFirstStrategy(request, cacheName) {
+function isCacheableRequest(request) {
   try {
-    console.log('[ServiceWorker] Fetching API from network:', request.url);
-    const networkResponse = await fetch(request);
-
-    // Cache successful responses
-    if (networkResponse && networkResponse.status === 200) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] Network failed, trying cache:', request.url);
-    
-    const cachedResponse = await caches.match(request);
-    
-    if (cachedResponse) {
-      console.log('[ServiceWorker] Serving stale API data from cache');
-      return cachedResponse;
-    }
-
-    console.error('[ServiceWorker] No cached response available:', error);
-    throw error;
+    const url = new URL(request.url);
+    return request.method === 'GET' && (url.protocol === 'http:' || url.protocol === 'https:');
+  } catch {
+    return false;
   }
 }
 
@@ -196,7 +179,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification('MaanSarathi', options)
+    self.registration.showNotification('ManaSarathi', options)
   );
 });
 

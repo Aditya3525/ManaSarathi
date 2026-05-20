@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 import { useAuthStore } from '../stores/authStore';
 
-import { getApiBaseUrl, getWsBaseUrl } from '../config/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -70,11 +70,16 @@ export interface ProgressMetric {
 
 export interface MoodEntry {
   mood: string;
+  emotion?: string | null;
+  emotionGroup?: string | null;
+  intensity?: number | null;
+  trigger?: string | null;
   notes: string | null;
   createdAt: string;
 }
 
 export interface RecommendedPractice {
+  id?: string;
   title: string;
   description: string | null;
   type: string;
@@ -236,6 +241,7 @@ export function useDashboardData() {
     queryFn: () => fetchDashboardSummary(token!),
     enabled: !!token && !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // retain cached summary for 10 minutes
     refetchOnWindowFocus: true,
   });
 }
@@ -334,7 +340,6 @@ export function useDashboardWebSocket() {
 
     ws.onopen = () => {
       setIsConnected(true);
-      console.log('[Dashboard] WebSocket connected');
     };
 
     ws.onmessage = (event) => {
@@ -352,8 +357,6 @@ export function useDashboardWebSocket() {
           case 'assessment_completed':
             queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
             break;
-          default:
-            console.log('[Dashboard] Unknown update type:', data.type);
         }
 
         setLastUpdate(new Date());
@@ -369,7 +372,6 @@ export function useDashboardWebSocket() {
 
     ws.onclose = () => {
       setIsConnected(false);
-      console.log('[Dashboard] WebSocket disconnected');
     };
 
     return () => {

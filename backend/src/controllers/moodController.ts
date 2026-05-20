@@ -7,6 +7,57 @@ import { prisma } from '../config/database';
  * Handles CRUD operations and statistics for mood entries.
  */
 
+const LEGACY_MOOD_BY_GROUP: Record<string, string> = {
+    joy: 'Great',
+    surprise: 'Good',
+    fear: 'Anxious',
+    anger: 'Struggling',
+    sadness: 'Struggling',
+    disgust: 'Okay'
+};
+
+const LEGACY_MOOD_BY_EMOTION: Record<string, string> = {
+    anxious: 'Anxious',
+    nervous: 'Anxious',
+    worried: 'Anxious',
+    overwhelmed: 'Struggling',
+    insecure: 'Struggling',
+    hopeless: 'Struggling',
+    lonely: 'Struggling',
+    grieving: 'Struggling',
+    frustrated: 'Struggling',
+    irritated: 'Struggling',
+    resentful: 'Struggling',
+    jealous: 'Struggling',
+    calm: 'Good',
+    grateful: 'Great',
+    excited: 'Great',
+    happy: 'Great',
+    proud: 'Great'
+};
+
+const normalizeLegacyMood = (
+    mood: unknown,
+    emotionGroup: unknown,
+    emotion: unknown
+): string | null => {
+    if (typeof mood === 'string' && mood.trim().length > 0) {
+        return mood.trim();
+    }
+
+    const normalizedGroup = typeof emotionGroup === 'string' ? emotionGroup.trim().toLowerCase() : '';
+    if (normalizedGroup && LEGACY_MOOD_BY_GROUP[normalizedGroup]) {
+        return LEGACY_MOOD_BY_GROUP[normalizedGroup];
+    }
+
+    const normalizedEmotion = typeof emotion === 'string' ? emotion.trim().toLowerCase() : '';
+    if (normalizedEmotion && LEGACY_MOOD_BY_EMOTION[normalizedEmotion]) {
+        return LEGACY_MOOD_BY_EMOTION[normalizedEmotion];
+    }
+
+    return null;
+};
+
 /**
  * GET /api/mood
  * Fetch mood entries for the authenticated user with optional date filtering.
@@ -52,14 +103,41 @@ export const createMoodEntry = async (req: any, res: Response) => {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
 
-        const { mood, notes } = req.body;
+        const { mood, emotion, emotionGroup, intensity, trigger, notes } = req.body;
 
-        if (!mood) {
-            return res.status(400).json({ success: false, error: 'Mood is required' });
+        const resolvedMood = normalizeLegacyMood(mood, emotionGroup, emotion);
+
+        if (!resolvedMood) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mood is required (directly or derived from emotion/emotionGroup)'
+            });
         }
 
+
+        const normalizedEmotion = typeof emotion === 'string' ? emotion.trim().toLowerCase() : null;
+        const normalizedEmotionGroup =
+            typeof emotionGroup === 'string' ? emotionGroup.trim().toLowerCase() : null;
+        const normalizedTrigger = typeof trigger === 'string' && trigger.trim().length > 0
+            ? trigger.trim()
+            : null;
+        const normalizedNotes = typeof notes === 'string' && notes.trim().length > 0
+            ? notes.trim()
+            : null;
+        const normalizedIntensity = typeof intensity === 'number'
+            ? Math.max(1, Math.min(10, Math.round(intensity)))
+            : null;
+
         const moodEntry = await prisma.moodEntry.create({
-            data: { userId, mood, notes },
+            data: {
+                userId,
+                mood: resolvedMood,
+                emotion: normalizedEmotion,
+                emotionGroup: normalizedEmotionGroup,
+                intensity: normalizedIntensity,
+                trigger: normalizedTrigger,
+                notes: normalizedNotes,
+            },
         });
 
         res.status(201).json({ success: true, data: moodEntry });

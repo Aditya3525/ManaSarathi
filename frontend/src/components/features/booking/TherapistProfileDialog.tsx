@@ -1,12 +1,3 @@
-import React, { useState } from 'react';
-import { Button } from '../../ui/button';
-import { Badge } from '../../ui/badge';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '../../ui/dialog';
 import {
     User,
     Star,
@@ -20,7 +11,19 @@ import {
     BookOpen,
     CheckCircle2,
 } from 'lucide-react';
+import React, { useState } from 'react';
+
 import { type Therapist } from '../../../services/helpSafetyApi';
+import { type AssessmentShareContext } from '../../../utils/assessmentSharingContext';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '../../ui/dialog';
+
 import { ConsultationBookingDialog } from './ConsultationBookingDialog';
 import './booking.css';
 
@@ -28,12 +31,14 @@ interface TherapistProfileDialogProps {
     therapist: Therapist | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    sharingContext?: AssessmentShareContext | null;
 }
 
 export function TherapistProfileDialog({
     therapist,
     open,
     onOpenChange,
+    sharingContext,
 }: TherapistProfileDialogProps) {
     const [bookingOpen, setBookingOpen] = useState(false);
 
@@ -233,6 +238,7 @@ export function TherapistProfileDialog({
                 therapist={therapist}
                 open={bookingOpen}
                 onOpenChange={setBookingOpen}
+                sharingContext={sharingContext}
             />
         </>
     );

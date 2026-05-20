@@ -1,0 +1,169 @@
+/* ===== THERAPEUTIC ANIMATIONS WITH FRAMER MOTION ===== */
+
+/* Page transitions - Soft Editorial Wellness style */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-scale-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.page-enter {
+  animation: page-fade-in var(--transition-calm) forwards;
+}
+
+.page-enter-slide {
+  animation: page-slide-up var(--transition-calm) forwards;
+}
+
+.page-enter-scale {
+  animation: page-scale-in var(--transition-calm) forwards;
+}
+
+/* Message entrance (for chat) */
+@keyframes message-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message-enter {
+  animation: message-slide-up 250ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Gentle breathing pulse (for bot avatar, loading states) */
+@keyframes breathe-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+.animate-breathe {
+  animation: breathe-pulse var(--transition-breathe) infinite;
+}
+
+/* Wellness card reveal */
+@keyframes wellness-reveal {
+  from { 
+    opacity: 0;
+    transform: translateY(16px);
+    backdrop-filter: blur(0px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+    backdrop-filter: blur(10px);
+  }
+}
+
+.animate-wellness-reveal {
+  animation: wellness-reveal var(--transition-calm) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Score ring fill */
+@keyframes ring-fill {
+  from { stroke-dashoffset: 283; }
+}
+
+/* Celebration confetti */
+@keyframes confetti-fall {
+  0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Card expand */
+@keyframes card-expand {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: 500px; opacity: 1; }
+}
+
+.card-expand-enter {
+  animation: card-expand var(--transition-calm) forwards;
+  overflow: hidden;
+}
+
+/* Stat counter increment */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gentle glow for active states */
+@keyframes gentle-glow {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  50% { box-shadow: 0 0 16px 4px hsl(var(--primary) / 0.15); }
+}
+
+.animate-glow {
+  animation: gentle-glow 3s ease-in-out infinite;
+}
+
+/* Mood selection feedback */
+@keyframes mood-select {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1.05); }
+}
+
+/* Streak increment */
+@keyframes streak-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Therapeutic bloom effect */
+@keyframes bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(12px);
+    filter: blur(4px);
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-bloom {
+  animation: bloom 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Subtle shimmer */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background-size: 1000px 100%;
+}
+
+/* Reduced motion override */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .page-enter-slide,
+  .page-enter-scale,
+  .message-enter,
+  .animate-breathe,
+  .animate-wellness-reveal,
+  .card-expand-enter,
+  .animate-glow,
+  .animate-bloom,
+  .animate-shimmer {
+    animation: none !important;
+    transition: none !important;
+  }
+}

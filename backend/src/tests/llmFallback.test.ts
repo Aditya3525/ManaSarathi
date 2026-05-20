@@ -5,6 +5,8 @@ const originalEnv = {
   AI_ENABLE_FALLBACK: process.env.AI_ENABLE_FALLBACK,
   HUGGINGFACE_API_KEY_1: process.env.HUGGINGFACE_API_KEY_1,
   GEMINI_API_KEY_1: process.env.GEMINI_API_KEY_1,
+  NVIDIA_API_KEY_1: process.env.NVIDIA_API_KEY_1,
+  NVIDIA_API_KEY: process.env.NVIDIA_API_KEY,
   AI_PROVIDER_MAX_FAILURES_BEFORE_COOLDOWN: process.env.AI_PROVIDER_MAX_FAILURES_BEFORE_COOLDOWN,
   AI_PROVIDER_COOLDOWN_MS: process.env.AI_PROVIDER_COOLDOWN_MS
 };
@@ -12,6 +14,8 @@ const originalEnv = {
 try {
   process.env.HUGGINGFACE_API_KEY_1 = 'hf_test_key';
   process.env.GEMINI_API_KEY_1 = 'g_test_key';
+  delete process.env.NVIDIA_API_KEY_1;
+  delete process.env.NVIDIA_API_KEY;
   process.env.AI_PROVIDER_PRIORITY = 'huggingface,gemini,ollama';
   delete process.env.AI_ENABLE_FALLBACK;
 
@@ -65,6 +69,16 @@ try {
     delete process.env.GEMINI_API_KEY_1;
   } else {
     process.env.GEMINI_API_KEY_1 = originalEnv.GEMINI_API_KEY_1;
+  }
+  if (originalEnv.NVIDIA_API_KEY_1 === undefined) {
+    delete process.env.NVIDIA_API_KEY_1;
+  } else {
+    process.env.NVIDIA_API_KEY_1 = originalEnv.NVIDIA_API_KEY_1;
+  }
+  if (originalEnv.NVIDIA_API_KEY === undefined) {
+    delete process.env.NVIDIA_API_KEY;
+  } else {
+    process.env.NVIDIA_API_KEY = originalEnv.NVIDIA_API_KEY;
   }
   if (originalEnv.AI_PROVIDER_MAX_FAILURES_BEFORE_COOLDOWN === undefined) {
     delete process.env.AI_PROVIDER_MAX_FAILURES_BEFORE_COOLDOWN;

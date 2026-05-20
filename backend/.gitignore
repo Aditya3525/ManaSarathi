@@ -113,3 +113,5 @@ build/
 # Database
 *.sqlite
 *.db
+*.db.bak
+.vercel

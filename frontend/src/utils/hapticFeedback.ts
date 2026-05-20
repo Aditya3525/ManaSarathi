@@ -42,14 +42,12 @@ export async function triggerHaptic(
   pattern: HapticPattern | number | number[]
 ): Promise<boolean> {
   if (!isHapticSupported()) {
-    console.log('[Haptic] Vibration API not supported');
     return false;
   }
 
   // Check if user has disabled haptics
   const hapticEnabled = getHapticPreference();
   if (!hapticEnabled) {
-    console.log('[Haptic] Haptic feedback disabled by user');
     return false;
   }
 
@@ -63,7 +61,6 @@ export async function triggerHaptic(
     }
 
     const success = navigator.vibrate(vibrationPattern);
-    console.log('[Haptic] Vibration triggered:', vibrationPattern);
     return success;
   } catch (error) {
     console.error('[Haptic] Error triggering vibration:', error);

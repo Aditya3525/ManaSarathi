@@ -189,10 +189,14 @@ function SparkleSuccess({ message }: { message?: string }) {
  * Hook for triggering success animations
  */
 export function useSuccessAnimation() {
-  const [state, setState] = useState({
+  const [state, setState] = useState<{
+    show: boolean;
+    message: string;
+    variant: 'checkmark' | 'confetti' | 'sparkle';
+  }>({
     show: false,
     message: '',
-    variant: 'checkmark' as const,
+    variant: 'checkmark',
   });
 
   const showSuccess = (

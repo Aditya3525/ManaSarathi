@@ -23,7 +23,7 @@ export function useAssessmentTemplates() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to fetch assessment templates');
       }
-      return response.data;
+      return response.data?.templates ?? [];
     },
     staleTime: 15 * 60 * 1000, // Templates rarely change, cache for 15 minutes
   });
@@ -100,8 +100,19 @@ export function useSubmitAssessment() {
   return useMutation({
     mutationFn: async (data: {
       assessmentType: string;
-      responses: Record<string, number>;
+      responses: Record<string, number | string>;
+      score: number;
+      rawScore?: number;
+      maxScore?: number;
       sessionId?: string;
+      responseDetails?: Array<{
+        questionId: string;
+        questionText: string;
+        answerLabel: string;
+        answerValue: string | number | null;
+        answerScore?: number;
+      }>;
+      categoryBreakdown?: Record<string, { raw: number; normalized: number; interpretation?: string }>;
     }) => {
       const response = await assessmentsApi.submitAssessment(data);
       if (!response.success) {
@@ -109,12 +120,20 @@ export function useSubmitAssessment() {
       }
       return response.data;
     },
-    onSuccess: () => {
-      // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
+    onSuccess: (data) => {
+      if (userId && data?.history && data?.insights) {
+        queryClient.setQueryData(queryKeys.assessmentHistory(userId), {
+          history: data.history,
+          insights: data.insights,
+        });
+        queryClient.setQueryData(queryKeys.assessmentInsights(userId), data.insights);
+      } else {
+        queryClient.invalidateQueries({ queryKey: queryKeys.assessmentHistory(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.assessmentInsights(userId) });
+      }
+
       queryClient.invalidateQueries({ queryKey: queryKeys.assessments });
-      
+
       push({
         title: 'Assessment Completed',
         description: 'Your assessment has been saved successfully.',
@@ -194,7 +213,7 @@ export function usePrefetchAssessmentTemplates() {
       queryKey: queryKeys.assessmentTemplates,
       queryFn: async () => {
         const response = await assessmentsApi.getAssessmentTemplates();
-        return response.data;
+        return response.data?.templates ?? [];
       },
     });
   };

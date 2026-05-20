@@ -193,12 +193,12 @@ export const ENVIRONMENTS = {
     webUrl: 'http://localhost:3000',
   },
   staging: {
-    apiUrl: 'https://staging-api.maansarathi.app/api',
-    webUrl: 'https://staging.maansarathi.app',
+    apiUrl: 'https://staging-api.manasarthi.app/api',
+    webUrl: 'https://staging.manasarthi.app',
   },
   production: {
-    apiUrl: 'https://api.maansarathi.app/api',
-    webUrl: 'https://maansarathi.app',
+    apiUrl: 'https://api.manasarthi.app/api',
+    webUrl: 'https://manasarthi.app',
   },
 } as const;
 
@@ -228,9 +228,9 @@ export const FEATURES = {
 // ============================================================================
 
 export const APP = {
-  NAME: 'MaanSarathi',
-  BUNDLE_ID: 'com.maansarathi.app',
-  SCHEME: 'maansarathi',
+  NAME: 'ManaSarathi',
+  BUNDLE_ID: 'com.manasarthi.app',
+  SCHEME: 'manasarthi',
   SUPPORTED_LANGUAGES: ['en', 'hi', 'es', 'fr', 'de', 'zh'] as const,
   DEFAULT_LANGUAGE: 'en',
   ASSESSMENT_TYPES: [

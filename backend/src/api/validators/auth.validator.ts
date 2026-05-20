@@ -3,42 +3,46 @@
  */
 
 import { z } from 'zod';
+import { validateRegistrationEmail } from '../../utils/emailValidation';
+import { STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_REGEX } from '../../shared/auth/passwordPolicy';
 
 /**
  * User Registration Schema
  */
 export const registerSchema = z.object({
   body: z.object({
-    name: z
-      .string({
-        required_error: 'Name is required',
-      })
-      .min(2, 'Name must be at least 2 characters')
-      .max(50, 'Name must not exceed 50 characters')
-      .trim(),
-    
     email: z
       .string({
         required_error: 'Email is required',
       })
-      .email('Invalid email address')
+      .trim()
       .toLowerCase()
-      .trim(),
-    
+      .email('Invalid email address')
+      .superRefine((value, context) => {
+        const validation = validateRegistrationEmail(value);
+        if (!validation.isValid) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: validation.message || 'Invalid email address',
+          });
+        }
+      }),
+
     password: z
       .string({
         required_error: 'Password is required',
       })
-      .min(6, 'Password must be at least 6 characters')
-      .max(100, 'Password must not exceed 100 characters'),
-    
+      .min(8, 'Password must be at least 8 characters')
+      .max(100, 'Password must not exceed 100 characters')
+      .regex(STRONG_PASSWORD_REGEX, STRONG_PASSWORD_MESSAGE),
+
     firstName: z
       .string()
       .min(1, 'First name is required')
       .max(50, 'First name must not exceed 50 characters')
       .trim()
       .optional(),
-    
+
     lastName: z
       .string()
       .min(1, 'Last name is required')
@@ -57,10 +61,10 @@ export const loginSchema = z.object({
       .string({
         required_error: 'Email is required',
       })
-      .email('Invalid email address')
+      .trim()
       .toLowerCase()
-      .trim(),
-    
+      .email('Invalid email address'),
+
     password: z
       .string({
         required_error: 'Password is required',
@@ -81,16 +85,16 @@ export const passwordSetupSchema = z.object({
       .min(8, 'Password must be at least 8 characters')
       .max(100, 'Password must not exceed 100 characters')
       .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+        STRONG_PASSWORD_REGEX,
+        STRONG_PASSWORD_MESSAGE
       ),
-    
+
     securityQuestion: z
       .string()
       .min(5, 'Security question must be at least 5 characters')
       .max(200, 'Security question must not exceed 200 characters')
       .optional(),
-    
+
     securityAnswer: z
       .string()
       .min(2, 'Security answer must be at least 2 characters')
@@ -110,52 +114,55 @@ export const updateProfileSchema = z.object({
       .max(50, 'First name must not exceed 50 characters')
       .trim()
       .optional(),
-    
+
     lastName: z
       .string()
       .min(1, 'Last name is required')
       .max(50, 'Last name must not exceed 50 characters')
       .trim()
       .optional(),
-    
+
     birthday: z
       .string()
-      .datetime('Invalid date format')
+      .refine((value) => {
+        if (!value) return true;
+        return !Number.isNaN(new Date(value).getTime());
+      }, 'Invalid date format')
       .optional(),
-    
+
     gender: z
       .enum(['male', 'female', 'non-binary', 'prefer-not-to-say', 'other'])
       .optional(),
-    
+
     region: z
       .string()
       .max(100, 'Region must not exceed 100 characters')
       .optional(),
-    
+
     language: z
       .string()
       .max(50, 'Language must not exceed 50 characters')
       .optional(),
-    
+
     emergencyContact: z
       .string()
       .max(100, 'Emergency contact name must not exceed 100 characters')
       .optional(),
-    
+
     emergencyPhone: z
       .string()
       .min(7, 'Phone number is too short')
       .max(20, 'Phone number is too long')
       .optional(),
-    
+
     approach: z
       .enum(['western', 'eastern', 'hybrid'])
       .optional(),
-    
+
     isOnboarded: z.boolean().optional(),
 
     dataConsent: z.boolean().optional(),
-    
+
     clinicianSharing: z.boolean().optional(),
   }).passthrough(), // Allow additional fields to pass through to the controller
 });
@@ -168,12 +175,12 @@ export const completeOnboardingSchema = z.object({
     approach: z.enum(['western', 'eastern', 'hybrid'], {
       required_error: 'Wellness approach is required',
     }),
-    
+
     selectedTypes: z
       .array(z.string())
       .min(1, 'At least one assessment type must be selected')
       .optional(),
-    
+
     preferences: z
       .object({
         language: z.string().optional(),

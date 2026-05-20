@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import Joi from 'joi';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 const progressSchema = Joi.object({
   progress: Joi.number().min(0).max(100).required()

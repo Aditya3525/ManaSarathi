@@ -20,7 +20,7 @@ export const queryClient = new QueryClient({
       retry: 2,
       
       // Don't refetch on window focus in development
-      refetchOnWindowFocus: process.env.NODE_ENV === 'production',
+      refetchOnWindowFocus: import.meta.env.PROD,
       
       // Refetch on reconnect
       refetchOnReconnect: true,

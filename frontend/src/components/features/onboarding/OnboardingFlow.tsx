@@ -22,6 +22,8 @@ interface OnboardingFlowProps {
     region?: string;
     emergencyContact?: string;
     emergencyPhone?: string;
+    dataConsent?: boolean;
+    clinicianSharing?: boolean;
   }) => void;
   user: { 
     name: string; 
@@ -145,7 +147,9 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
         gender: profileData.gender || undefined,
         region: profileData.region || undefined,
         emergencyContact: profileData.emergencyContact?.trim() || undefined,
-        emergencyPhone: profileData.emergencyPhone?.trim() || undefined
+        emergencyPhone: profileData.emergencyPhone?.trim() || undefined,
+        dataConsent: profileData.dataConsent,
+        clinicianSharing: profileData.clinicianSharing,
       };
       
       onComplete(completionData);
@@ -252,7 +256,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
               <Heart className="h-10 w-10 text-primary" />
             </div>
             <div className="space-y-4">
-              <h2 className="text-2xl">Welcome, {([user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name)}! 👋</h2>
+              <h2 className="text-2xl">Welcome, {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}! 👋</h2>
               <p className="text-muted-foreground text-lg">
                 We&apos;re here to support your wellbeing journey. This quick setup will help us personalize your experience.
               </p>
@@ -415,7 +419,9 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                     required
                   >
                     <option value="">Select country</option>
-                    {['India','United States','United Kingdom','Canada','Australia','Germany','France','Spain','Brazil','Japan','Singapore','United Arab Emirates'].map(c => (
+                    {[
+                      'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Côte d\'Ivoire', 'Cabo Verde', 'Cambodia', 'Cameroon', 'Canada', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo (Congo-Brazzaville)', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czechia (Czech Republic)', 'Democratic Republic of the Congo', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar (formerly Burma)', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine State', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+                    ].map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
@@ -566,9 +572,13 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                 <Input
                   id="emergencyPhone"
                   type="tel"
+                  maxLength={16}
                   value={profileData.emergencyPhone || ''}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, emergencyPhone: e.target.value }))}
-                  placeholder="e.g., +1 (555) 123-4567"
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^\d+\s()-]/g, '').slice(0, 16);
+                    setProfileData(prev => ({ ...prev, emergencyPhone: val }));
+                  }}
+                  placeholder="e.g. +1 415 555 2671"
                   className={isMobile ? 'h-12 text-base' : ''}
                 />
               </div>
@@ -674,7 +684,7 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
           <div className="space-y-6">
             <SecurityQuestionSetup
               onComplete={handleSecurityQuestionComplete}
-              userName={user?.firstName || user?.name}
+              userName={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}
               isSubmitting={isSavingSecurityQuestion}
               error={securityQuestionError}
               variant="card"
@@ -742,7 +752,9 @@ export function OnboardingFlow({ onComplete, user, onExit, onBack }: OnboardingF
                       gender: profileData.gender || undefined,
                       region: profileData.region || undefined,
                       emergencyContact: profileData.emergencyContact?.trim() || undefined,
-                      emergencyPhone: profileData.emergencyPhone?.trim() || undefined
+                      emergencyPhone: profileData.emergencyPhone?.trim() || undefined,
+                      dataConsent: profileData.dataConsent,
+                      clinicianSharing: profileData.clinicianSharing,
                     };
                     onComplete(completionData);
                   } else {

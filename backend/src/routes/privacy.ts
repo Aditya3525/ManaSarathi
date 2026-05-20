@@ -311,7 +311,7 @@ router.post('/export-data', async (req: any, res) => {
     // ── JSON format ──
     if (format === 'json') {
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="MaanSarathi-export-${dateStr}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="ManaSarathi-export-${dateStr}.json"`);
       return res.json(exportPayload);
     }
 
@@ -319,7 +319,7 @@ router.post('/export-data', async (req: any, res) => {
     if (format === 'text') {
       const lines: string[] = [];
       lines.push('═══════════════════════════════════════════════════════════');
-      lines.push('                  MaanSarathi — Data Export');
+      lines.push('                  ManaSarathi — Data Export');
       lines.push('═══════════════════════════════════════════════════════════');
       lines.push(`Export Date : ${exportPayload.exportDate}`);
       lines.push(`Sections   : ${requestedSections.join(', ')}`);
@@ -371,7 +371,7 @@ router.post('/export-data', async (req: any, res) => {
         for (const c of exportPayload.conversations) {
           lines.push(`  ┌─ ${c.title || 'Untitled'} (${new Date(c.createdAt).toLocaleDateString()})`);
           for (const msg of (c.messages || [])) {
-            const sender = msg.type === 'user' ? 'You' : 'MaanSarathi';
+            const sender = msg.type === 'user' ? 'You' : 'ManaSarathi';
             const time = new Date(msg.createdAt).toLocaleTimeString();
             lines.push(`  │  [${time}] ${sender}: ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '…' : ''}`);
           }
@@ -565,19 +565,19 @@ router.post('/export-data', async (req: any, res) => {
       }
 
       lines.push('═══════════════════════════════════════════════════════════');
-      lines.push('  End of export — MaanSarathi © ' + new Date().getFullYear());
+      lines.push('  End of export — ManaSarathi © ' + new Date().getFullYear());
       lines.push('═══════════════════════════════════════════════════════════');
 
       const textContent = lines.join('\n');
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="MaanSarathi-export-${dateStr}.txt"`);
+      res.setHeader('Content-Disposition', `attachment; filename="ManaSarathi-export-${dateStr}.txt"`);
       return res.send(textContent);
     }
 
     // ── PDF format ──
     if (format === 'pdf') {
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="MaanSarathi-export-${dateStr}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="ManaSarathi-export-${dateStr}.pdf"`);
 
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
       doc.pipe(res);
@@ -692,7 +692,7 @@ router.post('/export-data', async (req: any, res) => {
       // ════════════════════════════════════════════════════════
       doc.rect(0, 0, 595, 120).fill(C.primary);
       doc.fillColor(C.white).fontSize(28).font('Helvetica-Bold')
-        .text('MaanSarathi', LEFT, 30, { align: 'center' });
+        .text('ManaSarathi', LEFT, 30, { align: 'center' });
       doc.fontSize(13).font('Helvetica')
         .text('Personal Data Export', { align: 'center' });
       doc.moveDown(0.4);
@@ -777,7 +777,7 @@ router.post('/export-data', async (req: any, res) => {
             ensureSpace(24);
             const isUser = msg.type === 'user';
             const bubbleColor = isUser ? C.userBubble : C.botBubble;
-            const sender = isUser ? 'You' : 'MaanSarathi';
+            const sender = isUser ? 'You' : 'ManaSarathi';
             const snippet = msg.content.substring(0, 400) + (msg.content.length > 400 ? '…' : '');
             const indent = isUser ? 30 : 10;
 
@@ -1161,7 +1161,7 @@ router.post('/export-data', async (req: any, res) => {
       doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).lineWidth(0.5).stroke(C.border);
       doc.moveDown(0.5);
       doc.fontSize(8).fillColor(C.muted).font('Helvetica')
-        .text(`MaanSarathi © ${new Date().getFullYear()}`, { align: 'center' });
+        .text(`ManaSarathi © ${new Date().getFullYear()}`, { align: 'center' });
       doc.text('This document contains personal data. Handle with care.', { align: 'center' });
 
       doc.end();

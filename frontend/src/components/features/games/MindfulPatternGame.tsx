@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
 import { Brain, Clock, RotateCcw, Target, Trophy } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import { triggerHaptic } from '../../../utils/hapticFeedback';
 import { Button } from '../../ui/button';

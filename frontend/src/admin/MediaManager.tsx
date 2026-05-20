@@ -13,7 +13,7 @@ import {
   MoreVertical,
   FolderPlus,
 } from 'lucide-react';
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -40,7 +40,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { getApiBaseUrl, getServerBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
+
+import { adminFetch } from './adminApi';
 
 interface MediaFile {
   id: string;
@@ -49,7 +52,7 @@ interface MediaFile {
   size: number;
   url: string;
   thumbnail?: string;
-  folder?: string;
+  folder?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +61,9 @@ export const MediaManager: React.FC = () => {
   const { push } = useNotificationStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [knownFolders, setKnownFolders] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,31 +74,46 @@ export const MediaManager: React.FC = () => {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
-  // Mock data - replace with actual API calls
-  const mockFiles: MediaFile[] = [
-    {
-      id: '1',
-      name: 'hero-image.jpg',
-      type: 'image',
-      size: 1024000,
-      url: '/uploads/media/hero-image.jpg',
-      thumbnail: '/uploads/thumbnails/hero-image.jpg',
-      folder: 'images',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      name: 'meditation-guide.mp4',
-      type: 'video',
-      size: 5120000,
-      url: '/uploads/media/meditation-guide.mp4',
-      thumbnail: '/uploads/thumbnails/meditation-guide.jpg',
-      folder: 'videos',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
+  const resolveFileUrl = (value: string): string => {
+    if (/^https?:\/\//i.test(value)) {
+      return value;
+    }
+    return `${getServerBaseUrl()}${value.startsWith('/') ? '' : '/'}${value}`;
+  };
+
+  const loadMediaFiles = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/media/files`);
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Failed to load media files');
+      }
+
+      const files = Array.isArray(payload.data) ? payload.data : [];
+      setMediaFiles(files);
+
+      const folders = Array.from(new Set<string>(
+        files
+          .map((file: MediaFile) => file.folder)
+          .filter((folder: string | null | undefined): folder is string => Boolean(folder))
+      ));
+      setKnownFolders((prev) => Array.from(new Set<string>([...prev, ...folders])).sort((a, b) => a.localeCompare(b)));
+    } catch (error) {
+      console.error('Failed to load media files:', error);
+      push({
+        title: 'Error',
+        description: 'Failed to load media files',
+        type: 'error',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [push]);
+
+  useEffect(() => {
+    loadMediaFiles();
+  }, [loadMediaFiles]);
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -124,19 +145,39 @@ export const MediaManager: React.FC = () => {
 
     setIsUploading(true);
     try {
-      // TODO: Implement actual file upload to server
-      const formData = new FormData();
-      Array.from(uploadedFiles).forEach((file) => {
-        formData.append('files', file);
-      });
+      let uploadedCount = 0;
+      let failedCount = 0;
 
-      // Mock upload - replace with actual API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      for (const file of Array.from(uploadedFiles)) {
+        const uploadKind = file.type.startsWith('image/') ? 'thumbnail' : 'media';
+        const uploadUrl = new URL(`${getApiBaseUrl()}/admin/upload/${uploadKind}`);
+        if (folderFilter !== 'all') {
+          uploadUrl.searchParams.set('folder', folderFilter);
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await adminFetch(uploadUrl.toString(), {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          uploadedCount += 1;
+        } else {
+          failedCount += 1;
+        }
+      }
+
+      await loadMediaFiles();
 
       push({
-        title: 'Success',
-        description: `Uploaded ${uploadedFiles.length} file(s) successfully`,
-        type: 'success',
+        title: failedCount === 0 ? 'Success' : 'Upload completed with issues',
+        description: failedCount === 0
+          ? `Uploaded ${uploadedCount} file(s) successfully`
+          : `Uploaded ${uploadedCount} file(s), ${failedCount} failed`,
+        type: failedCount === 0 ? 'success' : 'warning',
       });
 
       // Reset file input
@@ -153,7 +194,7 @@ export const MediaManager: React.FC = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [push]);
+  }, [folderFilter, loadMediaFiles, push]);
 
   // Handle file selection
   const toggleFileSelection = (fileId: string) => {
@@ -175,21 +216,45 @@ export const MediaManager: React.FC = () => {
     }
   };
 
-  // Handle bulk delete
-  const handleBulkDelete = async () => {
-    if (selectedFiles.size === 0) return;
+  const deleteMediaFiles = async (fileIds: string[]) => {
+    if (fileIds.length === 0) return;
+
+    const targetUrls = mediaFiles
+      .filter((file) => fileIds.includes(file.id))
+      .map((file) => file.url);
+
+    if (targetUrls.length === 0) return;
 
     try {
-      // TODO: Implement actual delete API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      push({
-        title: 'Success',
-        description: `Deleted ${selectedFiles.size} file(s)`,
-        type: 'success',
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/media/files`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: targetUrls }),
       });
 
-      setSelectedFiles(new Set());
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Failed to delete files');
+      }
+
+      const deleted = Array.isArray(payload.data?.deleted) ? payload.data.deleted.length : 0;
+      const failed = Array.isArray(payload.data?.failed) ? payload.data.failed.length : 0;
+
+      push({
+        title: failed === 0 ? 'Success' : 'Delete completed with issues',
+        description: failed === 0
+          ? `Deleted ${deleted} file(s)`
+          : `Deleted ${deleted} file(s), ${failed} could not be deleted`,
+        type: failed === 0 ? 'success' : 'warning',
+      });
+
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        fileIds.forEach((id) => next.delete(id));
+        return next;
+      });
+
+      await loadMediaFiles();
     } catch (error) {
       console.error('Delete error:', error);
       push({
@@ -200,17 +265,34 @@ export const MediaManager: React.FC = () => {
     }
   };
 
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    await deleteMediaFiles(Array.from(selectedFiles));
+  };
+
   // Handle create folder
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
 
     try {
-      // TODO: Implement actual folder creation
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const response = await adminFetch(`${getApiBaseUrl()}/admin/media/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderName: newFolderName.trim(), bucket: 'media' }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Failed to create folder');
+      }
+
+      const createdFolder = String(payload.data?.folderName || newFolderName.trim());
+      setKnownFolders((prev) => Array.from(new Set([...prev, createdFolder])).sort());
+      setFolderFilter(createdFolder);
 
       push({
         title: 'Success',
-        description: `Created folder "${newFolderName}"`,
+        description: `Created folder "${createdFolder}"`,
         type: 'success',
       });
 
@@ -227,7 +309,7 @@ export const MediaManager: React.FC = () => {
   };
 
   // Filter files
-  const filteredFiles = mockFiles.filter((file) => {
+  const filteredFiles = mediaFiles.filter((file) => {
     const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = typeFilter === 'all' || file.type === typeFilter;
     const matchesFolder = folderFilter === 'all' || file.folder === folderFilter;
@@ -235,7 +317,14 @@ export const MediaManager: React.FC = () => {
   });
 
   // Get unique folders
-  const folders = Array.from(new Set(mockFiles.map((f) => f.folder).filter(Boolean)));
+  const folders = Array.from(
+    new Set([
+      ...knownFolders,
+      ...mediaFiles
+        .map((f) => f.folder)
+        .filter((folder: string | null | undefined): folder is string => Boolean(folder)),
+    ])
+  ).sort();
 
   return (
     <div className="space-y-6">
@@ -271,14 +360,14 @@ export const MediaManager: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-bold">{mockFiles.length}</div>
+            <div className="text-2xl font-bold">{mediaFiles.length}</div>
             <div className="text-sm text-muted-foreground">Total Files</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold">
-              {formatFileSize(mockFiles.reduce((sum, f) => sum + f.size, 0))}
+              {formatFileSize(mediaFiles.reduce((sum, f) => sum + f.size, 0))}
             </div>
             <div className="text-sm text-muted-foreground">Total Size</div>
           </CardContent>
@@ -387,7 +476,11 @@ export const MediaManager: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredFiles.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-muted-foreground">Loading files...</p>
+            </div>
+          ) : filteredFiles.length === 0 ? (
             <div className="text-center py-12">
               <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No files found</h3>
@@ -422,7 +515,7 @@ export const MediaManager: React.FC = () => {
                   <div className="aspect-square rounded bg-muted flex items-center justify-center mb-2">
                     {file.thumbnail ? (
                       <img
-                        src={file.thumbnail}
+                        src={resolveFileUrl(file.thumbnail)}
                         alt={file.name}
                         className="w-full h-full object-cover rounded"
                       />
@@ -450,12 +543,12 @@ export const MediaManager: React.FC = () => {
                           <Eye className="h-4 w-4 mr-2" />
                           Preview
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.open(resolveFileUrl(file.url), '_blank')}>
                           <Download className="h-4 w-4 mr-2" />
                           Download
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
+                        <DropdownMenuItem className="text-destructive" onClick={() => deleteMediaFiles([file.id])}>
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
                         </DropdownMenuItem>
@@ -512,12 +605,12 @@ export const MediaManager: React.FC = () => {
                         <Eye className="h-4 w-4 mr-2" />
                         Preview
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => window.open(resolveFileUrl(file.url), '_blank')}>
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem className="text-destructive" onClick={() => deleteMediaFiles([file.id])}>
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
                       </DropdownMenuItem>
@@ -543,18 +636,18 @@ export const MediaManager: React.FC = () => {
             <div className="max-h-[60vh] overflow-auto">
               {previewFile.type === 'image' && (
                 <img
-                  src={previewFile.url}
+                  src={resolveFileUrl(previewFile.url)}
                   alt={previewFile.name}
                   className="w-full h-auto rounded"
                 />
               )}
               {previewFile.type === 'video' && (
-                <video src={previewFile.url} controls className="w-full rounded">
+                <video src={resolveFileUrl(previewFile.url)} controls className="w-full rounded">
                   <track kind="captions" />
                 </video>
               )}
               {previewFile.type === 'audio' && (
-                <audio src={previewFile.url} controls className="w-full">
+                <audio src={resolveFileUrl(previewFile.url)} controls className="w-full">
                   <track kind="captions" />
                 </audio>
               )}
@@ -564,7 +657,7 @@ export const MediaManager: React.FC = () => {
             <Button variant="outline" onClick={() => setPreviewFile(null)}>
               Close
             </Button>
-            <Button>
+            <Button onClick={() => previewFile && window.open(resolveFileUrl(previewFile.url), '_blank')}>
               <Download className="h-4 w-4 mr-2" />
               Download
             </Button>

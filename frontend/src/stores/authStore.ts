@@ -29,7 +29,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       user: null,
       token: null,
@@ -39,12 +39,20 @@ export const useAuthStore = create<AuthState>()(
 
       // Actions
       setUser: (user, token) => {
-        if (token) {
-          localStorage.setItem('token', token);
+        const existingToken = get().token || localStorage.getItem('token');
+        const resolvedToken = token !== undefined
+          ? token
+          : (user ? existingToken : null);
+
+        if (resolvedToken) {
+          localStorage.setItem('token', resolvedToken);
+        } else {
+          localStorage.removeItem('token');
         }
+
         set({
           user,
-          token: token || null,
+          token: resolvedToken,
           isAuthenticated: !!user,
           error: null,
         });

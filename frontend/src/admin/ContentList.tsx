@@ -14,16 +14,16 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
+import { adminFetch } from './adminApi';
 import { BulkActionToolbar } from './BulkActionToolbar';
 import { PreviewModal } from './PreviewModal';
 
@@ -40,6 +40,7 @@ export interface ContentItem {
   duration?: number;
   tags?: string[];
   isPublished: boolean;
+  scheduledPublishAt?: string | null;
   createdAt: string;
 }
 
@@ -63,7 +64,7 @@ export const ContentList: React.FC<ContentListProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [filterApproach, setFilterApproach] = useState<string>('all');
+  const [filterApproach, setFilterApproach] = useState<string>('hybrid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
   // Bulk selection state
@@ -100,7 +101,7 @@ export const ContentList: React.FC<ContentListProps> = ({
       const raw = data.data || [];
       interface RawContent {
         id: string; title: string; type: string; approach: string; category?: string; difficulty?: string;
-        description?: string; thumbnailUrl?: string; youtubeUrl?: string; duration?: number | string; tags?: string | string[]; isPublished: boolean; createdAt?: string;
+        description?: string; thumbnailUrl?: string; youtubeUrl?: string; duration?: number | string; tags?: string | string[]; isPublished: boolean; scheduledPublishAt?: string | null; createdAt?: string;
       }
       const normalized: ContentItem[] = (raw as RawContent[]).map((c) => ({
         id: c.id,
@@ -119,6 +120,7 @@ export const ContentList: React.FC<ContentListProps> = ({
               ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0)
               : []),
         isPublished: !!c.isPublished,
+        scheduledPublishAt: c.scheduledPublishAt ?? null,
         createdAt: c.createdAt || new Date().toISOString()
       }));
       setItems(normalized);
@@ -301,10 +303,10 @@ export const ContentList: React.FC<ContentListProps> = ({
 
   const getApproachColor = (approach: string) => {
     switch (approach) {
-      case 'cbt': return 'bg-blue-100 text-blue-800';
-      case 'mindfulness': return 'bg-green-100 text-green-800';
-      case 'dbt': return 'bg-purple-100 text-purple-800';
-      case 'act': return 'bg-orange-100 text-orange-800';
+      case 'western': return 'bg-blue-100 text-blue-800';
+      case 'eastern': return 'bg-green-100 text-green-800';
+      case 'hybrid': return 'bg-purple-100 text-purple-800';
+      case 'all': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -316,7 +318,7 @@ export const ContentList: React.FC<ContentListProps> = ({
                          item.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesApproach = filterApproach === 'all' || item.approach === filterApproach;
+    const matchesApproach = filterApproach === 'hybrid' || item.approach === filterApproach;
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'published' && item.isPublished) ||
                          (filterStatus === 'draft' && !item.isPublished);
@@ -387,15 +389,12 @@ export const ContentList: React.FC<ContentListProps> = ({
 
             <Select value={filterApproach} onValueChange={setFilterApproach}>
               <SelectTrigger className="h-11">
-                <SelectValue placeholder="All Approaches" />
+                <SelectValue placeholder="Hybrid (All)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Approaches</SelectItem>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="cbt">CBT</SelectItem>
-                <SelectItem value="mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="dbt">DBT</SelectItem>
-                <SelectItem value="act">ACT</SelectItem>
+                <SelectItem value="western">Western</SelectItem>
+                <SelectItem value="eastern">Eastern</SelectItem>
+                <SelectItem value="hybrid">Hybrid (All)</SelectItem>
               </SelectContent>
             </Select>
 

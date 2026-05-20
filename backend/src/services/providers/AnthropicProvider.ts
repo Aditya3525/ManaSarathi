@@ -19,9 +19,8 @@ export class AnthropicProvider extends BaseAIProvider {
         try {
           const client = new Anthropic({ apiKey });
           this.clients.set(apiKey, client);
-          console.log(`[${this.name}] Initialized client for API key: ${apiKey.substring(0, 10)}...`);
         } catch (error) {
-          console.warn(`[${this.name}] Failed to initialize client for API key:`, error);
+          console.warn(`[${this.name}] Failed to initialize client:`, error);
         }
       }
     }
@@ -52,7 +51,7 @@ export class AnthropicProvider extends BaseAIProvider {
         ]);
         return true;
       } catch (error) {
-        console.warn(`[${this.name}] Connection test failed for key ${apiKey.substring(0, 10)}...:`, error);
+        console.warn(`[${this.name}] Connection test failed:`, error);
         throw error;
       }
     });
@@ -75,8 +74,6 @@ export class AnthropicProvider extends BaseAIProvider {
       if (!client) throw new Error('Client not found for API key');
 
       try {
-        console.log(`[${this.name}] Generating response with ${preparedMessages.length} messages...`);
-        
         // Convert system message to separate parameter for Anthropic
         const systemMessage = preparedMessages.find(msg => msg.role === 'system')?.content || '';
         const conversationMessages = preparedMessages.filter(msg => msg.role !== 'system');
@@ -115,11 +112,10 @@ export class AnthropicProvider extends BaseAIProvider {
           apiKeyUsed: this.currentApiKeyIndex
         };
 
-        console.log(`[${this.name}] Successfully generated response in ${processingTime}ms`);
         return aiResponse;
 
       } catch (error: any) {
-        console.error(`[${this.name}] Error with API key ${apiKey.substring(0, 10)}...:`, error);
+        console.error(`[${this.name}] Error while generating response:`, error);
         
         // Handle specific Anthropic errors
         if (error.status === 429) {

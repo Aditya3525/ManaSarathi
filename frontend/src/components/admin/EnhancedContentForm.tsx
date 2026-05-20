@@ -1,9 +1,11 @@
-import { useState } from 'react';
 import { Upload, X, Plus, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+
+import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
 import {
   Select,
   SelectContent,
@@ -11,8 +13,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '../ui/select';
-import { Checkbox } from '../ui/checkbox';
-import { useToast } from '../../contexts/ToastContext';
+import { Textarea } from '../ui/textarea';
 
 interface EnhancedContentFormProps {
   onSubmit: (data: ContentFormData) => Promise<void>;

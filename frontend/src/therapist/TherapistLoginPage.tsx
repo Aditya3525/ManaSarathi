@@ -47,7 +47,7 @@ export const TherapistLoginPage: React.FC<TherapistLoginPageProps> = ({
                             onClick={onNavigateHome}
                         >
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to MaanSarathi
+                            Back to ManaSarathi
                         </Button>
 
                         <div className="space-y-6">
@@ -150,7 +150,7 @@ export const TherapistLoginPage: React.FC<TherapistLoginPageProps> = ({
                                     </button>
                                 </p>
                                 <p>
-                                    Need help? <a className="underline" href="mailto:support@maansarathi.app">Contact support</a>
+                                    Need help? <a className="underline" href="mailto:support@manasarthi.app">Contact support</a>
                                 </p>
                             </div>
                         </CardContent>

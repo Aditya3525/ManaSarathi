@@ -1,17 +1,4 @@
-import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../../ui/button';
-import { Textarea } from '../../ui/textarea';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter
-} from '../../ui/dialog';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     Video,
     Phone,
@@ -26,15 +13,38 @@ import {
     Star,
     CheckCircle2
 } from 'lucide-react';
-import { Badge } from '../../ui/badge';
-import { therapistApi, type Therapist } from '../../../services/helpSafetyApi';
+import React, { useEffect, useMemo, useState } from 'react';
+
 import { useToast } from '../../../contexts/ToastContext';
+import { assessmentsApi, type AssessmentInsights } from '../../../services/api';
+import { therapistApi, type Therapist } from '../../../services/helpSafetyApi';
+import {
+    type AssessmentShareContext,
+    getDefaultShareSelection,
+    hasShareSelectionEnabled,
+} from '../../../utils/assessmentSharingContext';
+import { Button } from '../../ui/button';
+import { Checkbox } from '../../ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter
+} from '../../ui/dialog';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
+import { Textarea } from '../../ui/textarea';
+
+
 import './booking.css';
 
 interface ConsultationBookingDialogProps {
     therapist: Therapist | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    sharingContext?: AssessmentShareContext | null;
 }
 
 type ConsultationType = 'video' | 'phone' | 'in-person';
@@ -82,10 +92,66 @@ const CONSULTATION_TYPES: { key: ConsultationType; label: string; desc: string; 
     },
 ];
 
+const formatAssessmentLabel = (assessmentType: string): string =>
+    assessmentType
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b(phq|gad|ptsd|ocd)\b/gi, (match) => match.toUpperCase())
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatTrendLabel = (trend: string | undefined): string | undefined => {
+    if (!trend) return undefined;
+
+    switch (trend) {
+        case 'improving':
+            return 'Improving';
+        case 'declining':
+            return 'Declining';
+        case 'stable':
+            return 'Stable';
+        case 'baseline':
+            return 'Baseline';
+        default:
+            return trend;
+    }
+};
+
+const buildDirectBookingShareContext = (insights: AssessmentInsights): AssessmentShareContext | null => {
+    const entries = Object.entries(insights.byType ?? {});
+    if (entries.length === 0) {
+        return null;
+    }
+
+    const [assessmentType, summary] = [...entries].sort((a, b) => {
+        const aDate = new Date(a[1].lastCompletedAt).getTime();
+        const bDate = new Date(b[1].lastCompletedAt).getTime();
+        return bDate - aDate;
+    })[0];
+
+    const recommendations = (summary.recommendations ?? [])
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .slice(0, 4);
+
+    return {
+        source: 'direct-booking',
+        assessmentType,
+        assessmentLabel: formatAssessmentLabel(assessmentType),
+        latestScore: Number.isFinite(summary.latestScore) ? Math.round(summary.latestScore) : undefined,
+        trend: formatTrendLabel(summary.trend),
+        interpretation: summary.interpretation || undefined,
+        recommendations: recommendations.length > 0 ? recommendations : undefined,
+        wellnessScore:
+            typeof insights.wellnessScore?.value === 'number'
+                ? Math.round(insights.wellnessScore.value)
+                : undefined,
+        generatedAt: new Date().toISOString(),
+    };
+};
+
 export function ConsultationBookingDialog({
     therapist,
     open,
     onOpenChange,
+    sharingContext,
 }: ConsultationBookingDialogProps) {
     const { push } = useToast();
     const queryClient = useQueryClient();
@@ -97,6 +163,47 @@ export function ConsultationBookingDialog({
     const [message, setMessage] = useState('');
     const [userPhone, setUserPhone] = useState('');
     const [bookingSuccess, setBookingSuccess] = useState(false);
+    const [shareSelection, setShareSelection] = useState(() => getDefaultShareSelection(sharingContext));
+    const [shareReferenceEnabled, setShareReferenceEnabled] = useState(() =>
+        Boolean(sharingContext?.assessmentLabel) && hasShareSelectionEnabled(getDefaultShareSelection(sharingContext))
+    );
+
+    const fallbackShareContextQuery = useQuery({
+        queryKey: ['booking-share-context-fallback'],
+        enabled: open && !sharingContext,
+        staleTime: 5 * 60 * 1000,
+        queryFn: async (): Promise<AssessmentShareContext | null> => {
+            const response = await assessmentsApi.getAssessmentHistory();
+            if (!response.success || !response.data?.insights) {
+                return null;
+            }
+
+            return buildDirectBookingShareContext(response.data.insights);
+        },
+    });
+
+    const resolvedSharingContext = sharingContext ?? fallbackShareContextQuery.data ?? null;
+    const hasReferralContext = Boolean(resolvedSharingContext?.assessmentLabel);
+    const sharingEnabled = hasReferralContext && shareReferenceEnabled && hasShareSelectionEnabled(shareSelection);
+
+    const sharedDataLabels = useMemo(() => {
+        if (!hasReferralContext) {
+            return [] as string[];
+        }
+
+        const labels: string[] = [];
+        if (shareSelection.scoreSummary) labels.push('Score summary');
+        if (shareSelection.interpretation) labels.push('Interpretation');
+        if (shareSelection.recommendations) labels.push('Recommendations');
+        if (shareSelection.trend) labels.push('Trend');
+        return labels;
+    }, [hasReferralContext, shareSelection]);
+
+    const applyShareDefaults = (context: AssessmentShareContext | null | undefined) => {
+        const defaults = getDefaultShareSelection(context);
+        setShareSelection(defaults);
+        setShareReferenceEnabled(Boolean(context?.assessmentLabel) && hasShareSelectionEnabled(defaults));
+    };
 
     const resetState = () => {
         setCurrentStep(0);
@@ -106,7 +213,14 @@ export function ConsultationBookingDialog({
         setMessage('');
         setUserPhone('');
         setBookingSuccess(false);
+        applyShareDefaults(resolvedSharingContext);
     };
+
+    useEffect(() => {
+        if (open) {
+            applyShareDefaults(resolvedSharingContext);
+        }
+    }, [open, resolvedSharingContext]);
 
     const handleClose = (isOpen: boolean) => {
         if (!isOpen) resetState();
@@ -121,6 +235,23 @@ export function ConsultationBookingDialog({
             preferredTime: string;
             message?: string;
             userPhone?: string;
+            sharingContext?: {
+                source?: 'insights-share' | 'insights-discuss' | 'direct-booking';
+                assessmentType?: string;
+                assessmentLabel?: string;
+                latestScore?: number;
+                trend?: string;
+                interpretation?: string;
+                recommendations?: string[];
+                wellnessScore?: number;
+                generatedAt?: string;
+                includeData?: {
+                    scoreSummary?: boolean;
+                    interpretation?: boolean;
+                    recommendations?: boolean;
+                    trend?: boolean;
+                };
+            };
         }) => therapistApi.requestBooking(data),
         onSuccess: () => {
             setBookingSuccess(true);
@@ -167,10 +298,47 @@ export function ConsultationBookingDialog({
     const handleSubmit = () => {
         if (!therapist) return;
 
-        const fullMessage = [
-            `Consultation Type: ${CONSULTATION_TYPES.find(t => t.key === consultType)?.label || consultType}`,
-            message ? `\nMessage: ${message}` : ''
-        ].join('');
+        const selectedConsultationType = CONSULTATION_TYPES.find(t => t.key === consultType)?.label || consultType;
+
+        const messageParts: string[] = [`Consultation Type: ${selectedConsultationType}`];
+        const trimmedMessage = message.trim();
+        if (trimmedMessage.length > 0) {
+            messageParts.push(`Message: ${trimmedMessage}`);
+        }
+
+        let sharingPayload:
+            | {
+                source?: 'insights-share' | 'insights-discuss' | 'direct-booking';
+                assessmentType?: string;
+                assessmentLabel?: string;
+                latestScore?: number;
+                trend?: string;
+                interpretation?: string;
+                recommendations?: string[];
+                wellnessScore?: number;
+                generatedAt?: string;
+                includeData?: {
+                    scoreSummary?: boolean;
+                    interpretation?: boolean;
+                    recommendations?: boolean;
+                    trend?: boolean;
+                };
+            }
+            | undefined;
+
+        if (hasReferralContext && sharingEnabled && resolvedSharingContext) {
+            sharingPayload = {
+                ...resolvedSharingContext,
+                includeData: {
+                    scoreSummary: shareSelection.scoreSummary,
+                    interpretation: shareSelection.interpretation,
+                    recommendations: shareSelection.recommendations,
+                    trend: shareSelection.trend,
+                },
+            };
+        }
+
+        const fullMessage = messageParts.join('\n').trim();
 
         bookingMutation.mutate({
             therapistId: therapist.id,
@@ -178,6 +346,7 @@ export function ConsultationBookingDialog({
             preferredTime: selectedTime,
             message: fullMessage || undefined,
             userPhone: userPhone || undefined,
+            sharingContext: sharingPayload,
         });
     };
 
@@ -215,7 +384,7 @@ export function ConsultationBookingDialog({
                             <h3 className="text-xl font-semibold">Booking Requested!</h3>
                             <p className="text-sm text-muted-foreground max-w-sm">
                                 Your consultation request with <strong>{therapist.name}</strong> has been submitted.
-                                You'll receive a notification once the therapist confirms your appointment.
+                                You&apos;ll receive a notification once the therapist confirms your appointment.
                             </p>
                         </div>
                         <div className="booking-summary w-full mt-2">
@@ -317,9 +486,12 @@ export function ConsultationBookingDialog({
                             </p>
                             <div className="grid gap-3">
                                 {CONSULTATION_TYPES.map((type) => (
-                                    <div
+                                    <button
+                                        type="button"
                                         key={type.key}
-                                        className={`consult-type-card ${consultType === type.key ? 'selected' : ''}`}
+                                        className={`consult-type-card booking-selectable ${consultType === type.key ? 'selected' : ''}`}
+                                        aria-pressed={consultType === type.key}
+                                        data-selected={consultType === type.key ? 'true' : 'false'}
                                         onClick={() => setConsultType(type.key)}
                                     >
                                         <div className="flex items-center gap-3 relative z-10">
@@ -336,7 +508,7 @@ export function ConsultationBookingDialog({
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         </div>
@@ -370,7 +542,9 @@ export function ConsultationBookingDialog({
                                         <button
                                             key={slot}
                                             type="button"
-                                            className={`time-slot-btn ${selectedTime === slot ? 'selected' : ''}`}
+                                            className={`time-slot-btn booking-selectable ${selectedTime === slot ? 'selected' : ''}`}
+                                            aria-pressed={selectedTime === slot}
+                                            data-selected={selectedTime === slot ? 'true' : 'false'}
                                             onClick={() => setSelectedTime(slot)}
                                         >
                                             {formatTime(slot)}
@@ -388,6 +562,106 @@ export function ConsultationBookingDialog({
                                 Add optional details to help the therapist prepare for your session.
                             </p>
 
+                            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                                <div>
+                                    <p className="text-sm font-medium text-primary">Share assessment insights with therapist</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        You can choose whether to send your latest assessment data as a reference.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="share-assessment-reference"
+                                        checked={hasReferralContext && shareReferenceEnabled}
+                                        disabled={!hasReferralContext || fallbackShareContextQuery.isLoading}
+                                        onCheckedChange={(checked) => {
+                                            const enabled = checked === true;
+                                            setShareReferenceEnabled(enabled);
+
+                                            if (enabled && !hasShareSelectionEnabled(shareSelection)) {
+                                                setShareSelection(getDefaultShareSelection(resolvedSharingContext));
+                                            }
+                                        }}
+                                    />
+                                    <Label htmlFor="share-assessment-reference" className="text-sm">
+                                        Send data to therapist as reference
+                                    </Label>
+                                </div>
+
+                                {fallbackShareContextQuery.isLoading && !sharingContext && (
+                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        Loading your latest assessment insights...
+                                    </div>
+                                )}
+
+                                {hasReferralContext ? (
+                                    <>
+                                        <p className="text-xs text-muted-foreground">
+                                            Reference source: {resolvedSharingContext?.assessmentLabel}
+                                        </p>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="share-score-summary"
+                                                    checked={shareSelection.scoreSummary}
+                                                    disabled={!shareReferenceEnabled}
+                                                    onCheckedChange={(checked) =>
+                                                        setShareSelection((prev) => ({ ...prev, scoreSummary: checked === true }))
+                                                    }
+                                                />
+                                                <Label htmlFor="share-score-summary" className="text-sm">Score summary</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="share-trend"
+                                                    checked={shareSelection.trend}
+                                                    disabled={!shareReferenceEnabled}
+                                                    onCheckedChange={(checked) =>
+                                                        setShareSelection((prev) => ({ ...prev, trend: checked === true }))
+                                                    }
+                                                />
+                                                <Label htmlFor="share-trend" className="text-sm">Trend over recent assessments</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="share-interpretation"
+                                                    checked={shareSelection.interpretation}
+                                                    disabled={!shareReferenceEnabled}
+                                                    onCheckedChange={(checked) =>
+                                                        setShareSelection((prev) => ({ ...prev, interpretation: checked === true }))
+                                                    }
+                                                />
+                                                <Label htmlFor="share-interpretation" className="text-sm">Interpretation summary</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="share-recommendations"
+                                                    checked={shareSelection.recommendations}
+                                                    disabled={!shareReferenceEnabled}
+                                                    onCheckedChange={(checked) =>
+                                                        setShareSelection((prev) => ({ ...prev, recommendations: checked === true }))
+                                                    }
+                                                />
+                                                <Label htmlFor="share-recommendations" className="text-sm">Top recommendations</Label>
+                                            </div>
+                                        </div>
+
+                                        {shareReferenceEnabled && sharedDataLabels.length === 0 && (
+                                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                                No assessment fields selected. You can still continue without sharing.
+                                            </p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground bg-background/70 border rounded px-2 py-2">
+                                        No completed assessment insights found yet. Complete an assessment first to share reference data.
+                                    </p>
+                                )}
+                            </div>
+
                             <div className="space-y-2">
                                 <Label htmlFor="consult-phone">
                                     Phone Number <span className="text-xs text-muted-foreground">(optional)</span>
@@ -395,9 +669,13 @@ export function ConsultationBookingDialog({
                                 <Input
                                     id="consult-phone"
                                     type="tel"
-                                    placeholder="e.g. +1 (555) 123-4567"
+                                    maxLength={10}
+                                    placeholder="e.g. 9876543210"
                                     value={userPhone}
-                                    onChange={(e) => setUserPhone(e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                        setUserPhone(val);
+                                    }}
                                 />
                             </div>
 
@@ -459,10 +737,24 @@ export function ConsultationBookingDialog({
                                         <span className="booking-summary-value">{userPhone}</span>
                                     </div>
                                 )}
+                                <div className="booking-summary-row">
+                                    <span className="booking-summary-label">Sharing</span>
+                                    <span className="booking-summary-value text-right max-w-[60%] text-xs font-normal">
+                                        {!hasReferralContext
+                                            ? (fallbackShareContextQuery.isLoading && !sharingContext
+                                                ? 'Checking assessment data...'
+                                                : 'No assessment reference available')
+                                            : !shareReferenceEnabled
+                                                ? `Not sharing (${resolvedSharingContext?.assessmentLabel})`
+                                                : sharedDataLabels.length > 0
+                                                    ? `${sharedDataLabels.join(', ')} (${resolvedSharingContext?.assessmentLabel})`
+                                                    : `No fields selected (${resolvedSharingContext?.assessmentLabel})`}
+                                    </span>
+                                </div>
                             </div>
 
                             <p className="text-xs text-muted-foreground text-center">
-                                By submitting, the therapist will review and confirm your appointment. You'll be notified once confirmed.
+                                By submitting, the therapist will review and confirm your appointment. You&apos;ll be notified once confirmed.
                             </p>
                         </div>
                     )}

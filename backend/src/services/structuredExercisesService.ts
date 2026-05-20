@@ -43,6 +43,30 @@ export interface GroundingExercise extends Exercise {
   steps: string[];
 }
 
+export type ExerciseCardType =
+  | 'breathing-animation'
+  | 'grounding-checklist'
+  | 'cbt-thought-record'
+  | 'body-scan-visual'
+  | 'worry-dump-timer';
+
+export interface ExerciseCardMeta {
+  exerciseCard: ExerciseCardType;
+  exerciseId: string;
+  title: string;
+  duration: number;
+  difficulty: Exercise['difficulty'];
+  pattern?: {
+    inhale: number;
+    hold: number;
+    exhale: number;
+    pause?: number;
+  };
+  rounds?: number;
+  steps?: string[];
+  cbtSteps?: { step: number; title: string; prompt: string }[];
+}
+
 /**
  * Structured Exercises Service
  * Provides guided therapeutic exercises in chat
@@ -492,14 +516,24 @@ export class StructuredExercisesService {
   /**
    * Format exercise for chat display
    */
-  formatExerciseForChat(exercise: Exercise): string {
+  formatExerciseForChat(exercise: Exercise): { content: string; metadata: ExerciseCardMeta } {
     let formatted = `🧘 **${exercise.title}**\n\n`;
     formatted += `📝 ${exercise.description}\n\n`;
     formatted += `⏱️ Duration: ${exercise.duration} minutes\n`;
     formatted += `🎯 Difficulty: ${exercise.difficulty}\n\n`;
 
+    const metadata: ExerciseCardMeta = {
+      exerciseCard: this.mapTypeToCard(exercise),
+      exerciseId: exercise.id,
+      title: exercise.title,
+      duration: exercise.duration,
+      difficulty: exercise.difficulty
+    };
+
     if ('pattern' in exercise && exercise.type === 'breathing') {
       const breathEx = exercise as BreathingExercise;
+      metadata.pattern = breathEx.pattern;
+      metadata.rounds = breathEx.rounds;
       formatted += `**Breathing Pattern:**\n`;
       formatted += `• Inhale: ${breathEx.pattern.inhale} seconds\n`;
       if (breathEx.pattern.hold) formatted += `• Hold: ${breathEx.pattern.hold} seconds\n`;
@@ -510,6 +544,11 @@ export class StructuredExercisesService {
 
     if ('steps' in exercise && exercise.type === 'cbt-thought-record') {
       const cbtEx = exercise as CBTThoughtRecord;
+      metadata.cbtSteps = cbtEx.steps.map((step) => ({
+        step: step.step,
+        title: step.title,
+        prompt: step.prompt
+      }));
       formatted += `**Steps:**\n`;
       cbtEx.steps.forEach(step => {
         formatted += `\n${step.step}. **${step.title}**\n`;
@@ -518,6 +557,7 @@ export class StructuredExercisesService {
       });
       formatted += '\n';
     } else if ('steps' in exercise) {
+      metadata.steps = (exercise as GroundingExercise).steps;
       formatted += `**Instructions:**\n`;
       (exercise as GroundingExercise).steps.forEach((step, i) => {
         formatted += `${i + 1}. ${step}\n`;
@@ -536,7 +576,27 @@ export class StructuredExercisesService {
       formatted += `✓ ${benefit}\n`;
     });
 
-    return formatted;
+    return {
+      content: formatted,
+      metadata
+    };
+  }
+
+  private mapTypeToCard(exercise: Exercise): ExerciseCardType {
+    if (exercise.type === 'breathing') {
+      return 'breathing-animation';
+    }
+
+    if (exercise.type === 'cbt-thought-record') {
+      return 'cbt-thought-record';
+    }
+
+    if (exercise.type === 'grounding') {
+      const grounding = exercise as GroundingExercise;
+      return grounding.technique === 'body-scan' ? 'body-scan-visual' : 'grounding-checklist';
+    }
+
+    return 'worry-dump-timer';
   }
 }
 

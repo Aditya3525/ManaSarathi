@@ -16,6 +16,30 @@ type NormalizedError = {
   code: string;
 };
 
+const isPrismaDatabaseUnavailableError = (err: any): boolean => {
+  if (!err) {
+    return false;
+  }
+
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    return true;
+  }
+
+  const code = typeof err?.code === 'string' ? err.code : '';
+  const name = typeof err?.name === 'string' ? err.name : '';
+  const message = typeof err?.message === 'string' ? err.message : '';
+
+  if (code === 'P1001' || code === 'P1002' || code === 'P1008') {
+    return true;
+  }
+
+  if (name === 'PrismaClientInitializationError') {
+    return true;
+  }
+
+  return /can't reach database server|database server at .* timed out/i.test(message);
+};
+
 /**
  * Async error wrapper for route handlers
  */
@@ -28,6 +52,14 @@ export function asyncHandler(
 }
 
 const normalizeError = (err: any): NormalizedError => {
+  if (isPrismaDatabaseUnavailableError(err)) {
+    return {
+      statusCode: 503,
+      message: 'Database is temporarily unavailable. Please try again in a minute.',
+      code: 'DATABASE_UNAVAILABLE',
+    };
+  }
+
   // Handle AppError instances
   if (err instanceof AppError) {
     return {
@@ -92,21 +124,29 @@ export const errorHandler = (err: any, req: Request, res: Response, _next: NextF
 
   // Special handling for ValidationError to include field-specific errors
   if (err instanceof ValidationError) {
-    res.status(statusCode).json({
+    const body: any = {
       success: false,
       error: message,
       errors: err.errors,
       requestId,
-      ...(process.env.NODE_ENV === 'development' && { stack: err?.stack })
-    });
+    };
+    // Expose stack only when explicitly enabled for debugging
+    if (process.env.NODE_ENV === 'development' && process.env.DEBUG_STACK === 'true') {
+      body.stack = err?.stack;
+    }
+    res.status(statusCode).json(body);
     return;
   }
 
-  res.status(statusCode).json({
+  const responseBody: any = {
     success: false,
     error: message,
     code,
     requestId,
-    ...(process.env.NODE_ENV === 'development' && { stack: err?.stack })
-  });
+  };
+  // Expose stack only when explicitly enabled for debugging
+  if (process.env.NODE_ENV === 'development' && process.env.DEBUG_STACK === 'true') {
+    responseBody.stack = err?.stack;
+  }
+  res.status(statusCode).json(responseBody);
 };

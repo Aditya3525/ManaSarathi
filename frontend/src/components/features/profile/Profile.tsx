@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   User,
@@ -19,12 +20,10 @@ import {
   FileDown,
   CheckCircle2
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import React, { type Dispatch, type SetStateAction, useEffect, useMemo, useState, useCallback } from 'react';
 
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useDevice } from '../../../hooks/use-device';
-import { LanguageSelector } from '../LanguageSelector';
 import { authApi, usersApi, privacyApi } from '../../../services/api';
 import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Badge } from '../../ui/badge';
@@ -45,6 +44,9 @@ import {
 } from '../../ui/sheet';
 import { Switch } from '../../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
+import { SubscriptionPlans } from '../subscription';
+import { LanguageSelector } from '../LanguageSelector';
 
 interface ProfileUser {
   id: string;
@@ -58,6 +60,7 @@ interface ProfileUser {
   lastName?: string;
   approach?: 'western' | 'eastern' | 'hybrid';
   securityQuestion?: string | null;
+  isPremium?: boolean;
 }
 
 interface ProfileProps {
@@ -75,7 +78,6 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showDeviceRemoveConfirm, setShowDeviceRemoveConfirm] = useState<string | null>(null);
   const [securityQuestionError, setSecurityQuestionError] = useState<string | null>(null);
   const [securityQuestionSuccess, setSecurityQuestionSuccess] = useState<string | null>(null);
   const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
@@ -276,6 +278,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     approach: (user?.approach as 'western' | 'eastern' | 'hybrid' | undefined) || 'hybrid'
   });
 
+  const profileDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'ManaSarathi User';
+  const avatarInitials = profileDisplayName
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase())
+    .slice(0, 2)
+    .join('') || 'MS';
+
   const validateBirthday = (dateStr: string | undefined) => {
     if (!dateStr) return true;
     const d = new Date(dateStr);
@@ -351,7 +361,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const resp = await privacyApi.deleteAccount();
+      const resp = await privacyApi.deleteAccount('DELETE');
       if (!resp.success) throw new Error(resp.error || 'Deletion failed');
       setShowDeleteConfirm(false);
       // Log out and redirect
@@ -593,7 +603,7 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background page-enter">
       {/* Mobile/Tablet/Desktop Header - Responsive */}
       <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
@@ -612,12 +622,12 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </Button>
 
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User className="h-6 w-6 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground flex items-center justify-center flex-shrink-0 text-sm font-semibold shadow-sm">
+                  {avatarInitials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-semibold truncate">
-                    {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}
+                  <h1 className="text-xl font-semibold truncate text-foreground">
+                    {profileDisplayName}
                   </h1>
                   <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
                 </div>
@@ -638,11 +648,11 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-primary" />
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground flex items-center justify-center text-lg font-semibold shadow-sm">
+                  {avatarInitials}
                 </div>
                 <div>
-                  <h1 className="text-3xl">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name}</h1>
+                  <h1 className="text-3xl text-foreground">{profileDisplayName}</h1>
                   <p className="text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
@@ -656,8 +666,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
           {/* Mobile: Horizontal scrollable tabs / Desktop: Full grid */}
           <div className={device.isMobile ? "overflow-x-auto -mx-4 px-4" : ""}>
             <TabsList className={device.isMobile 
-              ? "inline-flex w-auto min-w-full justify-start gap-1" 
-              : "grid w-full grid-cols-5"
+              ? "inline-flex w-auto min-w-full justify-start gap-1 h-auto overflow-x-auto" 
+              : "flex w-full h-auto flex-wrap lg:flex-nowrap gap-1 md:gap-2"
             }>
               <TabsTrigger 
                 value="personal" 
@@ -684,6 +694,12 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 Accessibility
               </TabsTrigger>
               <TabsTrigger 
+                value="subscription"
+                className={device.isMobile ? "flex-shrink-0 px-4 min-h-[44px]" : ""}
+              >
+                Subscription
+              </TabsTrigger>
+              <TabsTrigger 
                 value="account"
                 className={device.isMobile ? "flex-shrink-0 px-4 min-h-[44px]" : ""}
               >
@@ -692,8 +708,15 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
             </TabsList>
           </div>
 
+          {/* Subscription Information Tab */}
+          <TabsContent value="subscription" className="space-y-4 md:space-y-6">
+            <SubscriptionPlans userIsPremium={user?.isPremium} />
+          </TabsContent>
+
           {/* Personal Information Tab */}
           <TabsContent value="personal" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.1}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <div className={device.isMobile 
@@ -734,9 +757,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                   </Alert>
                 )}
                 {saveSuccess && (
-                  <Alert className="border-green-300 bg-green-50">
-                    <AlertDescription>Profile updated successfully.</AlertDescription>
-                  </Alert>
+                  <div
+                    className="flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-green-800 animate-in fade-in zoom-in-95 duration-300"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <CheckCircle2 className="h-4 w-4 animate-pulse" />
+                    <span className="text-sm font-medium">Profile updated successfully.</span>
+                  </div>
                 )}
                 
                 {/* Mobile: Single column / Tablet+: Two columns */}
@@ -825,10 +853,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                     <Input
                       id="emergencyPhone"
                       type="tel"
+                      maxLength={10}
                       value={editedProfile.emergencyPhone}
-                      onChange={(e) => setEditedProfile(prev => ({ ...prev, emergencyPhone: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setEditedProfile(prev => ({ ...prev, emergencyPhone: val }));
+                      }}
                       disabled={!isEditing}
-                      placeholder="e.g., +1 (555) 123-4567"
+                      placeholder="e.g. 9876543210"
                       inputMode="tel"
                       className={device.isMobile ? "min-h-[44px]" : ""}
                     />
@@ -851,8 +883,10 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 )}
               </CardContent>
             </Card>
+              </StaggerItem>
 
             {/* Language Preferences Card */}
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -875,10 +909,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Privacy & Data Tab */}
           <TabsContent value="privacy" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1004,8 +1042,10 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Alert>
               </CardContent>
             </Card>
+              </StaggerItem>
 
             {/* Connected Devices */}
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1015,44 +1055,54 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {connectedDevices.map((connectedDevice, index) => (
-                    <div 
-                      key={index} 
-                      className={`flex items-center justify-between p-3 rounded-lg border ${device.isMobile ? 'min-h-[60px]' : ''}`}
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {getDeviceIcon(connectedDevice.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{connectedDevice.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Last active: {connectedDevice.lastActive}
-                          </p>
+                  <StaggerContainer staggerDelay={0.06}>
+                    {connectedDevices.map((connectedDevice, index) => (
+                      <StaggerItem key={index}>
+                        <div 
+                          className={`flex items-center justify-between p-3 rounded-lg border ${device.isMobile ? 'min-h-[60px]' : ''}`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {getDeviceIcon(connectedDevice.type)}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{connectedDevice.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Last active: {connectedDevice.lastActive}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {connectedDevice.current && (
+                              <Badge variant="default">Current</Badge>
+                            )}
+                            {!connectedDevice.current && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled
+                                className={device.isMobile ? "min-h-[40px]" : ""}
+                              >
+                                Unavailable
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {connectedDevice.current && (
-                          <Badge variant="default">Current</Badge>
-                        )}
-                        {!connectedDevice.current && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => setShowDeviceRemoveConfirm(connectedDevice.name)}
-                            className={device.isMobile ? "min-h-[40px]" : ""}
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      </StaggerItem>
+                    ))}
+                  </StaggerContainer>
+                  <p className="text-xs text-muted-foreground">
+                    Device session revocation is temporarily unavailable in this build.
+                  </p>
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Notifications Tab */}
           <TabsContent value="notifications" className="space-y-4 md:space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1211,10 +1261,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Accessibility Tab */}
           <TabsContent value="accessibility" className="space-y-6">
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1312,6 +1366,25 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                       onCheckedChange={(checked) =>
                         setAccessibilitySetting('reducedMotion', checked, {
                           announce: 'Reduced motion {state}'
+                        })
+                      }
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label>Simple Language Mode</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Use easier words and shorter guidance in AI chat responses
+                      </p>
+                    </div>
+                    <Switch
+                      checked={accessibilitySettings.simpleLanguage}
+                      onCheckedChange={(checked) =>
+                        setAccessibilitySetting('simpleLanguage', checked, {
+                          announce: 'Simple language mode {state}'
                         })
                       }
                     />
@@ -1452,15 +1525,19 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
 
           {/* Account Management Tab */}
           <TabsContent value="account" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Download className="h-5 w-5 text-primary" />
-                  Export Your Data
+            <StaggerContainer staggerDelay={0.08}>
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Download className="h-5 w-5 text-primary" />
+                      Export Your Data
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1574,12 +1651,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </div>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquareLock className="h-5 w-5 text-primary" />
-                  Password Recovery
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquareLock className="h-5 w-5 text-primary" />
+                      Password Recovery
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1653,12 +1732,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <KeyRound className="h-5 w-5 text-primary" />
-                  Update Security Question
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <KeyRound className="h-5 w-5 text-primary" />
+                      Update Security Question
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1752,12 +1833,14 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                  Change Your Approach
+              <StaggerItem>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      Change Your Approach
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1836,11 +1919,13 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
 
-            <Card className="border-red-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-red-600">
-                  <Trash2 className="h-5 w-5" />
+              <StaggerItem>
+                <Card className="border-red-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-red-600">
+                      <Trash2 className="h-5 w-5" />
                   Danger Zone
                 </CardTitle>
               </CardHeader>
@@ -1869,6 +1954,8 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
                 </Button>
               </CardContent>
             </Card>
+              </StaggerItem>
+            </StaggerContainer>
           </TabsContent>
         </Tabs>
 
@@ -1904,47 +1991,6 @@ export function Profile({ user, onNavigate, setUser, onLogout }: ProfileProps) {
               </Button>
             </div>
           </div>
-        )}
-
-        {/* Device Removal Confirmation Sheet (Mobile) */}
-        {device.isMobile && showDeviceRemoveConfirm && (
-          <Sheet open={!!showDeviceRemoveConfirm} onOpenChange={() => setShowDeviceRemoveConfirm(null)}>
-            <SheetContent side="bottom" className="h-auto max-h-[85vh]">
-              <SheetHeader>
-                <SheetTitle>Remove Device</SheetTitle>
-                <SheetDescription>
-                  Are you sure you want to remove this device from your account?
-                </SheetDescription>
-              </SheetHeader>
-              <div className="py-6 space-y-4">
-                <div className="rounded-lg bg-muted p-4">
-                  <p className="font-medium">{showDeviceRemoveConfirm}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    This device will be signed out and will need to sign in again to access your account.
-                  </p>
-                </div>
-              </div>
-              <SheetFooter className="flex-col sm:flex-row gap-2">
-                <Button 
-                  variant="destructive" 
-                  className="w-full min-h-[48px]"
-                  onClick={() => {
-                    console.log('Device removed:', showDeviceRemoveConfirm);
-                    setShowDeviceRemoveConfirm(null);
-                  }}
-                >
-                  Remove Device
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full min-h-[48px]"
-                  onClick={() => setShowDeviceRemoveConfirm(null)}
-                >
-                  Cancel
-                </Button>
-              </SheetFooter>
-            </SheetContent>
-          </Sheet>
         )}
 
         {/* Delete Confirmation (Desktop Modal / Mobile Bottom Sheet) */}

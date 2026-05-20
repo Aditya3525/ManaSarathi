@@ -1,14 +1,11 @@
 import { 
   ArrowLeft,
   Play,
-  Pause,
   RotateCcw,
   Heart,
   Waves,
   Users,
   Clock,
-  Volume2,
-  VolumeX,
   Download,
   CheckCircle,
   SkipForward,
@@ -25,7 +22,7 @@ import {
   List,
   ArrowUp
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getApiBaseUrl } from '../../../config/apiConfig';
@@ -38,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
 import { Progress } from '../../ui/progress';
 import { ResponsiveContainer } from '../../ui/responsive-layout';
+import { StaggerContainer, StaggerItem } from '../../ui/motion-wrapper';
 import {
   Sheet,
   SheetContent,
@@ -45,7 +43,6 @@ import {
   SheetTitle,
   SheetFooter
 } from '../../ui/sheet';
-import { Slider } from '../../ui/slider';
 
 interface PracticesProps {
   onNavigate: (page: string) => void;
@@ -56,13 +53,17 @@ interface Practice {
   description: string;
   type: 'meditation' | 'breathing' | 'yoga' | 'sleep';
   duration: number; // in minutes
-  difficulty: 'Beginner' | 'Moderate' | 'Advanced';
-  approach: 'Western' | 'Eastern' | 'Hybrid';
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  approach: 'Western' | 'Eastern' | 'Hybrid' | 'All';
   format: 'Audio' | 'Video' | 'Audio/Video';
   instructor: string;
   image: string;
   hasDownload: boolean;
   tags: string[];
+  focusAreas?: string[];
+  immediateRelief?: boolean;
+  crisisEligible?: boolean;
+  intensityLevel?: string | null;
   audioUrl?: string | null;
   videoUrl?: string | null;
   youtubeUrl?: string | null;
@@ -77,11 +78,44 @@ interface PracticeSession {
   isCompleted: boolean;
 }
 
+interface PracticeAutoStartPayload {
+  id?: string | null;
+  title?: string | null;
+  source?: string;
+  createdAt?: number;
+}
+
+type PracticeSortKey = 'recommended' | 'duration' | 'title';
+
+const DASHBOARD_PRACTICE_AUTOSTART_KEY = 'mw-practice-autostart';
+
+const parseStringArray = (raw: unknown): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((value) => String(value).trim()).filter(Boolean);
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((value) => String(value).trim()).filter(Boolean);
+        }
+      } catch {
+        // Fall through to comma parsing.
+      }
+    }
+    return trimmed.split(',').map((value) => value.trim()).filter(Boolean);
+  }
+  return [];
+};
+
 export function Practices({ onNavigate }: PracticesProps) {
   const device = useDevice();
   const { t } = useTranslation();
   
   const [currentSession, setCurrentSession] = useState<PracticeSession | null>(null);
+  const [mediaInstanceKey, setMediaInstanceKey] = useState<number>(0);
   // Filter state (multi-select except duration)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // empty = All
   const [selectedDuration, setSelectedDuration] = useState<string>('all');
@@ -91,6 +125,7 @@ export function Practices({ onNavigate }: PracticesProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
   const [postPracticeRating, setPostPracticeRating] = useState<number | null>(null);
   const [showPostPractice, setShowPostPractice] = useState(false);
+  const [sortBy, setSortBy] = useState<PracticeSortKey>('recommended');
 
   // Mobile-responsive state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -102,6 +137,7 @@ export function Practices({ onNavigate }: PracticesProps) {
   const [practices, setPractices] = useState<Practice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const didAutoStartRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -111,20 +147,26 @@ export function Practices({ onNavigate }: PracticesProps) {
         if(!resp.ok) throw new Error('Failed to load practices');
         const json = await resp.json();
         if(!json.success) throw new Error(json.error || 'Failed to load practices');
-  interface RawPractice { id:string; title:string; description?:string|null; type:string; duration:number; difficulty:string; approach:string; format:string; audioUrl?:string|null; videoUrl?:string|null; youtubeUrl?:string|null; thumbnailUrl?:string|null; tags?:string|null; }
+  interface RawPractice { id:string; title:string; description?:string|null; type:string; duration:number; difficulty:string; approach:string; format:string; audioUrl?:string|null; videoUrl?:string|null; youtubeUrl?:string|null; thumbnailUrl?:string|null; tags?:string|null; focusAreas?: string | string[] | null; immediateRelief?: boolean | null; crisisEligible?: boolean | null; intensityLevel?: string | null; }
         const mapped: Practice[] = (json.data as RawPractice[] || []).map((p) => ({
           id: p.id,
           title: p.title,
           description: p.description || '',
           type: (['meditation','breathing','yoga','sleep'].includes(p.type) ? p.type : 'meditation') as Practice['type'],
           duration: p.duration,
-          difficulty: (['Beginner','Moderate','Advanced'].includes(p.difficulty) ? p.difficulty : 'Beginner') as Practice['difficulty'],
-          approach: (['Western','Eastern','Hybrid'].includes(p.approach) ? p.approach : 'Western') as Practice['approach'],
+          difficulty: (['Beginner','Intermediate','Moderate','Advanced'].includes(p.difficulty)
+            ? (p.difficulty === 'Moderate' ? 'Intermediate' : p.difficulty)
+            : 'Beginner') as Practice['difficulty'],
+          approach: (['Western','Eastern','Hybrid','All'].includes(p.approach) ? p.approach : 'All') as Practice['approach'],
           format: (['Audio','Video','Audio/Video'].includes(p.format) ? p.format : 'Audio') as Practice['format'],
           instructor: 'Guide',
           image: p.thumbnailUrl || '/placeholder-practice.jpg',
           hasDownload: !!p.audioUrl,
           tags: typeof p.tags === 'string' ? p.tags.split(',').map((t:string)=>t.trim()).filter((t:string)=>t.length>0) : [],
+          focusAreas: parseStringArray(p.focusAreas),
+          immediateRelief: Boolean(p.immediateRelief),
+          crisisEligible: Boolean(p.crisisEligible),
+          intensityLevel: p.intensityLevel || null,
           audioUrl: p.audioUrl || undefined,
           videoUrl: p.videoUrl || undefined,
           youtubeUrl: p.youtubeUrl || undefined
@@ -161,16 +203,15 @@ export function Practices({ onNavigate }: PracticesProps) {
   ];
 
   const approaches = [
-    { id: 'all', label: 'All Approaches', icon: Filter },
     { id: 'Western', label: 'Western', icon: Heart },
     { id: 'Eastern', label: 'Eastern', icon: Waves },
-    { id: 'Hybrid', label: 'Hybrid', icon: Users }
+    { id: 'Hybrid', label: 'Hybrid (All)', icon: Users }
   ];
 
   const difficulties = [
     { id: 'all', label: 'All Levels', icon: Layers },
     { id: 'Beginner', label: 'Beginner', icon: Layers },
-    { id: 'Moderate', label: 'Moderate', icon: Layers },
+    { id: 'Intermediate', label: 'Intermediate', icon: Layers },
     { id: 'Advanced', label: 'Advanced', icon: Layers }
   ];
 
@@ -181,30 +222,35 @@ export function Practices({ onNavigate }: PracticesProps) {
       (selectedDuration === 'medium' && practice.duration > 10 && practice.duration <= 20) ||
       (selectedDuration === 'long' && practice.duration > 20);
     const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(practice.format) || (practice.format === 'Audio/Video' && (selectedFormats.includes('Audio') || selectedFormats.includes('Video')));
-    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes(practice.approach);
+    const matchesApproach = selectedApproaches.length === 0 || selectedApproaches.includes('Hybrid') || selectedApproaches.includes(practice.approach) || practice.approach === 'All' || practice.approach === 'Hybrid';
     const matchesDifficulty = selectedDifficulties.length === 0 || selectedDifficulties.includes(practice.difficulty);
     const matchesSearch = searchQuery.trim() === '' || 
       practice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       practice.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      practice.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      practice.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (practice.focusAreas || []).some(area => area.toLowerCase().includes(searchQuery.toLowerCase()));
     
     return matchesCategory && matchesDuration && matchesFormat && matchesApproach && matchesDifficulty && matchesSearch;
   });
 
-  // Sorting (currently fixed to 'recommended' - future: add sort UI)
+  const getRecommendedScore = (practice: Practice) => {
+    let score = 0;
+    if (practice.immediateRelief) score += 8;
+    if (practice.crisisEligible) score += 5;
+    if (practice.difficulty === 'Beginner') score += 3;
+    if (practice.duration <= 10) score += 2;
+    return score;
+  };
+
+  // Sorting
   const sortedPractices = [...filteredPractices].sort((a, b) => {
-    const sortBy: 'recommended' | 'popular' | 'duration' | 'newest' = 'recommended' as 'recommended' | 'popular' | 'duration' | 'newest'; // Default sort mode
     switch (sortBy) {
-      case 'popular':
-        // Sort by a popularity score (could be based on ratings, completions, etc.)
-        return 0; // Placeholder - implement with real data
       case 'duration':
         return a.duration - b.duration;
-      case 'newest':
-        return 0; // Placeholder - would need a createdAt field
-      case 'recommended':
+      case 'title':
+        return a.title.localeCompare(b.title);
       default:
-        return 0; // Default order
+        return getRecommendedScore(b) - getRecommendedScore(a);
     }
   });
 
@@ -248,26 +294,49 @@ export function Practices({ onNavigate }: PracticesProps) {
   };
 
   const startPractice = (practice: Practice) => {
+    setMediaInstanceKey(prev => prev + 1);
     setCurrentSession({ practice, currentTime: 0, duration: practice.duration * 60, isPlaying: true, volume: 0.7, isCompleted: false });
   };
 
-  const togglePlayPause = () => {
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        isPlaying: !prev.isPlaying
-      } : null);
+  useEffect(() => {
+    if (didAutoStartRef.current || currentSession || practices.length === 0 || typeof window === 'undefined') {
+      return;
     }
-  };
 
-  const handleVolumeChange = (value: number[]) => {
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        volume: value[0]
-      } : null);
+    const rawPayload = window.sessionStorage.getItem(DASHBOARD_PRACTICE_AUTOSTART_KEY);
+    if (!rawPayload) {
+      return;
     }
-  };
+
+    let payload: PracticeAutoStartPayload | null = null;
+    try {
+      payload = JSON.parse(rawPayload) as PracticeAutoStartPayload;
+    } catch {
+      payload = null;
+    }
+
+    window.sessionStorage.removeItem(DASHBOARD_PRACTICE_AUTOSTART_KEY);
+    didAutoStartRef.current = true;
+
+    if (!payload) {
+      return;
+    }
+
+    const title = payload.title?.trim().toLowerCase();
+    const matchedPractice = practices.find((practice) => {
+      if (payload?.id && practice.id === payload.id) {
+        return true;
+      }
+      if (title && practice.title.trim().toLowerCase() === title) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchedPractice) {
+      startPractice(matchedPractice);
+    }
+  }, [currentSession, practices]);
 
   const completePractice = useCallback(() => {
     if (currentSession) {
@@ -282,10 +351,11 @@ export function Practices({ onNavigate }: PracticesProps) {
 
   const resetPractice = () => {
     if (currentSession) {
+      setMediaInstanceKey(prev => prev + 1);
       setCurrentSession(prev => prev ? {
         ...prev,
         currentTime: 0,
-        isPlaying: false,
+        isPlaying: true,
         isCompleted: false
       } : null);
     }
@@ -293,6 +363,7 @@ export function Practices({ onNavigate }: PracticesProps) {
 
   const closePractice = () => {
     setCurrentSession(null);
+    setMediaInstanceKey(0);
     setShowPostPractice(false);
     setPostPracticeRating(null);
   };
@@ -326,7 +397,6 @@ export function Practices({ onNavigate }: PracticesProps) {
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'Beginner': return 'bg-green-100 text-green-800';
-      case 'Moderate':
       case 'Intermediate': return 'bg-yellow-100 text-yellow-800';
       case 'Advanced': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -334,120 +404,261 @@ export function Practices({ onNavigate }: PracticesProps) {
   };
 
   if (currentSession) {
-  const totalSeconds = currentSession.duration || (currentSession.practice.duration * 60);
-  const progress = totalSeconds ? (currentSession.currentTime / totalSeconds) * 100 : 0;
-  const { audioUrl, videoUrl, youtubeUrl, format } = currentSession.practice as Practice;
+    const totalSeconds = currentSession.duration || (currentSession.practice.duration * 60);
+    const progress = totalSeconds ? (currentSession.currentTime / totalSeconds) * 100 : 0;
+    const safeProgress = Number.isFinite(progress) ? Math.min(100, Math.max(0, progress)) : 0;
+    const { audioUrl, videoUrl, youtubeUrl, format } = currentSession.practice as Practice;
+    const isVideoSession = Boolean(
+      youtubeUrl ||
+      videoUrl ||
+      format === 'Video' ||
+      format === 'Audio/Video'
+    );
+    const focusAreas = currentSession.practice.focusAreas || [];
+    const progressLabel = `${formatTime(Math.floor(currentSession.currentTime))} / ${formatTime(totalSeconds)}`;
 
-    // Fullscreen minimal layout for YouTube practices
-    if (youtubeUrl) {
-      // Restart YouTube practice: reset session and start playback
-      function restartYouTubePractice() {
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          currentTime: 0,
-          isPlaying: true,
-          isCompleted: false
-        } : null);
-      }
+    const restartSession = () => {
+      setShowPostPractice(false);
+      setPostPracticeRating(null);
+      setMediaInstanceKey(prev => prev + 1);
+      setCurrentSession(prev => prev ? {
+        ...prev,
+        currentTime: 0,
+        duration: prev.practice.duration * 60,
+        isPlaying: true,
+        isCompleted: false
+      } : null);
+    };
 
+    const postPracticeModal = showPostPractice && (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center flex items-center justify-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Practice Complete
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-center text-muted-foreground">
+              Great work completing &ldquo;{currentSession.practice.title}&rdquo;. How are you feeling now?
+            </p>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <Button
+                    key={rating}
+                    variant={postPracticeRating === rating ? 'default' : 'outline'}
+                    className="aspect-square"
+                    onClick={() => setPostPracticeRating(rating)}
+                  >
+                    {rating}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    // Future hook: persist the rating before exiting the session.
+                    closePractice();
+                  }}
+                >
+                  Finish
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={restartSession}
+                >
+                  Practice Again
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+
+    if (isVideoSession) {
       return (
-        <div className="fixed inset-0 bg-slate-950 text-white flex flex-col">
-          {/* Top bar with back button */}
-          <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={closePractice}
-              className="text-white hover:bg-white/20"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" /> Back
-            </Button>
-          </div>
+        <div className="fixed inset-0 z-40 bg-slate-950 text-slate-100">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.22),transparent_45%)]" />
 
-          {/* YouTube Player - takes most of the screen */}
-          <div className="flex-1 relative bg-black">
-            <MediaPlayer
-              youtubeUrl={youtubeUrl}
-              title={currentSession.practice.title}
-              autoPlay
-              fillScreen
-              className="rounded-none"
-              playing={currentSession.isPlaying}
-              onTimeUpdate={(c,d)=>{
-                setCurrentSession(prev=> prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
-              }}
-              onEnded={()=> completePractice()}
-            />
-          </div>
-
-          {/* Bottom Info Panel - Clean design with practice details */}
-          <div className="bg-slate-900 border-t border-white/10">
-            <div className="max-w-4xl mx-auto px-6 py-5">
-              {/* Title and Instructor */}
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-semibold text-white truncate">
-                    {currentSession.practice.title}
-                  </h2>
-                  <p className="text-sm text-white/60 mt-1">
-                    with {currentSession.practice.instructor} • {currentSession.practice.duration} min
-                  </p>
+          <div className="relative h-full flex flex-col">
+            <header className="border-b border-white/10 bg-slate-900/85 backdrop-blur-sm px-4 md:px-6 py-3 md:py-4 space-y-3 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={closePractice}
+                    className="text-slate-100 hover:bg-white/10"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Exit
+                  </Button>
+                  <Badge className="bg-sky-500/20 text-sky-100 border border-sky-300/30">
+                    Video Session
+                  </Badge>
+                  {currentSession.practice.immediateRelief && (
+                    <Badge className="bg-emerald-500/20 text-emerald-100 border border-emerald-300/30">
+                      Quick Relief
+                    </Badge>
+                  )}
+                  {currentSession.practice.crisisEligible && (
+                    <Badge className="bg-amber-500/20 text-amber-100 border border-amber-300/30">
+                      Crisis Safe
+                    </Badge>
+                  )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2">
                   <Button
+                    variant="outline"
                     size="sm"
-                    onClick={restartYouTubePractice}
-                    className="bg-slate-700 hover:bg-slate-800 text-white font-bold border border-slate-600"
+                    onClick={restartSession}
+                    className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
                   >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    <span className="text-white font-bold">Restart</span>
+                    <RotateCcw className="h-4 w-4 mr-2" /> Restart
                   </Button>
                   <Button
                     size="sm"
                     onClick={completePractice}
                     disabled={currentSession.isCompleted}
-                    className="bg-primary hover:bg-primary/90 text-white font-semibold"
+                    className="bg-primary hover:bg-primary/90"
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Complete
+                    <CheckCircle className="h-4 w-4 mr-2" /> Mark Complete
                   </Button>
                 </div>
               </div>
 
-              {/* Description */}
-              {currentSession.practice.description && (
-                <p className="text-sm text-white/70 mt-3 line-clamp-2">
-                  {currentSession.practice.description}
-                </p>
-              )}
-
-              {/* Tags */}
-              {currentSession.practice.tags && currentSession.practice.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {currentSession.practice.tags.slice(0, 5).map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant="secondary"
-                      className="bg-slate-800 text-white/80"
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg md:text-xl font-semibold truncate">{currentSession.practice.title}</h2>
+                  <span className="text-xs md:text-sm text-slate-300 whitespace-nowrap">{progressLabel}</span>
                 </div>
-              )}
-            </div>
+                <Progress value={safeProgress} className="h-1.5 bg-white/10" />
+                <p className="text-xs md:text-sm text-slate-300">
+                  with {currentSession.practice.instructor} • {currentSession.practice.duration} min • {currentSession.practice.difficulty}
+                </p>
+              </div>
+            </header>
+
+            <main className="flex-1 min-h-0 p-3 md:p-5 overflow-hidden">
+              <div className="h-full max-w-[1700px] mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-3 md:gap-5">
+                <section className="min-h-0 flex flex-col gap-3">
+                  <div className="relative flex-1 min-h-[60vh] lg:min-h-0 rounded-2xl border border-white/10 bg-black/55 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_rgba(0,0,0,0.45)]">
+                    <MediaPlayer
+                      key={`session-video-${currentSession.practice.id}-${mediaInstanceKey}`}
+                      audioUrl={format === 'Audio' || format === 'Audio/Video' ? audioUrl : undefined}
+                      videoUrl={format === 'Video' || format === 'Audio/Video' ? videoUrl : undefined}
+                      youtubeUrl={youtubeUrl}
+                      poster={currentSession.practice.image}
+                      title={currentSession.practice.title}
+                      artist={currentSession.practice.instructor}
+                      autoPlay
+                      fillScreen
+                      className="h-full w-full rounded-none"
+                      playing={currentSession.isPlaying}
+                      volume={currentSession.volume}
+                      variant="full"
+                      onTimeUpdate={(c, d) => {
+                        setCurrentSession(prev => prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
+                      }}
+                      onEnded={() => completePractice()}
+                      onPlay={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: true } : prev)}
+                      onPause={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: false } : prev)}
+                      onVolumeChange={(v) => setCurrentSession(prev => prev ? { ...prev, volume: v } : prev)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[11px] text-slate-400 mb-1">Format</p>
+                      <p className="text-sm font-medium text-slate-100">{currentSession.practice.format}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[11px] text-slate-400 mb-1">Intensity</p>
+                      <p className="text-sm font-medium text-slate-100">{currentSession.practice.intensityLevel || 'Balanced'}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[11px] text-slate-400 mb-1">Approach</p>
+                      <p className="text-sm font-medium text-slate-100">{currentSession.practice.approach}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[11px] text-slate-400 mb-1">Type</p>
+                      <p className="text-sm font-medium text-slate-100 capitalize">{currentSession.practice.type}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <aside className="min-h-[240px] lg:min-h-0 rounded-2xl border border-white/10 bg-slate-900/70 backdrop-blur-sm overflow-hidden">
+                  <div className="h-full overflow-y-auto p-4 md:p-5 flex flex-col gap-5">
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-slate-400">Practice Brief</p>
+                      <p className="text-sm text-slate-200 leading-relaxed">
+                        {currentSession.practice.description || 'Follow the guided sequence and stay present with your breath and body cues.'}
+                      </p>
+                    </div>
+
+                    {focusAreas.length > 0 && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Focus Areas</p>
+                        <div className="flex flex-wrap gap-2">
+                          {focusAreas.slice(0, 8).map((area) => (
+                            <Badge key={area} className="bg-slate-800 text-slate-200 border border-slate-700">
+                              {area}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {currentSession.practice.tags.length > 0 && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Tags</p>
+                        <div className="flex flex-wrap gap-2">
+                          {currentSession.practice.tags.slice(0, 10).map((tag) => (
+                            <Badge key={tag} className="bg-slate-800/80 text-slate-300 border border-slate-700/80">
+                              #{tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-auto grid grid-cols-1 gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                        onClick={restartSession}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" /> Start Over
+                      </Button>
+                      <Button
+                        onClick={completePractice}
+                        disabled={currentSession.isCompleted}
+                      >
+                        <SkipForward className="h-4 w-4 mr-2" /> Complete Session
+                      </Button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </main>
           </div>
+
+          {postPracticeModal}
         </div>
       );
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center p-6 page-enter">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 space-y-6">
-            {/* Practice Info */}
             <div className="text-center space-y-2">
               <ImageWithFallback
                 src={currentSession.practice.image}
@@ -460,9 +671,9 @@ export function Practices({ onNavigate }: PracticesProps) {
               </p>
             </div>
 
-            {/* Media Player - now with controlled playback */}
             <div className="space-y-4">
               <MediaPlayer
+                key={`session-audio-${currentSession.practice.id}-${mediaInstanceKey}`}
                 audioUrl={format === 'Audio' || format === 'Audio/Video' ? audioUrl : undefined}
                 videoUrl={format === 'Video' || format === 'Audio/Video' ? videoUrl : undefined}
                 youtubeUrl={youtubeUrl}
@@ -473,17 +684,16 @@ export function Practices({ onNavigate }: PracticesProps) {
                 playing={currentSession.isPlaying}
                 volume={currentSession.volume}
                 variant="full"
-                onTimeUpdate={(c,d)=>{
-                  setCurrentSession(prev=> prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
+                onTimeUpdate={(c, d) => {
+                  setCurrentSession(prev => prev ? { ...prev, currentTime: c, duration: d || prev.duration } : prev);
                 }}
-                onEnded={()=> completePractice()}
+                onEnded={() => completePractice()}
                 onPlay={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: true } : prev)}
                 onPause={() => setCurrentSession(prev => prev ? { ...prev, isPlaying: false } : prev)}
                 onVolumeChange={(v) => setCurrentSession(prev => prev ? { ...prev, volume: v } : prev)}
               />
             </div>
 
-            {/* Quick action buttons - MediaPlayer handles main controls */}
             <div className="flex items-center justify-center gap-3 pt-2">
               <Button
                 variant="outline"
@@ -508,7 +718,6 @@ export function Practices({ onNavigate }: PracticesProps) {
               </Button>
             </div>
 
-            {/* Exit */}
             <Button
               variant="ghost"
               className="w-full text-muted-foreground hover:text-foreground"
@@ -519,64 +728,14 @@ export function Practices({ onNavigate }: PracticesProps) {
           </CardContent>
         </Card>
 
-        {/* Post-Practice Modal */}
-        {showPostPractice && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
-              <CardHeader>
-                <CardTitle className="text-center flex items-center justify-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  Practice Complete!
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-center text-muted-foreground">
-                  Great job completing &ldquo;{currentSession.practice.title}&rdquo;. How do you feel now?
-                </p>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-5 gap-2">
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                      <Button
-                        key={rating}
-                        variant={postPracticeRating === rating ? 'default' : 'outline'}
-                        className="aspect-square"
-                        onClick={() => setPostPracticeRating(rating)}
-                      >
-                        {rating === 1 ? '😔' : rating === 2 ? '😐' : rating === 3 ? '🙂' : rating === 4 ? '😊' : '🤗'}
-                      </Button>
-                    ))}
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      onClick={() => {
-                        // Save rating and close
-                        closePractice();
-                      }}
-                    >
-                      Complete
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => startPractice(currentSession.practice)}
-                    >
-                      Practice Again
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {postPracticeModal}
       </div>
     );
   }
 
   return (
     <ResponsiveContainer>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background page-enter">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary/10 to-accent/10">
           <div className={`max-w-6xl mx-auto ${device.isMobile ? 'p-4' : 'p-6'}`}>
@@ -679,6 +838,17 @@ export function Practices({ onNavigate }: PracticesProps) {
                 <div className="text-sm text-muted-foreground">
                   {sortedPractices.length} {sortedPractices.length === 1 ? 'practice' : 'practices'}
                 </div>
+
+                <select
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as PracticeSortKey)}
+                  aria-label="Sort practices"
+                  className="h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  <option value="recommended">Recommended</option>
+                  <option value="duration">Shortest First</option>
+                  <option value="title">Title A-Z</option>
+                </select>
                 
                 {/* View toggle */}
                 <div className="flex gap-1 bg-muted rounded-md p-1">
@@ -746,6 +916,16 @@ export function Practices({ onNavigate }: PracticesProps) {
                   <div className="text-sm text-muted-foreground">
                     {sortedPractices.length} {sortedPractices.length === 1 ? 'practice' : 'practices'}
                   </div>
+                  <select
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value as PracticeSortKey)}
+                    aria-label="Sort practices"
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                  >
+                    <option value="recommended">Recommended</option>
+                    <option value="duration">Shortest First</option>
+                    <option value="title">Title A-Z</option>
+                  </select>
                 </div>
               </div>
             )}
@@ -771,6 +951,21 @@ export function Practices({ onNavigate }: PracticesProps) {
             </SheetHeader>
             
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+              {/* Sort */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Sort By</h3>
+                <select
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as PracticeSortKey)}
+                  aria-label="Sort practices"
+                  className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="recommended">Recommended</option>
+                  <option value="duration">Shortest First</option>
+                  <option value="title">Title A-Z</option>
+                </select>
+              </div>
+
               {/* Practice Type */}
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold">Practice Type</h3>
@@ -1159,122 +1354,140 @@ export function Practices({ onNavigate }: PracticesProps) {
         
         {/* Mobile List View */}
         {!loading && !error && (device.isMobile || viewMode === 'list') && sortedPractices.length > 0 && (
-          <div className="space-y-3">
-            {sortedPractices.map((practice) => (
-              <Card key={practice.id} className="flex gap-3 p-3 hover:shadow-md transition-shadow">
-                {/* Thumbnail */}
-                <div className="relative flex-shrink-0 w-32 h-20 rounded overflow-hidden">
-                  <ImageWithFallback
-                    src={practice.image}
-                    alt={practice.title}
-                    className="w-full h-full object-cover"
-                  />
-                  
-                  {/* Duration badge */}
-                  <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5">
-                    {practice.duration}min
-                  </Badge>
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0 flex flex-col">
-                  {/* Title */}
-                  <h3 className="font-semibold text-sm line-clamp-2 mb-1">
-                    {practice.title}
-                  </h3>
-                  
-                  {/* Description */}
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                    {practice.description}
-                  </p>
-                  
-                  {/* Meta row */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                    <div className="flex items-center gap-1">
-                      {getTypeIcon(practice.type)}
-                      <span className="capitalize">{practice.type}</span>
+          <StaggerContainer staggerDelay={0.08}>
+            <div className="space-y-3">
+              {sortedPractices.map((practice) => (
+                <StaggerItem key={practice.id}>
+                  <Card className="flex gap-3 p-3 hover:shadow-md transition-shadow">
+                    {/* Thumbnail */}
+                    <div className="relative flex-shrink-0 w-32 h-20 rounded overflow-hidden">
+                      <ImageWithFallback
+                        src={practice.image}
+                        alt={practice.title}
+                        className="w-full h-full object-cover"
+                      />
+                      
+                      {/* Duration badge */}
+                      <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5">
+                        {practice.duration}min
+                      </Badge>
                     </div>
-                    <span>•</span>
-                    <span className={getDifficultyColor(practice.difficulty)}>{practice.difficulty}</span>
-                  </div>
-                  
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {practice.tags.slice(0, 2).map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {practice.tags.length > 2 && (
-                      <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                        +{practice.tags.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {/* CTA */}
-                  <Button 
-                    size="sm"
-                    className="w-full mt-auto min-h-[44px]"
-                    onClick={() => startPractice(practice)}
-                  >
-                    <Play className="h-4 w-4 mr-1" />
-                    {t('practices.startPractice')}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      {/* Title */}
+                      <h3 className="font-semibold text-sm line-clamp-2 mb-1">
+                        {practice.title}
+                      </h3>
+                      
+                      {/* Description */}
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                        {practice.description}
+                      </p>
+                      
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                        <div className="flex items-center gap-1">
+                          {getTypeIcon(practice.type)}
+                          <span className="capitalize">{practice.type}</span>
+                        </div>
+                        <span>•</span>
+                        <span className={getDifficultyColor(practice.difficulty)}>{practice.difficulty}</span>
+                      </div>
+                      
+                      {/* Tags */}
+                      {(practice.immediateRelief || practice.crisisEligible) && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {practice.immediateRelief && (
+                            <Badge className="bg-rose-100 text-rose-700 text-xs px-1.5 py-0">Quick Relief</Badge>
+                          )}
+                          {practice.crisisEligible && (
+                            <Badge className="bg-orange-100 text-orange-700 text-xs px-1.5 py-0">Crisis-Safe</Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {practice.tags.slice(0, 2).map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {practice.tags.length > 2 && (
+                          <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                            +{practice.tags.length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {/* CTA */}
+                      <Button 
+                        size="sm"
+                        className="w-full mt-auto min-h-[44px]"
+                        onClick={() => startPractice(practice)}
+                      >
+                        <Play className="h-4 w-4 mr-1" />
+                        {t('practices.startPractice')}
+                      </Button>
+                    </div>
+                  </Card>
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
         )}
         
         {/* Desktop Grid View */}
         {!loading && !error && !device.isMobile && viewMode === 'grid' && sortedPractices.length > 0 && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedPractices.map((practice) => (
-            <Card key={practice.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="relative">
-                <ImageWithFallback
-                  src={practice.image}
-                  alt={practice.title}
-                  className="w-full h-48 object-cover"
-                />
-                
-                {/* Play overlay */}
-                <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center group">
-                  <Button 
-                    size="lg"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity rounded-full w-16 h-16"
-                    onClick={() => startPractice(practice)}
-                  >
-                    <Play className="h-6 w-6" />
-                  </Button>
-                </div>
-
-                {/* Duration badge */}
-                <Badge className="absolute top-2 left-2 bg-black/70 text-white">
-                  {practice.duration} min
-                </Badge>
-              </div>
-
-              <CardContent className="p-4 space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge 
-                      className={getTypeColor(practice.type)}
-                    >
-                      <div className="flex items-center gap-1">
-                        {getTypeIcon(practice.type)}
-                        <span className="capitalize">{practice.type}</span>
-                      </div>
-                    </Badge>
+          <StaggerContainer staggerDelay={0.08}>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sortedPractices.map((practice) => (
+                <StaggerItem key={practice.id}>
+                <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <div className="relative">
+                    <ImageWithFallback
+                      src={practice.image}
+                      alt={practice.title}
+                      className="w-full h-48 object-cover"
+                    />
                     
-                    <Badge 
-                      variant="outline"
-                      className={getDifficultyColor(practice.difficulty)}
-                    >
-                      {practice.difficulty}
+                    {/* Play overlay */}
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center group">
+                      <Button 
+                        size="lg"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity rounded-full w-16 h-16"
+                        onClick={() => startPractice(practice)}
+                      >
+                        <Play className="h-6 w-6" />
+                      </Button>
+                    </div>
+
+                    {/* Duration badge */}
+                    <Badge className="absolute top-2 left-2 bg-black/70 text-white">
+                      {practice.duration} min
                     </Badge>
                   </div>
+
+                  <CardContent className="p-4 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge 
+                          className={getTypeColor(practice.type)}
+                        >
+                          <div className="flex items-center gap-1">
+                            {getTypeIcon(practice.type)}
+                            <span className="capitalize">{practice.type}</span>
+                          </div>
+                        </Badge>
+                        
+                        <Badge 
+                          variant="outline"
+                          className={getDifficultyColor(practice.difficulty)}
+                        >
+                          {practice.difficulty}
+                        </Badge>
+                      </div>
 
                   <h3 className="font-semibold leading-tight">{practice.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
@@ -1294,6 +1507,12 @@ export function Practices({ onNavigate }: PracticesProps) {
                 </div>
 
                 <div className="flex flex-wrap gap-1">
+                    {practice.immediateRelief && (
+                      <Badge className="bg-rose-100 text-rose-700 text-xs">Quick Relief</Badge>
+                    )}
+                    {practice.crisisEligible && (
+                      <Badge className="bg-orange-100 text-orange-700 text-xs">Crisis-Safe</Badge>
+                    )}
                   {practice.tags.slice(0, 3).map((tag) => (
                     <Badge key={tag} variant="secondary" className="text-xs">
                       {tag}
@@ -1309,9 +1528,11 @@ export function Practices({ onNavigate }: PracticesProps) {
                   {t('practices.startPractice')}
                 </Button>
               </CardContent>
-            </Card>
-          ))}
-        </div>
+                </Card>
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
         )}
         
         {/* Back to Top Button */}

@@ -1,15 +1,55 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import request from 'supertest';
-import app from '../src/server';
+import type { Express } from 'express';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
-const prisma = new PrismaClient();
+const resolveDatabaseUrl = (): string | null => {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) return null;
 
-describe('Admin auth session flow', () => {
+  if (!raw.startsWith('file:')) {
+    return raw;
+  }
+
+  const filePath = raw.slice('file:'.length);
+  if (!filePath.startsWith('./') && !filePath.startsWith('../')) {
+    return raw;
+  }
+
+  const absolutePath = path.resolve(process.cwd(), filePath).replace(/\\/g, '/');
+  const parentDir = path.dirname(absolutePath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+
+  return `file:${absolutePath}`;
+};
+
+const resolvedDatabaseUrl = resolveDatabaseUrl();
+if (resolvedDatabaseUrl) {
+  process.env.DATABASE_URL = resolvedDatabaseUrl;
+}
+
+const hasDatabaseUrl = Boolean(resolvedDatabaseUrl);
+const prisma = hasDatabaseUrl ? new PrismaClient() : null;
+let app: Express;
+
+const maybeDescribe = hasDatabaseUrl ? describe : describe.skip;
+
+maybeDescribe('Admin auth session flow', () => {
   const adminEmail = 'admin@mentalwellbeing.ai';
   let createdUserId: string | null = null;
 
   beforeAll(async () => {
+    if (!prisma) {
+      return;
+    }
+
+    const module = await import('../src/server');
+    app = module.default;
+
     // Ensure admin user exists with no password (so default demo password works)
     const user = await prisma.user.upsert({
       where: { email: adminEmail },
@@ -22,11 +62,13 @@ describe('Admin auth session flow', () => {
       },
     });
     createdUserId = user.id;
-  });
+  }, 60000);
 
   afterAll(async () => {
     // Leave user in DB for other tests; just disconnect prisma
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   });
 
   it('logs in and then returns session details', async () => {

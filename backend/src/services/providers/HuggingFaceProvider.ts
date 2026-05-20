@@ -69,7 +69,16 @@ export class HuggingFaceProvider extends BaseAIProvider {
       const message = error?.message || 'Unknown error occurred';
       console.error('❌ HuggingFace Error:', message);
 
-      if (message.toLowerCase().includes('rate limit') || message.toLowerCase().includes('quota')) {
+      const normalizedMessage = message.toLowerCase();
+      const shouldRotateKey =
+        normalizedMessage.includes('rate limit') ||
+        normalizedMessage.includes('quota') ||
+        normalizedMessage.includes('invalid username or password') ||
+        normalizedMessage.includes('unauthorized') ||
+        normalizedMessage.includes('forbidden') ||
+        normalizedMessage.includes('401');
+
+      if (shouldRotateKey) {
         this.rotateApiKey();
       }
 
@@ -96,7 +105,7 @@ export class HuggingFaceProvider extends BaseAIProvider {
       systemContent = this.createSystemPrompt(context);
     } else {
       systemContent =
-        'You are MaanSarathi, a supportive and empathetic mental health companion. ' +
+        'You are ManaSarathi, a supportive and empathetic mental health companion. ' +
         'Provide helpful, non-diagnostic guidance. Be compassionate, professional, ' +
         'and encourage seeking professional help when appropriate.';
     }
@@ -134,7 +143,12 @@ export class HuggingFaceProvider extends BaseAIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    return !!(this.getCurrentApiKey());
+    const apiKey = this.getCurrentApiKey();
+    if (!apiKey) {
+      return false;
+    }
+
+    return this.testConnection();
   }
 
   getProviderName(): string {

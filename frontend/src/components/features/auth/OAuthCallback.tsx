@@ -42,10 +42,14 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         let googleUserData = null;
         if (userDataParam) {
           try {
-            googleUserData = JSON.parse(decodeURIComponent(userDataParam));
-            console.log('Google User Data:', googleUserData);
+            googleUserData = JSON.parse(userDataParam);
           } catch (parseError) {
-            console.error('Error parsing user data:', parseError);
+            try {
+              // Backward compatibility for legacy callbacks that sent double-encoded payloads.
+              googleUserData = JSON.parse(decodeURIComponent(userDataParam));
+            } catch (legacyParseError) {
+              console.error('Error parsing user data:', legacyParseError);
+            }
           }
         }
 
@@ -63,22 +67,20 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
           throw new Error('Token validation failed');
         }
 
-        const userData = await response.json();
-        console.log('Backend user data:', userData);
+        const validationResponse = await response.json();
+        const validatedUser = validationResponse?.data?.user ?? validationResponse?.user ?? validationResponse;
 
         // Merge with Google user data if available
         const enhancedUserData = {
-          ...userData,
+          ...validatedUser,
           ...(googleUserData || {}),
           token,
           needsSetup,
           needsPassword: redirectTo === 'setup-password',
           isGoogleUser: !!googleUserData,
-          hasPassword: userData.hasPassword !== undefined ? userData.hasPassword : !!userData.password,
+          hasPassword: validatedUser?.hasPassword !== undefined ? validatedUser.hasPassword : !!validatedUser?.password,
           justCreated: googleUserData?.justCreated
         };
-
-        console.log('Enhanced user data for frontend:', enhancedUserData);
 
         // Store token in localStorage
         localStorage.setItem('token', token);
@@ -87,8 +89,6 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
         setStatus('success');
 
         // Determine the flow based on redirect parameter
-        console.log('OAuth routing decision:', { redirectTo, needsSetup, hasPassword: enhancedUserData.hasPassword, isOnboarded: enhancedUserData.isOnboarded });
-
         // If backend says dashboard but client thinks needs setup due to stale params, trust backend flags
         switch (redirectTo) {
           case 'setup-password':

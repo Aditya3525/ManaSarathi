@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Heart, Clock, TrendingUp, Filter, Loader2, Star } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { getApiBaseUrl } from '../../../config/apiConfig';
 import { useToast } from '../../../contexts/ToastContext';
@@ -8,26 +8,33 @@ import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 
 interface ContentRecommendation {
-  id: number;
+  id?: string;
   title: string;
-  type: string;
+  type?: string;
   contentType?: string;
-  category: string;
-  approach: string;
+  category?: string;
+  approach?: string;
   description?: string;
   thumbnailUrl?: string;
   duration?: number;
   intensityLevel?: string;
-  focusAreas: string[];
-  immediateRelief: boolean;
+  focusAreas?: string[];
+  immediateRelief?: boolean;
   averageRating?: number;
   completionCount?: number;
-  recommendationReason?: string;
+  reason?: string;
   score?: number;
+  url?: string | null;
 }
 
 interface RecommendationsResponse {
-  recommendations: ContentRecommendation[];
+  success?: boolean;
+  data?: {
+    items?: ContentRecommendation[];
+    crisisLevel?: string;
+    rationale?: string;
+  };
+  recommendations?: ContentRecommendation[];
   crisisLevel?: string;
   message?: string;
 }
@@ -55,8 +62,8 @@ export function ContentRecommendations() {
       }
 
       const data: RecommendationsResponse = await response.json();
-      setRecommendations(data.recommendations || []);
-      setCrisisLevel(data.crisisLevel || null);
+      setRecommendations(data.data?.items || data.recommendations || []);
+      setCrisisLevel(data.data?.crisisLevel || data.crisisLevel || null);
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       push({
@@ -74,8 +81,8 @@ export function ContentRecommendations() {
   }, [fetchRecommendations]);
 
   const filteredRecommendations = recommendations.filter(rec => {
-    if (selectedApproach !== 'all' && rec.approach !== selectedApproach) return false;
-    if (selectedCategory !== 'all' && rec.category !== selectedCategory) return false;
+    if (selectedApproach !== 'all' && rec.approach && rec.approach !== selectedApproach) return false;
+    if (selectedCategory !== 'all' && rec.category && rec.category !== selectedCategory) return false;
     return true;
   });
 
@@ -204,8 +211,8 @@ export function ContentRecommendations() {
             Quick Relief Resources
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {crisisRecommendations.map(rec => (
-              <ContentCard key={rec.id} recommendation={rec} isCrisis />
+            {crisisRecommendations.map((rec, index) => (
+              <ContentCard key={rec.id || `crisis-${index}`} recommendation={rec} isCrisis />
             ))}
           </div>
         </div>
@@ -218,8 +225,8 @@ export function ContentRecommendations() {
             Recommended for You
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {regularRecommendations.map(rec => (
-              <ContentCard key={rec.id} recommendation={rec} />
+            {regularRecommendations.map((rec, index) => (
+              <ContentCard key={rec.id || `regular-${index}`} recommendation={rec} />
             ))}
           </div>
         </div>
@@ -269,7 +276,8 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
     }
   };
 
-  const getApproachIcon = (approach: string) => {
+  const getApproachIcon = (approach?: string) => {
+    if (!approach) return '💡';
     switch (approach.toLowerCase()) {
       case 'eastern': return '🧘';
       case 'western': return '🧠';
@@ -282,7 +290,11 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
     <Card
       className={`hover:shadow-lg transition-shadow cursor-pointer ${isCrisis ? 'border-red-500 border-2' : ''
         }`}
-      onClick={() => window.location.href = `/content/${recommendation.id}`}
+      onClick={() => {
+        if (recommendation.url) {
+          window.open(recommendation.url, '_blank');
+        }
+      }}
     >
       {/* Thumbnail */}
       {recommendation.thumbnailUrl && (
@@ -315,10 +327,10 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
         )}
 
         {/* Recommendation Reason */}
-        {recommendation.recommendationReason && (
+        {recommendation.reason && (
           <div className="bg-blue-50 border-l-4 border-blue-500 p-2 mb-3">
             <p className="text-xs text-blue-800">
-              <strong>Why for you:</strong> {recommendation.recommendationReason}
+              <strong>Why for you:</strong> {recommendation.reason}
             </p>
           </div>
         )}
@@ -342,9 +354,9 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
         </div>
 
         {/* Focus Areas */}
-        {recommendation.focusAreas.length > 0 && (
+        {(recommendation.focusAreas || []).length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {recommendation.focusAreas.slice(0, 3).map((area, idx) => (
+            {(recommendation.focusAreas || []).slice(0, 3).map((area, idx) => (
               <span
                 key={idx}
                 className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full"
@@ -352,9 +364,9 @@ function ContentCard({ recommendation, isCrisis = false }: ContentCardProps) {
                 {area}
               </span>
             ))}
-            {recommendation.focusAreas.length > 3 && (
+            {(recommendation.focusAreas || []).length > 3 && (
               <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
-                +{recommendation.focusAreas.length - 3} more
+                +{(recommendation.focusAreas || []).length - 3} more
               </span>
             )}
           </div>

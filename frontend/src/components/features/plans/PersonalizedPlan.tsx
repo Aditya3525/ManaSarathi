@@ -1,9 +1,3 @@
-import React, { useState } from 'react';
-import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Badge } from '../../ui/badge';
-import { Progress } from '../../ui/progress';
-import { Calendar } from '../../ui/calendar';
 import { 
   ArrowLeft,
   Target,
@@ -17,9 +11,28 @@ import {
   Star,
   Users
 } from 'lucide-react';
+import React, { useState } from 'react';
+
+import type { PlanModuleWithState } from '../../../services/api';
+import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
+import { Calendar } from '../../ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Progress } from '../../ui/progress';
+
+import { CurrentWeekCard } from './CurrentWeekCard';
+import { JourneyTimeline } from './JourneyTimeline';
 
 interface PersonalizedPlanProps {
-  user: any;
+  user: {
+    id?: string;
+    approach?: 'western' | 'eastern' | 'hybrid';
+    assessmentScores?: {
+      anxiety?: number;
+      stress?: number;
+      emotionalIntelligence?: number;
+    };
+  } | null;
   onNavigate: (page: string) => void;
 }
 
@@ -45,6 +58,9 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
   // Generate personalized plan based on user scores and approach preference
   const generatePlan = (): PlanModule[] => {
     const scores = user?.assessmentScores || {};
+    const anxietyScore = scores.anxiety ?? 0;
+    const stressScore = scores.stress ?? 0;
+    const emotionalIntelligenceScore = scores.emotionalIntelligence ?? 100;
     const approach = planType;
     const modules: PlanModule[] = [];
 
@@ -85,7 +101,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
     }
 
     // Anxiety-specific modules adapted to approach
-    if (scores.anxiety > 50) {
+    if (anxietyScore > 50) {
       if (approach === 'western') {
         modules.push({
           id: 'cbt-anxiety',
@@ -150,7 +166,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
     }
 
     // Stress-specific modules adapted to approach
-    if (scores.stress > 40) {
+    if (stressScore > 40) {
       if (approach === 'western') {
         modules.push({
           id: 'stress-management',
@@ -210,7 +226,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
     }
 
     // Emotional intelligence modules
-    if (scores.emotionalIntelligence < 70) {
+    if (emotionalIntelligenceScore < 70) {
       modules.push({
         id: 'emotion-awareness',
         title: 'Emotional Awareness Practice',
@@ -242,6 +258,48 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
   const planModules = generatePlan();
   const completedModules = planModules.filter(m => m.completed).length;
   const overallProgress = Math.round((completedModules / planModules.length) * 100);
+  const timelineSteps = planModules.map((module, index) => ({
+    id: module.id,
+    label: module.title.slice(0, 20),
+    status: module.completed
+      ? 'completed'
+      : module.progress > 0
+        ? 'in-progress'
+        : 'upcoming',
+    weekNumber: index + 1,
+  })) as Array<{ id: string; label: string; status: 'completed' | 'in-progress' | 'upcoming'; weekNumber: number }>;
+
+  const currentStepId = planModules.find((module) => module.progress > 0 && !module.completed)?.id;
+  const currentWeekModuleStates: PlanModuleWithState[] = planModules
+    .filter((module) => !module.completed)
+    .slice(0, 4)
+    .map((module, index) => {
+      const numericDuration = Number.parseInt(module.duration, 10);
+      return {
+        id: module.id,
+        title: module.title,
+        description: module.description,
+        type: module.type,
+        duration: Number.isFinite(numericDuration) ? numericDuration : null,
+        difficulty: module.difficulty,
+        approach: planType,
+        order: index + 1,
+        userState: {
+          id: `${module.id}-state`,
+          userId: typeof user?.id === 'string' ? user.id : 'local-user',
+          moduleId: module.id,
+          completed: module.completed,
+          progress: module.progress,
+          scheduledFor: module.scheduledFor ? module.scheduledFor.toISOString() : null,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
+
+  const currentWeekProgress = currentWeekModuleStates.length
+    ? currentWeekModuleStates.reduce((acc, module) => acc + (module.userState?.progress ?? 0), 0) / currentWeekModuleStates.length
+    : 0;
+  const currentWeekTitle = currentWeekModuleStates[0]?.title || 'Current Focus';
 
   const getPlanTypeDescription = (type: string) => {
     switch (type) {
@@ -273,7 +331,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background page-enter">
       {/* Header */}
       <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-6">
         <div className="max-w-6xl mx-auto">
@@ -347,6 +405,22 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
                 Regenerate Plan
               </Button>
             </div>
+
+            {timelineSteps.length > 0 && (
+              <JourneyTimeline
+                steps={timelineSteps}
+                currentStep={currentStepId}
+              />
+            )}
+
+            {currentWeekModuleStates.length > 0 && (
+              <CurrentWeekCard
+                weekTitle={currentWeekTitle}
+                modules={currentWeekModuleStates}
+                overallProgress={currentWeekProgress}
+                onModuleClick={() => onNavigate('practices')}
+              />
+            )}
 
             <div className="space-y-4">
               {planModules.map((module, index) => {
@@ -473,7 +547,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
                 />
                 
                 <div className="space-y-2">
-                  <h4 className="font-medium">Today's Recommendations</h4>
+                  <h4 className="font-medium">Today&apos;s Recommendations</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
                     <p>• Morning: Introduction to Mindfulness (15 min)</p>
                     <p>• Evening: Progressive Body Scan (15 min)</p>
@@ -493,7 +567,7 @@ export function PersonalizedPlan({ user, onNavigate }: PersonalizedPlanProps) {
                   onClick={() => onNavigate('practices')}
                 >
                   <Play className="h-4 w-4 mr-2" />
-                  Start Today's Practice
+                  Start Today&apos;s Practice
                 </Button>
                 
                 <Button 

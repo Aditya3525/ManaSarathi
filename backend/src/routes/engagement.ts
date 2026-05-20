@@ -232,12 +232,28 @@ router.get('/personalized', authenticate, async (req, res) => {
       }))
     });
 
+    const normalizedScores = assessmentResults
+      .map((result: any) => (typeof result.normalizedScore === 'number' ? result.normalizedScore : null))
+      .filter((value: number | null): value is number => value !== null);
+
+    const rawScores = assessmentResults
+      .map((result: any) => (typeof result.score === 'number' ? result.score : null))
+      .filter((value: number | null): value is number => value !== null);
+
+    const wellnessScore = (() => {
+      const baseValues = normalizedScores.length > 0 ? normalizedScores : rawScores;
+      if (baseValues.length === 0) return 50;
+
+      const average = baseValues.reduce((sum, value) => sum + value, 0) / baseValues.length;
+      return Math.max(0, Math.min(100, Math.round(average)));
+    })();
+
     // Build recommendation context
     const context: EnhancedRecommendationContext = {
       user: {
         id: userId,
         approach: (user.approach as any) || 'hybrid',
-        wellnessScore: 50, // Default wellness score
+        wellnessScore,
         recentMood: moodEntries[0]?.mood,
         assessmentResults: assessmentResults.map((a: any) => ({
           type: a.assessmentType,
@@ -462,7 +478,7 @@ router.get('/engagements/me', authenticate, async (req, res) => {
 /**
  * POST /api/content/:id/bookmark
  * Toggle bookmark on a content item
- * Bookmarks are stored as engagement records with a bookmark flag
+ * Bookmarks are stored in progressTracking with dedicated bookmark metrics
  */
 // @ts-ignore
 router.post('/:id/bookmark', authenticate, async (req, res) => {
@@ -484,27 +500,60 @@ router.post('/:id/bookmark', authenticate, async (req, res) => {
     }
 
     if (content) {
-      // Toggle bookmark via engagement record
-      const existing = await prisma.contentEngagement.findUnique({
+      // Content bookmarks use dedicated progress records to avoid overwriting engagement history.
+      const existingBookmark = await prisma.progressTracking.findFirst({
+        where: {
+          userId,
+          metric: 'content_bookmark',
+          notes: { contains: `"contentId":"${contentId}"` },
+        },
+      });
+
+      const legacyBookmark = await prisma.contentEngagement.findUnique({
         where: { userId_contentId: { userId, contentId } },
       });
 
-      if (existing) {
-        // Toggle the bookmark (use a convention: bookmarked content has a non-null rating or we track via a separate flag)
-        await prisma.contentEngagement.delete({
-          where: { userId_contentId: { userId, contentId } },
-        });
+      const isLegacyBookmark =
+        Boolean(legacyBookmark) &&
+        !legacyBookmark?.completed &&
+        legacyBookmark?.rating == null &&
+        legacyBookmark?.timeSpent == null &&
+        legacyBookmark?.moodBefore == null &&
+        legacyBookmark?.moodAfter == null &&
+        legacyBookmark?.effectiveness == null;
+
+      if (existingBookmark || isLegacyBookmark) {
+        if (existingBookmark) {
+          await prisma.progressTracking.delete({ where: { id: existingBookmark.id } });
+        }
+
+        if (isLegacyBookmark) {
+          await prisma.contentEngagement.delete({
+            where: { userId_contentId: { userId, contentId } },
+          });
+        }
+
         res.json({ success: true, data: { bookmarked: false } });
       } else {
-        await prisma.contentEngagement.create({
-          data: { userId, contentId, completed: false },
+        await prisma.progressTracking.create({
+          data: {
+            userId,
+            metric: 'content_bookmark',
+            value: 1,
+            notes: JSON.stringify({ contentId }),
+          },
         });
+
         res.json({ success: true, data: { bookmarked: true } });
       }
     } else {
-      // For practices, use progress tracking
+      // Practice bookmarks use dedicated progress records.
       const existing = await prisma.progressTracking.findFirst({
-        where: { userId, metric: 'practice_bookmark', notes: { contains: contentId } },
+        where: {
+          userId,
+          metric: 'practice_bookmark',
+          notes: { contains: `"practiceId":"${contentId}"` },
+        },
       });
 
       if (existing) {
@@ -537,31 +586,78 @@ router.get('/bookmarks', authenticate, async (req, res) => {
   }
 
   try {
-    // Get bookmarked content
-    const contentBookmarks = await prisma.contentEngagement.findMany({
-      where: { userId },
-      include: { content: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [contentBookmarkRecords, practiceBookmarkRecords, legacyBookmarks] = await Promise.all([
+      prisma.progressTracking.findMany({
+        where: { userId, metric: 'content_bookmark' },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.progressTracking.findMany({
+        where: { userId, metric: 'practice_bookmark' },
+        orderBy: { date: 'desc' },
+      }),
+      // Backward compatibility for older bookmark records previously saved in contentEngagement.
+      prisma.contentEngagement.findMany({
+        where: {
+          userId,
+          completed: false,
+          rating: null,
+          timeSpent: null,
+          moodBefore: null,
+          moodAfter: null,
+          effectiveness: null,
+        },
+        select: { contentId: true },
+      }),
+    ]);
 
-    // Get bookmarked practices
-    const practiceBookmarks = await prisma.progressTracking.findMany({
-      where: { userId, metric: 'practice_bookmark' },
-      orderBy: { date: 'desc' },
-    });
+    const contentIds = new Set<string>();
+    for (const entry of contentBookmarkRecords) {
+      try {
+        const parsed = JSON.parse(entry.notes || '{}') as { contentId?: string };
+        if (parsed.contentId) {
+          contentIds.add(parsed.contentId);
+        }
+      } catch {
+        // Ignore malformed records.
+      }
+    }
 
-    const practiceIds = practiceBookmarks
-      .map(pb => { try { return JSON.parse(pb.notes || '{}').practiceId; } catch { return null; } })
-      .filter(Boolean);
+    for (const legacy of legacyBookmarks) {
+      if (legacy.contentId) {
+        contentIds.add(legacy.contentId);
+      }
+    }
 
-    const practices = practiceIds.length > 0
-      ? await prisma.practice.findMany({ where: { id: { in: practiceIds } } })
+    const content = contentIds.size > 0
+      ? await prisma.content.findMany({
+          where: { id: { in: Array.from(contentIds) } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+
+    const practiceIds = new Set<string>();
+    for (const entry of practiceBookmarkRecords) {
+      try {
+        const parsed = JSON.parse(entry.notes || '{}') as { practiceId?: string };
+        if (parsed.practiceId) {
+          practiceIds.add(parsed.practiceId);
+        }
+      } catch {
+        // Ignore malformed records.
+      }
+    }
+
+    const practices = practiceIds.size > 0
+      ? await prisma.practice.findMany({
+          where: { id: { in: Array.from(practiceIds) } },
+          orderBy: { createdAt: 'desc' },
+        })
       : [];
 
     res.json({
       success: true,
       data: {
-        content: contentBookmarks.map(cb => cb.content),
+        content,
         practices,
       },
     });

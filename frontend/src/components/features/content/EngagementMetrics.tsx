@@ -1,6 +1,7 @@
 import { Activity, BarChart3, Clock, Smile, Star, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { engagementApi, UserEngagementRecord } from '../../../services/api';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { ScrollArea } from '../../ui/scroll-area';
@@ -73,19 +74,31 @@ export function EngagementMetrics({ userId }: EngagementMetricsProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Replace with actual API call
-    // This is a placeholder - will be implemented when API client is updated
     const fetchEngagementData = async () => {
       try {
         setIsLoading(true);
-        // const response = await api.getUserEngagementHistory(userId);
-        // setEngagements(response.data);
-        
-        // Mock data for now
-        setEngagements([]);
-        setIsLoading(false);
+        const response = await engagementApi.getMyEngagements();
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Failed to fetch engagement data');
+        }
+
+        const mapped = response.data.map((entry: UserEngagementRecord): EngagementStat => ({
+          id: entry.id,
+          contentTitle: entry.content?.title || 'Untitled content',
+          completed: entry.completed,
+          rating: entry.rating,
+          timeSpent: entry.timeSpent,
+          moodBefore: entry.moodBefore,
+          moodAfter: entry.moodAfter,
+          effectiveness: entry.effectiveness,
+          createdAt: entry.updatedAt || entry.createdAt,
+        }));
+
+        setEngagements(mapped);
       } catch (error) {
         console.error('Failed to fetch engagement data:', error);
+        setEngagements([]);
+      } finally {
         setIsLoading(false);
       }
     };

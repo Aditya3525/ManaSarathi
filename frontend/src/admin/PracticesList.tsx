@@ -8,33 +8,33 @@ import {
   Eye,
   Waves,
   Heart,
-  Scan,
   Filter,
   Clock
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-import { getApiBaseUrl } from '../config/apiConfig';
-import { adminFetch } from './adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { getApiBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
+import { adminFetch } from './adminApi';
 import { BulkActionToolbar } from './BulkActionToolbar';
 import { PracticePreviewModal } from './PracticePreviewModal';
 
 export interface Practice {
   id: string;
   title: string;
+  category: string;
   type: 'meditation' | 'breathing' | 'yoga' | 'sleep';
   types?: string;
   duration: number;
   level?: 'Beginner' | 'Intermediate' | 'Advanced';
-  difficulty?: string;
+  difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
   approach: 'Western' | 'Eastern' | 'Hybrid' | 'All';
   format?: 'Audio' | 'Video' | 'Audio/Video';
   description?: string;
@@ -45,6 +45,7 @@ export interface Practice {
   // Tags come back from backend as comma-separated string; normalize to array
   tags?: string[];
   isPublished: boolean;
+  scheduledPublishAt?: string | null;
   createdAt: string;
 }
 
@@ -65,6 +66,7 @@ interface RawPractice {
   thumbnailUrl?: string;
   tags?: string[] | string | null;
   isPublished?: boolean;
+  scheduledPublishAt?: string | null;
   createdAt?: string;
 }
 
@@ -90,11 +92,10 @@ const normalizePracticeApproach = (value?: string): Practice['approach'] => {
     case 'eastern':
       return 'Eastern';
     case 'hybrid':
-      return 'Hybrid';
     case 'all':
-      return 'All';
+      return 'Hybrid';
     default:
-      return 'All';
+      return 'Hybrid';
   }
 };
 
@@ -120,11 +121,12 @@ const mapRawPractice = (raw: RawPractice): Practice => {
   return {
     id: raw.id,
     title: raw.title ?? 'Untitled Practice',
+    category: raw.type ?? raw.types ?? 'General',
     type: normalizePracticeType(raw.type ?? raw.types),
     types: raw.types ?? raw.type ?? 'meditation',
     duration: Number.isFinite(durationValue) && typeof durationValue === 'number' ? durationValue : 5,
     level: normalizePracticeLevel(raw.level ?? raw.difficulty),
-    difficulty: raw.difficulty,
+    difficulty: normalizePracticeLevel(raw.level ?? raw.difficulty),
     approach: normalizePracticeApproach(raw.approach),
     format: (raw.format as Practice['format']) ?? undefined,
     description: raw.description ?? undefined,
@@ -134,6 +136,7 @@ const mapRawPractice = (raw: RawPractice): Practice => {
     thumbnailUrl: raw.thumbnailUrl ?? undefined,
     tags: normalizeTags(raw.tags),
     isPublished: Boolean(raw.isPublished),
+    scheduledPublishAt: raw.scheduledPublishAt ?? null,
     createdAt: raw.createdAt ?? new Date().toISOString()
   };
 };
@@ -159,7 +162,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
-  const [filterApproach, setFilterApproach] = useState<string>('all');
+  const [filterApproach, setFilterApproach] = useState<string>('Hybrid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const filterGridClasses = 'grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4';
 
@@ -362,12 +365,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'Meditation': return <Brain className="h-4 w-4" />;
-      case 'Breathing': return <Wind className="h-4 w-4" />;
-      case 'Visualization': return <Eye className="h-4 w-4" />;
-      case 'Progressive Relaxation': return <Waves className="h-4 w-4" />;
-      case 'Mindfulness': return <Heart className="h-4 w-4" />;
-      case 'Body Scan': return <Scan className="h-4 w-4" />;
+      case 'meditation': return <Brain className="h-4 w-4" />;
+      case 'breathing': return <Wind className="h-4 w-4" />;
+      case 'sleep': return <Waves className="h-4 w-4" />;
+      case 'yoga': return <Heart className="h-4 w-4" />;
       default: return <Brain className="h-4 w-4" />;
     }
   };
@@ -383,10 +384,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
   const getApproachColor = (approach: string) => {
     switch (approach) {
-      case 'cbt': return 'bg-blue-100 text-blue-800';
-      case 'mindfulness': return 'bg-green-100 text-green-800';
-      case 'dbt': return 'bg-purple-100 text-purple-800';
-      case 'act': return 'bg-orange-100 text-orange-800';
+      case 'Western': return 'bg-blue-100 text-blue-800';
+      case 'Eastern': return 'bg-green-100 text-green-800';
+      case 'Hybrid': return 'bg-purple-100 text-purple-800';
+      case 'All': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -399,7 +400,7 @@ export const PracticesList: React.FC<PracticesListProps> = ({
     
     const matchesType = filterType === 'all' || item.type === filterType;
     const matchesLevel = filterLevel === 'all' || (item.level || item.difficulty) === filterLevel;
-    const matchesApproach = filterApproach === 'all' || item.approach === filterApproach;
+    const matchesApproach = filterApproach === 'Hybrid' || item.approach === filterApproach;
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'published' && item.isPublished) ||
                          (filterStatus === 'draft' && !item.isPublished);
@@ -459,12 +460,10 @@ export const PracticesList: React.FC<PracticesListProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Meditation">Meditation</SelectItem>
-                <SelectItem value="Breathing">Breathing</SelectItem>
-                <SelectItem value="Visualization">Visualization</SelectItem>
-                <SelectItem value="Progressive Relaxation">Progressive Relaxation</SelectItem>
-                <SelectItem value="Mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="Body Scan">Body Scan</SelectItem>
+                <SelectItem value="meditation">Meditation</SelectItem>
+                <SelectItem value="breathing">Breathing</SelectItem>
+                <SelectItem value="yoga">Yoga</SelectItem>
+                <SelectItem value="sleep">Sleep</SelectItem>
               </SelectContent>
             </Select>
 
@@ -482,15 +481,12 @@ export const PracticesList: React.FC<PracticesListProps> = ({
 
             <Select value={filterApproach} onValueChange={setFilterApproach}>
               <SelectTrigger className="h-11">
-                <SelectValue placeholder="All Approaches" />
+                <SelectValue placeholder="Hybrid (All)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Approaches</SelectItem>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="cbt">CBT</SelectItem>
-                <SelectItem value="mindfulness">Mindfulness</SelectItem>
-                <SelectItem value="dbt">DBT</SelectItem>
-                <SelectItem value="act">ACT</SelectItem>
+                <SelectItem value="Western">Western</SelectItem>
+                <SelectItem value="Eastern">Eastern</SelectItem>
+                <SelectItem value="Hybrid">Hybrid (All)</SelectItem>
               </SelectContent>
             </Select>
 

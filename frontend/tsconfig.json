@@ -10,16 +10,16 @@
     "strict": false,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
+    "types": ["vite/client", "vitest/globals"],
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["./**/*"],
+  "include": ["src", "vite-env.d.ts", "tests"],
   "exclude": ["dist", "build", "node_modules"]
 }

@@ -831,7 +831,12 @@ type UserProfileInput = Pick<
 >;
 
 async function upsertAdmin(email: string, profile: UserProfileInput) {
-  const password = await bcrypt.hash('admin123', 10);
+  const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!initialAdminPassword) {
+    throw new Error('ADMIN_INITIAL_PASSWORD is required to seed admin users');
+  }
+
+  const password = await bcrypt.hash(initialAdminPassword, 10);
   const normalizedEmail = email.toLowerCase();
   const data = {
     ...profile,
@@ -1371,39 +1376,55 @@ async function seedAssessmentInsightForUser(userId: string) {
 async function main() {
   console.log('🌱 Seeding database...');
   await seedAssessmentLibrary();
-  const admin = await upsertAdmin('admin@example.com', {
-    name: 'Jordan Taylor',
-    firstName: 'Jordan',
-    lastName: 'Taylor',
-    profilePhoto: 'https://avatars.githubusercontent.com/u/1?v=4',
-    approach: 'western',
-    birthday: new Date('1985-03-18'),
-    gender: 'female',
-    region: 'North America',
-    language: 'en-US',
-    emergencyContact: 'Alex Taylor',
-    emergencyPhone: '+1-555-201-3478',
-    dataConsent: true,
-    clinicianSharing: true,
-    isOnboarded: true
-  });
+  const adminProfiles: Record<string, UserProfileInput> = {
+    'admin@example.com': {
+      name: 'Jordan Taylor',
+      firstName: 'Jordan',
+      lastName: 'Taylor',
+      profilePhoto: 'https://avatars.githubusercontent.com/u/1?v=4',
+      approach: 'western',
+      birthday: new Date('1985-03-18'),
+      gender: 'female',
+      region: 'North America',
+      language: 'en-US',
+      emergencyContact: 'Alex Taylor',
+      emergencyPhone: '+1-555-201-3478',
+      dataConsent: true,
+      clinicianSharing: true,
+      isOnboarded: true
+    },
+    'admin@mentalwellbeing.ai': {
+      name: 'Morgan Lee',
+      firstName: 'Morgan',
+      lastName: 'Lee',
+      profilePhoto: 'https://avatars.githubusercontent.com/u/2?v=4',
+      approach: 'hybrid',
+      birthday: new Date('1990-11-05'),
+      gender: 'male',
+      region: 'Asia-Pacific',
+      language: 'en-SG',
+      emergencyContact: 'Jamie Lee',
+      emergencyPhone: '+65-5550-1122',
+      dataConsent: true,
+      clinicianSharing: false,
+      isOnboarded: true
+    }
+  };
 
-  await upsertAdmin('admin@mentalwellbeing.ai', {
-    name: 'Morgan Lee',
-    firstName: 'Morgan',
-    lastName: 'Lee',
-    profilePhoto: 'https://avatars.githubusercontent.com/u/2?v=4',
-    approach: 'hybrid',
-    birthday: new Date('1990-11-05'),
-    gender: 'male',
-    region: 'Asia-Pacific',
-    language: 'en-SG',
-    emergencyContact: 'Jamie Lee',
-    emergencyPhone: '+65-5550-1122',
-    dataConsent: true,
-    clinicianSharing: false,
-    isOnboarded: true
-  });
+  const adminEmails = (process.env.ADMIN_EMAILS || 'admin@example.com,admin@mentalwellbeing.ai')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  const uniqueAdminEmails = Array.from(new Set(
+    adminEmails.length ? adminEmails : Object.keys(adminProfiles)
+  ));
+
+  const admins = [] as User[];
+  for (const email of uniqueAdminEmails) {
+    const profile = adminProfiles[email] ?? adminProfiles['admin@example.com'];
+    admins.push(await upsertAdmin(email, profile));
+  }
 
   const demoUser1 = await upsertDemoUser('user1@example.com', {
     name: 'Avery Johnson',
@@ -1451,7 +1472,7 @@ async function main() {
   await seedAssessmentsForUser(demoUser2.id);
   await seedAssessmentInsightForUser(demoUser1.id);
   await seedAssessmentInsightForUser(demoUser2.id);
-  console.log('✅ Admin users:', admin.email, 'and secondary admin ensured');
+  console.log('✅ Admin users:', admins.map((admin) => admin.email).join(', '));
   console.log('👤 Demo users:', demoUser1.email, 'and', demoUser2.email, 'available');
   console.log('🌱 Seed complete');
 }

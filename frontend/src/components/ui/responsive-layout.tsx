@@ -31,7 +31,7 @@ export function ResponsiveContainer({
   };
 
   return (
-    <div className={cn(spacingClasses[spacing], className)}>
+    <div className={cn('min-w-0', spacingClasses[spacing], className)}>
       {children}
     </div>
   );
@@ -78,7 +78,7 @@ export function ResponsiveGrid({
 
   return (
     <div className={cn(
-      'grid',
+      'grid min-w-0',
       columnClasses,
       gapClasses[gap],
       className
@@ -113,13 +113,13 @@ export function ResponsiveStack({
   };
 
   return (
-    <div className={cn('flex flex-col', spacingClasses[spacing], className)}>
+    <div className={cn('flex min-w-0 flex-col', spacingClasses[spacing], className)}>
       {children}
     </div>
   );
 }
 
-interface CollapsibleSectionProps {
+interface ResponsiveCollapsibleSectionProps {
   children: React.ReactNode;
   title: string;
   icon?: React.ReactNode;
@@ -130,13 +130,13 @@ interface CollapsibleSectionProps {
 /**
  * Collapsible section for progressive disclosure on mobile
  */
-export function CollapsibleSection({
+export function ResponsiveCollapsibleSection({
   children,
   title,
   icon,
   defaultOpen = true,
   summary
-}: CollapsibleSectionProps) {
+}: ResponsiveCollapsibleSectionProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const { isMobile } = useDevice();
 
@@ -148,7 +148,7 @@ export function CollapsibleSection({
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="min-w-0 overflow-hidden rounded-lg border">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors"
@@ -188,6 +188,9 @@ export function CollapsibleSection({
   );
 }
 
+// Backward-compatible alias for existing imports.
+export const CollapsibleSection = ResponsiveCollapsibleSection;
+
 interface HorizontalScrollContainerProps {
   children: React.ReactNode;
   className?: string;
@@ -215,7 +218,7 @@ export function HorizontalScrollContainer({
       className
     )}>
       <div className={cn(
-        'flex gap-4',
+        'flex min-w-0 gap-4',
         snap && 'scroll-px-4'
       )}>
         {React.Children.map(children, (child, index) => (

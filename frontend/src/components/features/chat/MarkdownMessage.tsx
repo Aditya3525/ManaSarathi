@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 
 interface MarkdownMessageProps {
@@ -65,9 +64,8 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
   const contentToDisplay = enableTypewriter ? displayedContent : content;
 
   return (
-    <div className={`markdown-content text-sm leading-relaxed ${className}`}>
+    <div className={`markdown-content min-w-0 break-words text-sm leading-relaxed ${className}`}>
       <ReactMarkdown
-        rehypePlugins={[rehypeRaw]}
         remarkPlugins={[remarkGfm]}
         components={{
           // Code blocks with syntax highlighting
@@ -78,14 +76,14 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
                 style={vscDarkPlus}
                 language={match[1]}
                 PreTag="div"
-                className="rounded-md my-2 text-xs"
+                className="my-2 max-w-full overflow-x-auto rounded-md text-xs"
                 {...props}
               >
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
               <code 
-                className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono"
+                className="break-words rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono dark:bg-gray-700"
                 {...props}
               >
                 {children}

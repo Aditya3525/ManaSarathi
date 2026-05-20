@@ -2,7 +2,7 @@ import { BarChart3, CalendarCheck, Shield, Smile, TrendingUp } from 'lucide-reac
 import React, { useEffect, useRef, useState } from 'react';
 
 import { useDevice } from '../../../hooks/use-device';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+import { Card, CardContent } from '../../ui/card';
 
 interface Metric {
   icon: React.ComponentType<{ className?: string }>;

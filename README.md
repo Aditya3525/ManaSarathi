@@ -1,389 +1,415 @@
-# MaanSarathi - AI-Powered Mental Wellbeing Platform
+# MaanSarathi
 
-An intelligent mental wellbeing companion combining guided onboarding, personalized care plans, AI-powered chat support with crisis awareness, and a comprehensive content library. Built as a TypeScript monorepo with React/Vite frontend and Express/Prisma backend, featuring multi-LLM integration (Gemini, OpenAI, Anthropic, Hugging Face, Ollama).
+An AI-powered comprehensive mental wellbeing platform providing personalized support, mood tracking, clinical assessments, therapeutic games, and professional oversight — available on **Web** and **Mobile**.
 
-## 🌟 Key Features
+This repository is a monorepo containing three packages: the **React web frontend**, the **Express/Prisma backend API**, and the **React Native / Expo mobile app**.
 
-- **Intelligent Authentication** – Email/password, Google OAuth, and admin session management
-- **Smart Onboarding** – Guided profile setup with therapeutic preferences and safety contacts
-- **Personalized Dashboard** – Time-aware greetings, mood tracking, assessment summaries, and quick actions
-- **Comprehensive Assessments** – Anxiety, depression, stress, trauma, emotional intelligence, overthinking, personality analysis with historical insights
-- **AI Chat Companion** – Context-aware conversations with crisis detection and automated safety handoffs
-- **Adaptive Wellness Plans** – Personalized modules based on user preferences and assessment results
-- **Content Library** – Admin-managed repository of exercises, practices, and educational materials
-- **Analytics Dashboard** – Track mood patterns, progress metrics, and wellness journey over time
+---
 
-## 🏗️ Technical Architecture
+## 🚀 Project Overview
 
-### Tech Stack
+MaanSarathi bridges the gap between self-care and professional mental health support. By leveraging AI, the platform provides real-time empathetic conversations, emotional progress tracking, and personalized mindfulness and CBT (Cognitive Behavioral Therapy) resources — all accessible from a browser or a native mobile device.
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, Radix UI | Modern responsive UI with accessibility-first component library |
-| **Backend** | Express, TypeScript, Prisma ORM | RESTful API with database abstraction and type safety |
-| **Database** | Prisma + SQLite (dev) / PostgreSQL (production) | Strongly-typed database layer with migrations |
-| **AI Integration** | Gemini, OpenAI, Anthropic, Hugging Face, Ollama | Multi-provider LLM support with automatic failover |
-| **Auth** | JWT + Google OAuth 2.0 + Passport.js | Secure authentication with multiple strategies |
+### Core Architecture & Modules
 
-### Project Structure
+#### 1. AI & Conversational Engine
+- **Multi-Provider LLM Chatbot**: Context-aware agent with automatic fallback across Gemini, OpenAI, Anthropic, Hugging Face, NVIDIA, and Ollama.
+- **Conversation Memory**: Tracks long-term emotional patterns, important moments, action items, and therapeutic goals across sessions.
+- **Session Continuity**: Resumes conversations intelligently across devices and sessions.
+- **Crisis Detection**: Real-time sentiment and keyword analysis with escalation paths and emergency grounding exercises.
 
-```
+#### 2. Clinical Assessments
+- **Configurable Assessment Engine**: Standardized mental health assessments (PHQ-9, GAD-7, etc.) with a drag-and-drop admin builder.
+- **AI-Powered Insights**: Wellness scores, trend analysis, and long-term shift detection in well-being.
+
+#### 3. Daily Tracking & Reflection
+- **Mood & Check-ins**: Granular mood logging with triggers, intensity levels, and daily check-in summaries.
+- **Sleep Tracking**: Sleep hygiene logs and quality analysis.
+- **Journaling**: Reflective journal entries with AI pattern summaries.
+- **Habits, Intentions & Gratitude**: Daily intention setting, gratitude logs, and habit streaks.
+
+#### 4. Content, Practices & Therapeutic Games
+- **Multimedia Resources**: Articles, video, audio meditations, breathing exercises, and yoga sequences.
+- **Personalized Recommendations**: Engine suggests practices based on mood, engagement history, and assessment results.
+- **Therapeutic Mini-Games** *(Mobile)*: Interactive mental wellness games including Breathing Guide, Anxiety Pop, Memory Match, Mindful Patterns, Mood Colors, and Gratitude Puzzle.
+
+#### 5. Admin & Therapist Portals
+- **Therapist Portal**: Clinicians can view client profiles, manage session notes, handle bookings via a calendar, and monitor crisis alerts.
+- **Admin Dashboard**: Full platform management including user management, content curation, assessment builder, FAQ/support tickets, crisis resources, media manager, and system diagnostics.
+
+#### 6. Help & Safety System
+- **Support Tickets**: User-initiated support requests with admin management.
+- **FAQ System**: Categorized frequently asked questions.
+- **Crisis Resources & Safety Plans**: Curated emergency resources with admin-managed content.
+
+#### 7. Privacy & Data Control
+- **Privacy Settings**: Granular user data control.
+- **Data Export**: Users can export their personal data.
+- **Account Deletion**: Self-service account and data removal.
+
+---
+
+## 🛠 Tech Stack
+
+### Web Frontend (`frontend/`)
+| Concern | Technology |
+|---|---|
+| Framework | React 18 + Vite |
+| Language | TypeScript |
+| Styling | Tailwind CSS + Radix UI |
+| State Management | Zustand + React Context |
+| Routing | Internal path-based routing (`App.tsx`) |
+| Internationalization | i18next |
+| Testing | Vitest |
+
+### Mobile App (`mobile/`)
+| Concern | Technology |
+|---|---|
+| Framework | React Native (Expo SDK 54) |
+| Language | TypeScript |
+| Routing | Expo Router (file-based) |
+| Styling | NativeWind (Tailwind for RN) |
+| State Management | Zustand |
+| Data Fetching | TanStack React Query |
+| Internationalization | i18next (EN, HI, DE, ES, FR, ZH) |
+| Notifications | Expo Notifications |
+| Offline Support | AsyncStorage + offline cache service |
+| Auth | JWT + Expo Secure Store + OAuth (Google) |
+| Media | expo-av (audio/video) |
+| Biometrics | expo-local-authentication |
+| Deep Linking | expo-linking |
+| Build & Distribution | Expo Application Services (EAS) |
+| Testing | Jest + jest-expo |
+
+### Backend (`backend/`)
+| Concern | Technology |
+|---|---|
+| Framework | Express.js |
+| Language | TypeScript |
+| Database ORM | Prisma |
+| Database | PostgreSQL (Production) / SQLite (Local Dev) |
+| Authentication | JWT + Google OAuth + Passport.js |
+| Logging | Pino + pino-http |
+| Testing | Vitest |
+| Email | Email service (nodemailer-compatible) |
+| File Uploads | Multer → `/uploads` static serving |
+
+### AI Providers (Backend Services)
+- `GeminiProvider`, `OpenAIProvider`, `AnthropicProvider`, `HuggingFaceProvider`, `NvidiaProvider`, `OllamaProvider`
+- Unified `llmProvider` with automatic priority-based fallback.
+
+---
+
+## 📁 Project Structure
+
+```text
 MaanSarathi/
-├── frontend/                          # React + Vite frontend
+├── frontend/                        # React + Vite web application
+│   └── src/
+│       ├── admin/                   # Full admin portal (27 components)
+│       ├── therapist/               # Therapist portal (dashboard, calendar, notes)
+│       ├── components/
+│       │   ├── features/            # Feature-specific components
+│       │   ├── common/              # Shared UI components
+│       │   ├── layout/              # Page layout components
+│       │   └── ui/                  # Primitive UI components
+│       ├── contexts/                # React Context providers
+│       ├── hooks/                   # Custom React hooks
+│       ├── services/                # API integration layer
+│       ├── stores/                  # Zustand global state
+│       ├── styles/                  # Global CSS
+│       ├── types/                   # TypeScript interfaces
+│       ├── utils/                   # Utility functions
+│       ├── i18n/                    # Internationalization config
+│       └── App.tsx                  # Root app + routing
+├── backend/                         # Express API
 │   ├── src/
-│   │   ├── components/features/      # Feature modules (auth, chat, assessment, etc.)
-│   │   ├── services/                 # API client services
-│   │   ├── stores/                   # Zustand state management
-│   │   ├── hooks/                    # React Query hooks & custom hooks
-│   │   └── ui/                       # Reusable UI components
-│   └── dist/                         # Production build
-├── backend/                           # Express backend
-│   ├── src/
-│   │   ├── controllers/              # Request handlers
-│   │   ├── routes/                   # API endpoint definitions
-│   │   ├── services/                 # Business logic & AI providers
-│   │   ├── middleware/               # Auth, validation, error handling
-│   │   ├── config/                   # Database & OAuth configuration
-│   │   └── types/                    # TypeScript type definitions
-│   ├── prisma/
-│   │   ├── schema.prisma            # Database schema with 40+ indexes
-│   │   └── migrations/              # Database migrations
-│   └── tests/                        # Backend test suites
-└── package.json                      # Root workspace configuration
+│   │   ├── controllers/             # Route handlers (19 controllers)
+│   │   ├── routes/                  # Express routers (28+ route files)
+│   │   ├── services/                # Business logic & AI orchestration (21 services)
+│   │   │   └── providers/           # Individual LLM provider adapters
+│   │   ├── middleware/              # Auth, error handling, health monitoring
+│   │   ├── config/                  # Database, auth, passport config
+│   │   ├── utils/                   # Logger and helpers
+│   │   └── types/                   # Shared TS interfaces
+│   └── prisma/
+│       ├── schema.prisma            # Production DB schema
+│       ├── schema.local.prisma      # Local SQLite schema
+│       └── dev.db                   # Local SQLite database
+├── mobile/                          # React Native / Expo mobile app
+│   ├── app/
+│   │   ├── (auth)/                  # Auth screens (login, register, forgot-password, OAuth)
+│   │   ├── (onboarding)/            # Onboarding flow
+│   │   ├── (tabs)/                  # Tab navigation (Home, Chat, Mood, Content, Profile)
+│   │   ├── assessments/             # Assessment screens
+│   │   ├── content/                 # Content detail screens
+│   │   ├── games/                   # Therapeutic mini-games (6 games)
+│   │   ├── help-safety/             # Help & safety screens
+│   │   ├── profile/                 # Profile management screens
+│   │   ├── progress/                # Progress tracking screens
+│   │   ├── notifications.tsx        # Notification center
+│   │   ├── recommendations.tsx      # Personalized recommendations
+│   │   └── biometric-lock.tsx       # Biometric authentication gate
+│   ├── services/                    # API client, auth, offline cache, notifications, media
+│   ├── stores/                      # Zustand stores (app, auth, notifications)
+│   ├── hooks/                       # Custom hooks
+│   ├── components/ui/               # Reusable UI components
+│   ├── i18n/locales/                # Translation files (EN, HI, DE, ES, FR, ZH)
+│   └── config/                      # App configuration
+├── shared/                          # Shared config across packages
+├── graphify-out/                    # Graphify codebase AST graph output
+├── render.yaml                      # Render.com deployment (frontend + backend + DB)
+├── vercel.json                      # Vercel deployment config (frontend)
+└── package.json                     # Root workspace configuration
 ```
 
-## 🚀 Quick Start
+---
+
+## ⚡ Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm 8+
-- Optional: PostgreSQL/MySQL for production (SQLite for local development)
-- AI provider keys (Gemini, OpenAI, etc.) for live chat features
+- Node.js 18+
+- npm 8+
+- Python 3.10+ *(optional — for Graphify codebase tooling)*
+- AI provider API keys *(optional — for full chatbot functionality)*
 
-### Installation & Setup
+### Web (Frontend + Backend)
 
 ```powershell
-# 1. Install all dependencies and set up database
-npm run setup
+# 1) Install all workspace dependencies and set up local env files
+npm run setup:local
 
-# 2. Create environment variables
-# Backend: copy .env.example to .env and update values
-# Frontend: create .env.local with VITE_API_URL and VITE_GOOGLE_CLIENT_ID
+# 2) Validate environment configuration
+npm run doctor:config
 
-# 3. Seed demo data (optional)
-cd backend && npm run seed
-
-# 4. Start development server
-cd .. && npm run dev
+# 3) Start backend + frontend concurrently
+npm run dev
 ```
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000
-- **Database Admin**: `npm run db:studio`
+### Mobile App
 
-### Environment Variables
+```bash
+cd mobile
+npm install
+npx expo start        # Scan QR with Expo Go
+# or
+npm run android       # Launch Android emulator
+npm run ios           # Launch iOS simulator (macOS only)
+```
 
-**Backend** (`.env`):
+### Local URLs
+| Service | URL |
+|---|---|
+| Web Frontend | `http://localhost:3000` |
+| Backend API | `http://localhost:5000/api` |
+| Health Check | `http://localhost:5000/api/health` |
+| Readiness Check | `http://localhost:5000/api/health/ready` |
+| Prisma Studio | `npm run db:studio` |
+| Expo Dev Server | `http://localhost:8081` |
+
+---
+
+## ⚙️ Environment Variables
+
+---
+
+## 📘 User Manual
+
+A detailed user manual for end-users, therapists, and platform administrators is available at [USER_MANUAL.md](USER_MANUAL.md). It covers account setup, daily workflows, therapist tools, admin operations, safety procedures, and troubleshooting.
+
+Please consult the manual for role-specific step-by-step guides and screenshots.
+
+
+### Backend (`backend/.env`)
+
 ```env
 NODE_ENV=development
 PORT=5000
+BACKEND_URL=http://localhost:5000
 FRONTEND_URL=http://localhost:3000
-DATABASE_URL=file:./dev.db
-JWT_SECRET=your_jwt_secret_here
-SESSION_SECRET=your_session_secret_here
+DATABASE_URL=file:./prisma/dev.db
+JWT_SECRET=replace_with_secure_random_value
+SESSION_SECRET=replace_with_secure_random_value
+JWT_EXPIRE=7d
 
-# AI Providers (at least one required)
+# OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# AI Configurations
+AI_PROVIDER_PRIORITY=gemini,huggingface,openai,anthropic,ollama
+AI_ENABLE_FALLBACK=true
 GEMINI_API_KEY_1=your_key
 OPENAI_API_KEY_1=your_key
 ANTHROPIC_API_KEY_1=your_key
 HUGGINGFACE_API_KEY=your_key
-AI_PROVIDER_PRIORITY=gemini,huggingface,openai,anthropic,ollama
-AI_ENABLE_FALLBACK=true
+OLLAMA_ENABLED=false
 
-# OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+# Rate Limiting (production)
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=500
 
-# Admin access
-ADMIN_EMAILS=admin@example.com
+# Admin
+ADMIN_INITIAL_PASSWORD=your_admin_password
 ```
 
-**Frontend** (`.env.local`):
+### Frontend (`frontend/.env.local`)
+
 ```env
 VITE_API_URL=http://localhost:5000/api
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
 ```
-JWT_EXPIRE=7d
 
-# Rate limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
+### Mobile (`mobile/.env`)
 
-# OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-## 🎯 Core Features Explained
-
-### Authentication & Onboarding
-- **Email/Password**: Traditional login with bcrypt hashing and JWT tokens
-- **Google OAuth 2.0**: One-click authentication with automatic account linking
-- **Profile Setup**: Guided onboarding capturing therapeutic approach, demographics, emergency contacts
-- **Admin Console**: Secure admin-only interface for content management
-
-### Dashboard & Engagement
-- **Time-aware Greetings**: Personalized messages based on time of day and user mood
-- **Wellness Score**: 0-100 scale tracking overall wellbeing with trend indicators
-- **Quick Actions**: Fast access to assessments, chat, practices, and plans
-- **Mood Check-in**: One-tap daily mood logging with optional notes
-
-### Assessments (7 Types)
-- GAD-7 (Anxiety), PHQ-9 (Depression), PSS-10 (Stress), PCL-5 (Trauma)
-- PTQ (Overthinking), TEIQue (Emotional Intelligence), Mini-IPIP (Personality)
-- Combined assessment sessions for comprehensive wellness screening
-- Historical tracking with trend analysis and AI insights
-
-### Personalized Plans
-- Adaptive content based on user therapeutic approach (western/eastern/hybrid)
-- Progress tracking with completion metrics
-- Interactive exercise modules with guided instructions
-- Content filtering by relevance and user preferences
-
-### AI Chat Companion
-- **Multi-provider**: Seamless failover between Gemini, OpenAI, Anthropic, Hugging Face, Ollama
-  - Ollama Cloud: You can use Ollama Cloud models (e.g., `gpt-oss:20b-cloud`). To enable, set the following in `backend/.env`:
-
-    - `OLLAMA_BASE_URL` — e.g. `https://api.ollama.ai`
-    - `OLLAMA_MODEL` — `gpt-oss:20b-cloud`
-    - `OLLAMA_API_KEY` — your Ollama Cloud API key
-    - `OLLAMA_ENABLED=true`
-
-  When `OLLAMA_ENABLED` is true, the app will initialize the Ollama provider. Per-call model overrides are supported: services (like assessment insights) can request `model: 'gpt-oss:20b-cloud'` and the LLM routing will prefer Ollama for that call.
-- **Crisis Detection**: Keyword-based safety detection with immediate resource handoff
-- **Context Awareness**: Incorporates user demographics, assessment scores, mood history
-- **Voice**: Speech-to-text input and text-to-speech output
-- **Smart Features**: Auto-generated conversation starters, contextual replies, summaries
-- **Conversation Memory**: Tracks patterns, topics, and emotional trends
-- **Check-ins**: Proactive re-engagement based on user activity and risk factors
-
-### Content & Practices Library
-- **Admin Management**: Upload and publish exercises, practices, educational content
-- **Media Support**: Audio, video, and image content with automated metadata
-- **Structured Validation**: Content type rules (e.g., sleep practices audio-only)
-- **Public API**: Browse and discover practices in the mobile app
-
-### Analytics & Tracking
-- **Mood Journaling**: Daily mood logging with notes and sentiment analysis
-- **Progress Metrics**: Track arbitrary metrics (sleep, stress, activity, etc.)
-- **Visual Insights**: Calendar heatmaps and trend charts
-- **Historical Analysis**: 30/60/90 day wellness reports
-
-## 🧪 Development Commands
-
-```powershell
-# Development
-npm run dev                    # Start full stack (backend + frontend)
-npm run dev:backend           # Backend only (Express)
-npm run dev:frontend          # Frontend only (Vite)
-
-# Building
-npm run build                 # Build both frontend and backend
-npm run build:frontend        # Build frontend
-npm run build:backend         # Build backend
-
-# Quality assurance
-npm run lint                  # Run ESLint on both workspaces
-npm run typecheck             # TypeScript type checking
-npm run format                # Apply Prettier formatting
-npm run test                  # Run all tests
-
-# Database
-npm run db:studio             # Launch Prisma Studio GUI
-npm run db:migrate            # Run pending migrations
-npm run db:generate           # Generate Prisma client
-
-# Maintenance
-npm run clean                 # Remove all node_modules and builds
-npm run reset                 # Clean + reinstall everything
-npm run setup                 # Initial setup (install + migrate)
+```env
+EXPO_PUBLIC_API_URL=http://localhost:5000/api
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
 ```
 
-### Backend Testing
-```powershell
+---
+
+## 📜 API Overview
+
+Base URL: `/api`
+
+### Authentication
+| Endpoint | Description |
+|---|---|
+| `POST /auth/register` | User registration |
+| `POST /auth/login` | Email/password login |
+| `GET /auth/google` | Google OAuth initiation |
+| `GET /auth/me` | Current user profile |
+
+### Core Features
+| Endpoint Group | Description |
+|---|---|
+| `/chat`, `/chatbot`, `/conversations` | AI chat, chatbot, conversation history & insights |
+| `/assessments`, `/assessments/sessions` | Clinical assessments & session history |
+| `/mood`, `/checkins` | Mood logging & daily check-in summaries |
+| `/journal`, `/sleep`, `/habits` | Journaling, sleep logs, habit tracking |
+| `/intentions`, `/gratitude` | Daily intentions & gratitude logs |
+| `/plans` | Personalized wellness plans |
+| `/progress` | Progress analytics |
+| `/practices`, `/content`, `/public-content` | Content library & mindfulness practices |
+| `/recommendations` | Personalized AI recommendations |
+
+### Engagement & Personalization
+| Endpoint Group | Description |
+|---|---|
+| `/content/:id/engage` | Track content engagement |
+| `/content/bookmarks`, `/content/:id/bookmark` | Bookmark management |
+| `/dashboard` | Dashboard data aggregation |
+
+### Help & Safety
+| Endpoint Group | Description |
+|---|---|
+| `/support` | Support ticket submission & management |
+| `/faq` | FAQ retrieval |
+| `/crisis` | Crisis resources & safety plans |
+| `/therapists` | Therapist directory & bookings |
+| `/therapist-portal` | Therapist self-service portal |
+
+### Admin
+| Endpoint Group | Description |
+|---|---|
+| `/admin` | Full admin CRUD (users, content, assessments, analytics) |
+| `/admin/help-safety` | Crisis resource & FAQ admin management |
+| `/admin-data` | Direct database data operations |
+| `/privacy` | User privacy settings, data export, account deletion |
+| `/users` | User profile management |
+
+---
+
+## 🚀 Deployment
+
+### Render.com (Backend + PostgreSQL)
+The `render.yaml` at the repository root configures:
+- **`manasarthi-backend`** — Node.js web service (generates Prisma client, syncs schema, builds, and seeds baseline content on deploy)
+- **`manasarthi-db`** — Managed PostgreSQL database
+
+```bash
+# Render backend deployment steps
 cd backend
-npm run test                  # Run all tests
-npm run test:watch           # Watch mode
+npm run db:generate              # Generate Prisma client
+npm run db:push:auto             # Sync production schema
+npm run build                    # Compile the backend
+npm run seed:production          # Seed assessments, practices, content, FAQ, crisis resources, therapists
+npm start                        # Start production server
+
+# Vercel frontend deployment is handled separately from the repo root
+npm run build --workspace frontend
 ```
 
-### Frontend Testing
-```powershell
-cd frontend
-npm run test                  # Run all tests
-npm run test:watch           # Watch mode
+### Vercel (Frontend)
+`vercel.json` is configured at the repository root for SPA rewrites and a Vite build from `frontend/`.
+
+### GitHub Actions
+The repository keeps CI in `.github/workflows/ci.yml` for type/build/test checks. Production deployment is owned by Render and Vercel, so older Azure/Netlify/Railway/Heroku workflows have been removed to prevent accidental or confusing deploy paths.
+
+### Mobile (EAS Build)
+```bash
+cd mobile
+eas build --profile production --platform all   # Build iOS + Android
+eas submit --platform ios                        # Submit to App Store
+eas submit --platform android                    # Submit to Play Store
 ```
-
-## 🚢 Deployment
-
-### Frontend Deployment
-- Build: `npm run build:frontend` → outputs to `frontend/dist`
-- Platforms: Vercel, Netlify, AWS Amplify
-- Configuration: `vercel.json` handles SPA routing
-- Environment: Set `VITE_API_URL` and `VITE_GOOGLE_CLIENT_ID` in platform settings
-
-### Backend Deployment
-- Build: `npm run build:backend`
-- Platforms: Render, Railway, Heroku, AWS, Google Cloud, Azure
-- Configurations provided:
-  - `render.yaml` – Render deployment
-  - `railway.json` – Railway deployment
-  - `Procfile` – Heroku/buildpack compatibility
-  - `web.config` – IIS/Azure compatibility
-- Database: Migrate from SQLite to PostgreSQL/MySQL
-  - Update `DATABASE_URL` in environment
-  - Migrations run automatically on deployment
 
 ### Production Checklist
-- [ ] Set all required environment variables
-- [ ] Use strong, unique secrets for JWT and SESSION
-- [ ] Configure production database URL
-- [ ] Set up AI provider API keys and fallbacks
-- [ ] Configure CORS and HTTPS
-- [ ] Enable database connection pooling
-- [ ] Set up logging and monitoring
-- [ ] Test provider health endpoints
-- [ ] Configure backup strategy
+- Use PostgreSQL (`DATABASE_URL=postgresql://...`)
+- Set strong `JWT_SECRET` and `SESSION_SECRET`
+- Set `FRONTEND_URL` to your Vercel production URL
+- Set `VITE_API_URL` in Vercel to your Render backend URL
+- Configure strict CORS origins; use `ADDITIONAL_CORS_ORIGINS` for explicit staging/preview URLs
+- Replace demo therapist seed profiles with verified provider data before a public launch
+- Force HTTPS
+- Set `NODE_ENV=production`
 
-## 📊 Recent Improvements
+---
 
-### Enterprise-Grade Architecture (October 2025)
+## 🧠 Developer Tooling: Graphify
 
-**Input Validation** ✅
-- Zod schemas for all major API endpoints
-- Field-level error messages with validation rules
-- Type-safe runtime validation
+This repository uses **Graphify** for AST-based codebase graph generation, enabling AI agents to navigate and understand the architecture. The graph output lives in `graphify-out/`.
 
-**Error Handling** ✅
-- 11 custom error classes (ValidationError, NotFoundError, ConflictError, etc.)
-- Centralized error middleware with consistent JSON responses
-- Developer-friendly stack traces in development
-
-**Database Optimization** ✅
-- Singleton Prisma client with connection pooling
-- 40+ strategic indexes for 50-70% query performance gains
-- Query logging in development for profiling
-
-**State Management** ✅
-- Zustand stores for auth, notifications, and app state
-- LocalStorage persistence for user sessions
-- Optimized re-renders with selector patterns
-
-**Data Fetching** ✅
-- React Query hooks for assessments, mood, chat, and conversations
-- Automatic caching with background refetching
-- Optimistic updates for better UX
-- Custom hooks: `useAssessments`, `useMood`, `useChat`, `useConversations`
-
-### Performance Metrics
-- Query performance: 50-70% improvement with database indexes
-- Bundle size: Optimized frontend build with Vite
-- API response times: Sub-100ms for common queries
-- LLM failover: <500ms provider switching
-
-## 🗺️ Roadmap
-
-### ✅ Completed Features
-- Multi-provider AI integration with intelligent failover
-- Voice input/output and accessibility features
-- Comprehensive assessment suite (7 types)
-- Personalized wellness plans
-- AI chat with crisis detection
-- Conversation management and memory
-- Admin content management console
-- Analytics and mood tracking
-- 40+ database performance indexes
-- React Query data fetching layer
-- Zustand state management
-
-### 🚀 Planned Enhancements
-- Extended conversation personalization and learning
-- Advanced goal tracking and monitoring UI
-- Comprehensive test coverage (unit, integration, e2e)
-- Mobile app (React Native)
-- Push notifications for proactive check-ins
-- Premium subscription features (Stripe)
-- Community and group therapy features
-- Biometric data integration with wearables
-- Enhanced analytics and reporting
-- Multi-language support improvements
-
-## 🙌 Contributing
-
-1. **Setup**: `npm run setup` to install and prepare database
-2. **Development**: Create feature branch in relevant workspace (frontend/backend)
-3. **Quality**: Keep lint, typecheck, and tests passing before PR
-4. **Documentation**: Update README when adding new features or env variables
-
-### Testing Before PR
-```powershell
-npm run lint
-npm run typecheck
-npm run test
-npm run format
+```bash
+# Regenerate after major structural changes
+python -m graphify update .
 ```
 
-## 📚 API Documentation
+---
 
-### Key Endpoints
+## 🧪 Testing
 
-**Authentication**
-- `POST /api/auth/register` – Create new account
-- `POST /api/auth/login` – Login with email/password
-- `POST /api/auth/logout` – End session
-- `GET /api/auth/me` – Get current user
-- `GET /api/auth/google` – Google OAuth initiation
+```powershell
+# Run all tests (frontend + backend)
+npm run test
 
-**Chat**
-- `POST /api/chat/messages` – Send message
-- `GET /api/chat/conversations` – List conversations
-- `DELETE /api/chat/conversations/:id` – Delete conversation
-- `GET /api/chat/ai/health` – Check AI provider health
+# Run individually
+npm run test:backend
+npm run test:frontend
 
-**Assessments**
-- `POST /api/assessments/:type/start` – Begin assessment
-- `POST /api/assessments/:type/submit` – Submit responses
-- `GET /api/assessments/results` – Get user results
-- `GET /api/assessments/insights` – Get AI insights
+# Mobile
+cd mobile && npm test
+```
 
-**Content**
-- `GET /api/content/practices` – List published practices
-- `GET /api/content/:id` – Get practice details
-- `POST /api/admin/content/upload` – Upload media (admin)
-- `PUT /api/admin/content/:id` – Edit content (admin)
+---
 
-**Profile & Progress**
-- `GET /api/profile` – Get user profile
-- `PUT /api/profile` – Update profile
-- `POST /api/mood` – Log mood entry
-- `GET /api/progress` – Get progress metrics
+## 🔧 Useful Scripts
 
-## 🔒 Security Considerations
+| Script | Description |
+|---|---|
+| `npm run dev` | Start backend + frontend concurrently |
+| `npm run setup:local` | Install deps, create env files, seed local DB |
+| `npm run doctor:config` | Validate environment configuration |
+| `npm run db:migrate` | Run Prisma migrations |
+| `npm run db:studio` | Open Prisma Studio |
+| `npm run db:generate` | Regenerate Prisma client |
+| `npm run lint` | Lint frontend + backend |
+| `npm run typecheck` | TypeScript type-check both packages |
+| `npm run build` | Production build (frontend + backend) |
+| `npm run clean` | Remove all build artifacts and node_modules |
 
-- **JWT tokens**: Signed with secure secret, stored in httpOnly cookies
-- **Password hashing**: bcrypt with salt rounds 10+
-- **Input validation**: Zod schemas on all endpoints
-- **Admin routes**: Protected by session middleware and role checks
-- **CORS**: Configured to whitelist frontend domain
-- **Rate limiting**: Recommended for production
-- **Database**: Prepared statements via Prisma ORM
-- **Secrets management**: Use environment variables, never commit keys
+---
 
-## 💬 Support & Issues
-
-- **Documentation**: Check README files in frontend/ and backend/
-- **Debug**: Use `npm run db:studio` for database inspection
-- **Logs**: Check terminal output for detailed error messages
-- **Tests**: Run suite to identify issues: `npm run test`
-
-## 📝 License
-
-Proprietary - All rights reserved. MaanSarathi © 2025
-   
+## 📄 License
+MIT

@@ -10,11 +10,38 @@ import { z } from 'zod';
 export const logMoodSchema = z.object({
   body: z.object({
     mood: z
-      .string({
-        required_error: 'Mood is required',
-      })
+      .string()
       .min(1, 'Mood cannot be empty')
-      .max(50, 'Mood must not exceed 50 characters'),
+      .max(50, 'Mood must not exceed 50 characters')
+      .trim()
+      .optional(),
+
+    emotion: z
+      .string()
+      .min(1, 'Emotion cannot be empty')
+      .max(50, 'Emotion must not exceed 50 characters')
+      .trim()
+      .optional(),
+
+    emotionGroup: z
+      .string()
+      .min(1, 'Emotion group cannot be empty')
+      .max(50, 'Emotion group must not exceed 50 characters')
+      .trim()
+      .optional(),
+
+    intensity: z
+      .number()
+      .int('Intensity must be an integer')
+      .min(1, 'Intensity must be at least 1')
+      .max(10, 'Intensity must not exceed 10')
+      .optional(),
+
+    trigger: z
+      .string()
+      .max(250, 'Trigger must not exceed 250 characters')
+      .trim()
+      .optional(),
 
     notes: z
       .string()
@@ -37,6 +64,9 @@ export const logMoodSchema = z.object({
       .string()
       .datetime('Invalid date format')
       .optional(),
+  }).refine((data) => Boolean(data.mood || data.emotion), {
+    message: 'Mood or emotion is required',
+    path: ['mood'],
   }),
 });
 

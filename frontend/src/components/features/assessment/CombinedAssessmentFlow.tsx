@@ -51,6 +51,30 @@ interface CombinedQuestion {
 	}>;
 }
 
+interface AdaptiveFollowUpRule {
+	screenerType: string;
+	followUpType: string;
+	threshold: number;
+	notice: string;
+}
+
+const ADAPTIVE_FOLLOW_UP_RULES: AdaptiveFollowUpRule[] = [
+	{
+		screenerType: 'anxiety_gad2',
+		followUpType: 'anxiety',
+		threshold: 3,
+		notice: 'Adding a deeper anxiety check for a more accurate support plan.'
+	},
+	{
+		screenerType: 'depression_phq2',
+		followUpType: 'depression',
+		threshold: 3,
+		notice: 'Adding a deeper mood check to personalize your recommendations.'
+	}
+];
+
+const normalizeTypeKey = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 const BASIC_TEMPLATE_SCORING: Record<string, {
 	minScore: number;
 	maxScore: number;
@@ -136,6 +160,9 @@ export default function CombinedAssessmentFlow({
 	const [responses, setResponses] = useState<Record<string, Record<string, number>>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [showGeneratingInsights, setShowGeneratingInsights] = useState(false);
+	const [loadingFollowUpType, setLoadingFollowUpType] = useState<string | null>(null);
+	const [adaptiveNotice, setAdaptiveNotice] = useState<string | null>(null);
+	const [triggeredFollowUps, setTriggeredFollowUps] = useState<string[]>([]);
 	const [startTime] = useState(Date.now());
 
 	// Fetch assessment templates
@@ -144,6 +171,9 @@ export default function CombinedAssessmentFlow({
 			try {
 				setLoading(true);
 				setError(null);
+				setAdaptiveNotice(null);
+				setLoadingFollowUpType(null);
+				setTriggeredFollowUps([]);
 				
 				// Separate basic assessments from others
 				const basicTypes = selectedTypes.filter(type => isBasicAssessment(type));
@@ -258,6 +288,18 @@ export default function CombinedAssessmentFlow({
 		return minutes;
 	}, [currentQuestionIndex, totalQuestions]);
 
+	useEffect(() => {
+		if (!adaptiveNotice) {
+			return;
+		}
+
+		const timer = window.setTimeout(() => {
+			setAdaptiveNotice(null);
+		}, 5000);
+
+		return () => window.clearTimeout(timer);
+	}, [adaptiveNotice]);
+
 	const handleAnswer = useCallback((value: number) => {
 		if (!currentQuestion) return;
 
@@ -269,6 +311,98 @@ export default function CombinedAssessmentFlow({
 			}
 		}));
 	}, [currentQuestion]);
+
+	const appendFollowUpTemplate = useCallback(async (followUpType: string): Promise<boolean> => {
+		if (loadingFollowUpType) {
+			return false;
+		}
+
+		const normalizedFollowUpType = normalizeTypeKey(followUpType);
+		const alreadyLoaded = assessmentTemplates.some((template) => {
+			return (
+				normalizeTypeKey(template.assessmentType) === normalizedFollowUpType ||
+				normalizeTypeKey(template.definitionId) === normalizedFollowUpType
+			);
+		});
+
+		if (alreadyLoaded) {
+			setTriggeredFollowUps((prev) => (prev.includes(followUpType) ? prev : [...prev, followUpType]));
+			return false;
+		}
+
+		setLoadingFollowUpType(followUpType);
+		try {
+			const response = await assessmentsApi.getAssessmentTemplates([followUpType]);
+			if (!response.success || !response.data?.templates?.length) {
+				return false;
+			}
+
+			const appendedTemplates = response.data.templates.filter((template) => {
+				return !assessmentTemplates.some((existing) => {
+					return (
+						normalizeTypeKey(existing.assessmentType) === normalizeTypeKey(template.assessmentType) ||
+						normalizeTypeKey(existing.definitionId) === normalizeTypeKey(template.definitionId)
+					);
+				});
+			});
+
+			if (appendedTemplates.length === 0) {
+				setTriggeredFollowUps((prev) => (prev.includes(followUpType) ? prev : [...prev, followUpType]));
+				return false;
+			}
+
+			setAssessmentTemplates((prev) => [...prev, ...appendedTemplates]);
+			setTriggeredFollowUps((prev) => (prev.includes(followUpType) ? prev : [...prev, followUpType]));
+			return true;
+		} catch (fetchError) {
+			console.error('Failed to append adaptive follow-up template:', fetchError);
+			return false;
+		} finally {
+			setLoadingFollowUpType(null);
+		}
+	}, [assessmentTemplates, loadingFollowUpType]);
+
+	const maybeTriggerAdaptiveFollowUp = useCallback(async (): Promise<boolean> => {
+		if (!currentQuestion) {
+			return false;
+		}
+
+		if (currentQuestion.questionIndex !== currentQuestion.totalInAssessment) {
+			return false;
+		}
+
+		const rule = ADAPTIVE_FOLLOW_UP_RULES.find((candidate) => {
+			return normalizeTypeKey(candidate.screenerType) === normalizeTypeKey(currentQuestion.assessmentType);
+		});
+
+		if (!rule || triggeredFollowUps.includes(rule.followUpType)) {
+			return false;
+		}
+
+		const assessmentResponses = responses[currentQuestion.assessmentType] || {};
+		if (Object.keys(assessmentResponses).length < currentQuestion.totalInAssessment) {
+			return false;
+		}
+
+		const screenerScore = Object.values(assessmentResponses).reduce((sum, responseValue) => {
+			if (typeof responseValue === 'number' && Number.isFinite(responseValue)) {
+				return sum + responseValue;
+			}
+			const parsed = Number(responseValue);
+			return Number.isFinite(parsed) ? sum + parsed : sum;
+		}, 0);
+
+		if (screenerScore < rule.threshold) {
+			return false;
+		}
+
+		const appended = await appendFollowUpTemplate(rule.followUpType);
+		if (appended) {
+			setAdaptiveNotice(rule.notice);
+		}
+
+		return appended;
+	}, [appendFollowUpTemplate, currentQuestion, responses, triggeredFollowUps]);
 
 	const handleSubmit = useCallback(async () => {
 		if (assessmentTemplates.length === 0) return;
@@ -342,13 +476,16 @@ export default function CombinedAssessmentFlow({
 		}
 	}, [assessmentTemplates, responses, sessionId, onComplete]);
 
-	const handleNext = useCallback(() => {
-		if (currentQuestionIndex < totalQuestions - 1) {
-			setCurrentQuestionIndex(prev => prev + 1);
-		} else {
-			handleSubmit();
+	const handleNext = useCallback(async () => {
+		const appendedFollowUp = await maybeTriggerAdaptiveFollowUp();
+
+		if (currentQuestionIndex < totalQuestions - 1 || appendedFollowUp) {
+			setCurrentQuestionIndex((prev) => prev + 1);
+			return;
 		}
-	}, [currentQuestionIndex, totalQuestions, handleSubmit]);
+
+		handleSubmit();
+	}, [currentQuestionIndex, handleSubmit, maybeTriggerAdaptiveFollowUp, totalQuestions]);
 
 	const handlePrevious = useCallback(() => {
 		if (currentQuestionIndex > 0) {
@@ -481,6 +618,18 @@ export default function CombinedAssessmentFlow({
 					</span>
 				</div>
 
+				{loadingFollowUpType && (
+					<p className="text-sm text-primary bg-primary/10 border border-primary/20 rounded-md px-3 py-2">
+						Loading additional questions for deeper personalization...
+					</p>
+				)}
+
+				{adaptiveNotice && !loadingFollowUpType && (
+					<p className="text-sm text-primary bg-primary/10 border border-primary/20 rounded-md px-3 py-2">
+						{adaptiveNotice}
+					</p>
+				)}
+
 				{/* Question Card */}
 				<Card className="shadow-lg">
 					<CardHeader>
@@ -540,7 +689,7 @@ export default function CombinedAssessmentFlow({
 								Previous
 							</Button>
 							<Button
-								onClick={handleNext}
+								onClick={() => void handleNext()}
 								disabled={!canProceed || isSubmitting}
 								className="flex-1"
 							>

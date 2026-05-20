@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../admin';
+import { requireAdmin } from './requireAdmin';
 import {
   getAllTickets,
   respondToTicket,

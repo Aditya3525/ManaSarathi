@@ -51,7 +51,6 @@ const formatTime = (seconds: number): string => {
 };
 
 export function ContentEngagementTracker({
-  contentId,
   timeSpent,
   onSubmit,
   onClose,

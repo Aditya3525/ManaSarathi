@@ -3,7 +3,9 @@
 ## Prerequisites
 
 1. **Node.js 18+**
-2. **PostgreSQL** database server
+2. **Database**
+  - Local development: SQLite (default)
+  - Production/staging: PostgreSQL
 
 ## Database Setup
 
@@ -15,7 +17,7 @@
 ### Option 2: Docker PostgreSQL (Recommended)
 ```bash
 # Run PostgreSQL in Docker
-docker run --name MaanSarathi-postgres \
+docker run --name ManaSarathi-postgres \
   -e POSTGRES_DB=mental_wellbeing_db \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=password \
@@ -27,7 +29,7 @@ docker run --name MaanSarathi-postgres \
 Use services like:
 - **Supabase** (recommended for free tier)
 - **Railway**
-- **PlanetScale**
+- **Neon**
 - **AWS RDS**
 
 ## Installation & Setup
@@ -45,12 +47,12 @@ cp .env.example .env
 
 3. **Generate Prisma client:**
 ```bash
-npx prisma generate
+npm run db:generate:auto
 ```
 
-4. **Run database migrations:**
+4. **Sync schema for local development (SQLite):**
 ```bash
-npx prisma migrate dev --name init
+npm run db:push:auto
 ```
 
 5. **Start development server:**
@@ -65,7 +67,8 @@ Create a `.env` file with:
 ```env
 NODE_ENV=development
 PORT=5000
-DATABASE_URL="postgresql://postgres:password@localhost:5432/mental_wellbeing_db"
+DATABASE_URL="file:./prisma/dev.db"
+# DATABASE_URL="postgresql://postgres:password@localhost:5432/mental_wellbeing_db"
 JWT_SECRET="your_super_secret_jwt_key_change_in_production"
 JWT_EXPIRE=7d
 FRONTEND_URL=http://localhost:3000
@@ -81,13 +84,16 @@ LOG_LEVEL=info
 - `POST /api/auth/login` - Login user  
 - `GET /api/auth/me` - Get current user (requires token)
 
-### Future Endpoints (In Development)
+### Core Endpoints
 - `/api/users/*` - User management
 - `/api/assessments/*` - Wellbeing assessments
 - `/api/plans/*` - Personalized wellness plans
 - `/api/chat/*` - AI chatbot conversations
 - `/api/progress/*` - Progress tracking
 - `/api/content/*` - Content library
+- `/api/privacy/*` - Privacy settings, data export, account deletion
+- `/api/support/*` - Support ticket creation and tracking
+- `/api/therapist-portal/*` - Therapist login, profile, bookings, and stats
 
 ## Database Schema
 
@@ -112,12 +118,12 @@ The database includes tables for:
 
 ## Health Check
 
-Once running, check: `GET http://localhost:5000/health`
+Once running, check: `GET http://localhost:5000/api/health`
 
 ## Next Steps
 
 1. Set up your database (see Database Setup above)
-2. Run migrations
+2. For local SQLite, run `npm run db:push:auto`; for PostgreSQL, run migrations
 3. Test the authentication endpoints
 4. Integrate with your React frontend
 5. Add additional API endpoints as needed

@@ -1,11 +1,14 @@
 {
-  "name": "maansarathi-frontend",
+  "name": "manasarthi-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "MaanSarathi companion app (React + Vite)",
+  "description": "ManaSarathi companion app (React + Vite)",
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "styles:compat": "node scripts/generate-tailwind-compat.mjs",
+    "predev": "npm run styles:compat",
+    "prebuild": "npm run styles:compat",
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
@@ -60,6 +63,7 @@
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "8.6.0",
     "file-saver": "^2.0.5",
+    "framer-motion": "^11.0.0",
     "i18next": "^25.7.1",
     "i18next-browser-languagedetector": "^8.2.0",
     "input-otp": "1.4.2",
@@ -119,13 +123,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://example.com/your-repo.git"
+    "url": "https://github.com/Aditya3525/ManaSarathi.git"
   },
   "keywords": [
     "wellbeing",
     "react",
     "vite",
     "ai",
-    "MaanSarathi"
+    "ManaSarathi"
   ]
 }

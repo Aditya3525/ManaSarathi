@@ -94,6 +94,16 @@
   }
 }
 
+/* --- Shared Selectable Controls --- */
+.booking-selectable {
+  position: relative;
+}
+
+.booking-selectable:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
 /* --- Consultation Type Cards --- */
 .consult-type-card {
   position: relative;
@@ -125,13 +135,17 @@
   opacity: 1;
 }
 
-.consult-type-card.selected {
+.consult-type-card.selected,
+.consult-type-card[aria-pressed='true'],
+.consult-type-card[data-selected='true'] {
   border-color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.05);
-  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+  background: linear-gradient(140deg, hsl(var(--primary) / 0.12), hsl(var(--primary) / 0.04));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.16), 0 10px 24px -14px hsl(var(--primary) / 0.45);
 }
 
-.consult-type-card.selected::before {
+.consult-type-card.selected::before,
+.consult-type-card[aria-pressed='true']::before,
+.consult-type-card[data-selected='true']::before {
   opacity: 1;
 }
 
@@ -147,7 +161,9 @@
 }
 
 .consult-type-card:hover .consult-type-icon,
-.consult-type-card.selected .consult-type-icon {
+.consult-type-card.selected .consult-type-icon,
+.consult-type-card[aria-pressed='true'] .consult-type-icon,
+.consult-type-card[data-selected='true'] .consult-type-icon {
   transform: scale(1.1);
 }
 
@@ -165,6 +181,8 @@
 }
 
 .time-slot-btn {
+  position: relative;
+  min-height: 2.3rem;
   padding: 0.5rem 0.25rem;
   font-size: 0.8rem;
   font-weight: 500;
@@ -182,11 +200,29 @@
   background: hsl(var(--primary) / 0.05);
 }
 
-.time-slot-btn.selected {
+.time-slot-btn.selected,
+.time-slot-btn[aria-pressed='true'],
+.time-slot-btn[data-selected='true'] {
   border-color: hsl(var(--primary));
-  background: hsl(var(--primary));
+  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary) / 0.9));
   color: hsl(var(--primary-foreground));
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 0.3);
+  transform: translateY(-1px);
+}
+
+.time-slot-btn.selected::after,
+.time-slot-btn[aria-pressed='true']::after,
+.time-slot-btn[data-selected='true']::after {
+  content: '';
+  position: absolute;
+  top: 0.32rem;
+  right: 0.32rem;
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 999px;
+  background: hsl(var(--primary-foreground));
+  opacity: 0.92;
 }
 
 /* --- Booking Summary Card --- */
@@ -371,7 +407,7 @@
   display: flex;
   gap: 0.25rem;
   padding: 0.25rem;
-  background: hsl(var(--muted));
+  background: var(--muted);
   border-radius: 0.5rem;
   width: fit-content;
 }
@@ -383,19 +419,22 @@
   font-weight: 500;
   border: none;
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .therapist-sub-tab:hover {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
-.therapist-sub-tab.active {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.08);
+.therapist-sub-tab.active,
+.therapist-sub-tab[aria-pressed='true'],
+.therapist-sub-tab[data-selected='true'] {
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.06);
   font-weight: 600;
 }
 

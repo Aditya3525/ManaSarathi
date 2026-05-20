@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
 import { Brain, Heart, Sparkles, Target, Wind, Smile, Trophy, ArrowLeft } from 'lucide-react';
-import { Card } from '../../ui/card';
+import React, { useState } from 'react';
+
 import { Button } from '../../ui/button';
-import { BreathingRhythmGame } from './BreathingRhythmGame';
-import { MemoryMatchGame } from './MemoryMatchGame';
-import { MoodColorMatcher } from './MoodColorMatcher';
-import { GratitudePuzzleGame } from './GratitudePuzzleGame';
+import { Card } from '../../ui/card';
+
 import { AnxietyBubblePopGame } from './AnxietyBubblePopGame';
+import { BreathingRhythmGame } from './BreathingRhythmGame';
+import { GratitudePuzzleGame } from './GratitudePuzzleGame';
+import { MemoryMatchGame } from './MemoryMatchGame';
 import { MindfulPatternGame } from './MindfulPatternGame';
+import { MoodColorMatcher } from './MoodColorMatcher';
 
 type GameType = 'breathing' | 'memory' | 'mood' | 'gratitude' | 'anxiety' | 'pattern' | null;
 
@@ -22,14 +24,19 @@ interface GameCardProps {
 
 const GameCard: React.FC<GameCardProps> = ({ title, description, icon, color, category, onPlay }) => {
   return (
-    <Card className="p-6 lg:p-8 hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:-translate-y-2 cursor-pointer group relative overflow-hidden" onClick={onPlay}>
+    <Card
+      className="group relative cursor-pointer overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-[var(--shadow-card)] lg:p-8"
+      onClick={onPlay}
+    >
       {/* Gradient overlay on hover */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       
       <div className="relative">
         <div className="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
-          <div className={`p-4 lg:p-5 rounded-2xl ${color} group-hover:scale-125 group-hover:rotate-12 transition-all duration-500 shadow-lg`}>
-            {icon}
+          <div className="transition-transform duration-500 group-hover:scale-105">
+            <div className={`p-4 lg:p-5 rounded-2xl ${color} transition-all duration-500 shadow-lg`}>
+              {icon}
+            </div>
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
@@ -103,7 +110,7 @@ export const GamesHub: React.FC = () => {
 
   if (activeGame) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 pb-20">
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 pb-20 page-enter">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <Button
             variant="ghost"
@@ -126,7 +133,7 @@ export const GamesHub: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 pb-20 page-enter">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-12">
@@ -139,6 +146,17 @@ export const GamesHub: React.FC = () => {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Play interactive games designed to boost your mental wellness, reduce stress, and build healthy coping skills.
           </p>
+        </div>
+
+        {/* Mood-matched suggestion */}
+        <div className="page-enter mb-4 flex items-center gap-3 rounded-xl border border-primary/10 bg-gradient-to-r from-primary/5 to-accent/5 p-4">
+          <span className="text-2xl" role="img" aria-hidden="true">
+            <Target className="h-6 w-6 text-primary" />
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-medium">Recommended for you right now</p>
+            <p className="text-xs text-muted-foreground">Based on your current mood, try a calming game</p>
+          </div>
         </div>
 
         {/* Games Grid */}

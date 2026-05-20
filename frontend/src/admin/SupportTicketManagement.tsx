@@ -44,10 +44,11 @@ import {
 } from '../components/ui/select';
 import { Skeleton } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
+import { getServerBaseUrl } from '../config/apiConfig';
 import { useNotificationStore } from '../stores/notificationStore';
 
-import { AdminSectionCard } from './AdminSectionCard';
 import { adminFetch } from './adminApi';
+import { AdminSectionCard } from './AdminSectionCard';
 import { AdminStatCard } from './AdminStatCard';
 
 // Types
@@ -76,8 +77,6 @@ export interface SupportTicket {
 
 const TICKET_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const TICKET_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-
-import { getServerBaseUrl } from '../config/apiConfig';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || getServerBaseUrl();
 

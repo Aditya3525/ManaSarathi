@@ -47,6 +47,7 @@ enum PracticeCategory {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
+  isEmailVerified Boolean @default(false)
   name      String
   password  String?
   googleId  String?  @unique
@@ -77,9 +78,17 @@ model User {
   // Relations
   assessments    AssessmentResult[]
   moodEntries    MoodEntry[]
+  dailyIntentions DailyIntention[]
+  gratitudeEntries GratitudeEntry[]
+  habits       UserHabit[]
+  sleepLogs      SleepLog[]
+  microCheckins  MicroCheckin[]
+  journalEntries JournalEntry[]
+  journalReflection JournalReflection?
   planModules    UserPlanModule[]
   conversations  Conversation[]
   chatMessages   ChatMessage[]
+  chatFeedbackEntries ChatFeedback[]
   conversationMemory ConversationMemory?
   conversationGoals ConversationGoal[]
   progressTracking ProgressTracking[]
@@ -91,6 +100,7 @@ model User {
   supportTickets SupportTicket[]
   safetyPlan     SafetyPlan?
   therapistBookings TherapistBooking[]
+  therapistNotes TherapistNote[]
   therapistProfile   Therapist?
   
   // Analytics relations
@@ -168,6 +178,10 @@ model MoodEntry {
   id        String   @id @default(cuid())
   userId    String
   mood      String   // 'Great', 'Good', 'Okay', 'Struggling', 'Anxious'
+  emotion   String?  // Granular emotion: 'anxious', 'nervous', 'hopeful'
+  emotionGroup String? // Parent emotion group: 'fear', 'joy', 'sadness', etc.
+  intensity Int?     // 1-10 intensity rating
+  trigger   String?  // Optional trigger context
   notes     String?
   createdAt DateTime @default(now())
   
@@ -179,6 +193,117 @@ model MoodEntry {
   @@index([userId, createdAt])
   @@index([mood])
   @@map("mood_entries")
+}
+
+model DailyIntention {
+  id         String   @id @default(cuid())
+  userId     String
+  intention  String
+  isCustom   Boolean  @default(false)
+  completed  Boolean?
+  reflection String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("daily_intentions")
+}
+
+model GratitudeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  items     Json
+  note      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("gratitude_entries")
+}
+
+model UserHabit {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String
+  cue             String
+  practiceId      String?
+  active          Boolean   @default(true)
+  streak          Int       @default(0)
+  lastCompletedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active])
+  @@index([userId, createdAt])
+  @@map("user_habits")
+}
+
+model SleepLog {
+  id       String   @id @default(cuid())
+  userId   String
+  bedTime  DateTime
+  wakeTime DateTime
+  quality  Int      // 1-5 quality score
+  factors  Json?
+  duration Float?   // Duration in hours
+  notes    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("sleep_logs")
+}
+
+model MicroCheckin {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'morning', 'evening', 'post-chat'
+  responses Json
+  mood      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("micro_checkins")
+}
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  prompt    String?
+  content   String
+  mood      String?
+  tags      Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("journal_entries")
+}
+
+model JournalReflection {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  weekOf    DateTime
+  patterns  Json
+  aiSummary String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("journal_reflections")
 }
 
 model PlanModule {
@@ -261,6 +386,7 @@ model ChatMessage {
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedbackEntries ChatFeedback[]
   
   @@index([conversationId, createdAt])
   @@index([userId, createdAt])
@@ -268,6 +394,26 @@ model ChatMessage {
   @@index([type])
   @@index([createdAt])
   @@map("chat_messages")
+}
+
+model ChatFeedback {
+  id         String    @id @default(cuid())
+  userId     String
+  messageId  String
+  helpful    Boolean
+  note       String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId, createdAt])
+  @@index([userId, helpful, resolvedAt, createdAt])
+  @@index([messageId])
+  @@map("chat_feedback")
 }
 
 model ConversationGoal {
@@ -301,6 +447,9 @@ model ConversationMemory {
   emotionalPatterns    String   @default("{}") // Store emotional patterns as JSON string
   importantMoments     String   @default("[]") // Store important conversation moments as JSON string
   conversationMetrics  String   @default("{}") // Store conversation style metrics as JSON string
+  actionItems          Json?
+  lastSessionSummary   String?
+  lastSessionDate      DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   
@@ -414,6 +563,7 @@ model Content {
   averageRating   Float?
   effectiveness   Float?
   isPublished Boolean  @default(false)
+  scheduledPublishAt DateTime?
   sourceUrl   String?
   sourceName  String?
   confidence  Float?
@@ -458,6 +608,7 @@ model Practice {
   steps             String? // JSON structured practice steps
   contraindications String? // JSON array of contraindications
   isPublished Boolean  @default(false)
+  scheduledPublishAt DateTime?
   sourceUrl   String?
   sourceName  String?
   confidence  Float?
@@ -833,6 +984,7 @@ model Therapist {
   
   // Relations
   bookings TherapistBooking[]
+  notes    TherapistNote[]
   
   @@index([userId])
   @@index([isActive])
@@ -879,12 +1031,40 @@ model TherapistBooking {
   // Relations
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  notes     TherapistNote[]
   
   @@index([userId])
   @@index([therapistId])
   @@index([status])
   @@index([createdAt])
   @@map("therapist_bookings")
+}
+
+model TherapistNote {
+  id          String   @id @default(cuid())
+  therapistId String
+  therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId   String?
+  booking     TherapistBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  format      String   @default("SOAP")
+  subjective  String?
+  objective   String?
+  assessment  String?
+  plan        String?
+  narrative   String?
+
+  tags        String?
+  isPrivate   Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([therapistId, userId, createdAt])
+  @@index([bookingId])
+  @@map("therapist_notes")
 }
 
 // ========================================
@@ -923,6 +1103,7 @@ model CrisisEvent {
   confidence      Float
   indicators      String    // JSON array
   actionTaken     String    // JSON: resources provided, notifications sent
+  followUpResponse String?
   detectedAt      DateTime  @default(now())
   responseTime    Int?      // Time to provide resources in ms
   resolved        Boolean   @default(false)

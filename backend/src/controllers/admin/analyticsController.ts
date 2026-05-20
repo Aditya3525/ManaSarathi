@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../config/database';
 
 interface AnalyticsTimeframe {
   startDate: Date;
@@ -98,17 +96,31 @@ export const getAnalytics = async (req: Request, res: Response) => {
         where: { isPublished: true }
       }),
       
-      // Practice completions (if you have this table)
-      // For now, using a placeholder
-      Promise.resolve(0),
+      // Practice completions tracked via completed plan modules in timeframe
+      prisma.userPlanModule.count({
+        where: {
+          completed: true,
+          completedAt: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      }),
       
       // Total content
       prisma.content.count({
         where: { isPublished: true }
       }),
       
-      // Content views (placeholder - would need a views table)
-      Promise.resolve(0),
+      // Content interactions tracked via engagement updates in timeframe
+      prisma.contentEngagement.count({
+        where: {
+          updatedAt: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      }),
       
       // Premium users
       prisma.user.count({

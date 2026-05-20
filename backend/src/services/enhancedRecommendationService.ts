@@ -74,6 +74,51 @@ export interface EnhancedRecommendationResult {
 }
 
 export class EnhancedRecommendationService {
+  private parseStringList(raw?: string | null): string[] {
+    if (!raw) return [];
+
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((value) => String(value).trim().toLowerCase())
+            .filter(Boolean);
+        }
+      } catch {
+        // Fall through to comma-separated parsing.
+      }
+    }
+
+    return trimmed
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private overlapCount(left: string[], right: string[]): number {
+    if (left.length === 0 || right.length === 0) return 0;
+    const rightSet = new Set(right);
+    let count = 0;
+    for (const value of left) {
+      if (rightSet.has(value)) count += 1;
+    }
+    return count;
+  }
+
+  private normalizeFocusAreas(focusAreas: string[]): string[] {
+    return Array.from(
+      new Set(
+        focusAreas
+          .map((area) => area.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+  }
+
   /**
    * Get personalized content recommendations with crisis awareness
    */
@@ -290,42 +335,145 @@ export class EnhancedRecommendationService {
     approach: ApproachMode,
     focusAreas: string[]
   ): Promise<EnhancedRecommendationItem[]> {
-    // Find highly-rated content types
-    const highRated = engagementHistory
-      .filter(e => (e.rating || 0) >= 4 || (e.effectiveness || 0) >= 7)
-      .map(e => e.contentId);
+    const consumedIds = Array.from(new Set(engagementHistory.map((entry) => entry.contentId).filter(Boolean)));
+    const highRatedIds = Array.from(
+      new Set(
+        engagementHistory
+          .filter((entry) => (entry.rating || 0) >= 4 || (entry.effectiveness || 0) >= 7)
+          .map((entry) => entry.contentId)
+          .filter(Boolean)
+      )
+    );
 
-    if (highRated.length === 0) {
+    if (highRatedIds.length === 0) {
       return [];
     }
 
-    // Get similar content
-    const similarContent = await prisma.content.findMany({
+    const anchors = await prisma.content.findMany({
       where: {
         isPublished: true,
-        id: { notIn: engagementHistory.map(e => e.contentId) },
-        approach: { in: [approach, 'hybrid'] }
+        id: { in: highRatedIds }
       },
-      take: 3,
-      orderBy: { averageRating: 'desc' }
+      select: {
+        id: true,
+        category: true,
+        tags: true,
+        focusAreas: true,
+        type: true
+      }
     });
 
-    return similarContent.map(content => ({
-      id: content.id,
-      title: content.title,
-      description: content.description,
-      type: 'content' as const,
-      contentType: content.type,
-      category: content.category,
-      approach: content.approach,
-      duration: content.duration,
-      difficulty: content.difficulty,
-      url: content.content,
-      reason: 'Based on your positive engagement with similar content',
-      source: 'library' as const,
-      priority: 7,
-      effectiveness: content.effectiveness
-    }));
+    if (anchors.length === 0) {
+      return [];
+    }
+
+    const likedCategories = Array.from(
+      new Set(
+        anchors
+          .map((anchor) => anchor.category?.trim().toLowerCase())
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const likedTypes = Array.from(
+      new Set(
+        anchors
+          .map((anchor) => anchor.type?.trim().toLowerCase())
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const likedTags = Array.from(new Set(anchors.flatMap((anchor) => this.parseStringList(anchor.tags))));
+    const likedFocusAreas = Array.from(new Set(anchors.flatMap((anchor) => this.parseStringList(anchor.focusAreas))));
+
+    const normalizedFocusAreas = this.normalizeFocusAreas(focusAreas);
+
+    const candidates = await prisma.content.findMany({
+      where: {
+        isPublished: true,
+        id: { notIn: consumedIds },
+        approach: { in: [approach, 'hybrid'] }
+      },
+      take: 80,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const scored = candidates
+      .map((candidate) => {
+        const category = candidate.category?.trim().toLowerCase() || '';
+        const type = candidate.type?.trim().toLowerCase() || '';
+        const tags = this.parseStringList(candidate.tags);
+        const candidateFocusAreas = this.parseStringList(candidate.focusAreas);
+
+        const categoryMatched = category ? likedCategories.includes(category) : false;
+        const typeMatched = type ? likedTypes.includes(type) : false;
+        const tagMatches = this.overlapCount(tags, likedTags);
+        const likedFocusMatches = this.overlapCount(candidateFocusAreas, likedFocusAreas);
+        const activeFocusMatches = this.overlapCount(candidateFocusAreas, normalizedFocusAreas);
+
+        const similarityScore =
+          (categoryMatched ? 4 : 0) +
+          (typeMatched ? 2 : 0) +
+          tagMatches * 2 +
+          likedFocusMatches * 3 +
+          activeFocusMatches * 2;
+
+        if (similarityScore <= 0) return null;
+
+        return {
+          candidate,
+          similarityScore,
+          categoryMatched,
+          tagMatches,
+          likedFocusMatches,
+          activeFocusMatches
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((left, right) => {
+        if (left.similarityScore !== right.similarityScore) {
+          return right.similarityScore - left.similarityScore;
+        }
+        return (right.candidate.effectiveness || 0) - (left.candidate.effectiveness || 0);
+      })
+      .slice(0, 3);
+
+    if (scored.length === 0) {
+      recommendationLogger.info({ userId }, 'No similarity matches from engagement history; skipping engagement-based picks');
+      return [];
+    }
+
+    return scored.map((entry) => {
+      const matchingSignals: string[] = [];
+      if (entry.categoryMatched && entry.candidate.category) {
+        matchingSignals.push(entry.candidate.category);
+      }
+      if (entry.tagMatches > 0) {
+        matchingSignals.push('tags you engaged with');
+      }
+      if (entry.likedFocusMatches > 0 || entry.activeFocusMatches > 0) {
+        matchingSignals.push('your current focus areas');
+      }
+
+      const reasonSuffix = matchingSignals.length > 0
+        ? ` (${matchingSignals.join(', ')})`
+        : '';
+
+      return {
+        id: entry.candidate.id,
+        title: entry.candidate.title,
+        description: entry.candidate.description,
+        type: 'content' as const,
+        contentType: entry.candidate.type,
+        category: entry.candidate.category,
+        approach: entry.candidate.approach,
+        duration: entry.candidate.duration,
+        difficulty: entry.candidate.difficulty,
+        url: entry.candidate.content,
+        reason: `Based on your positive engagement with similar content${reasonSuffix}`,
+        source: 'library' as const,
+        priority: 8,
+        effectiveness: entry.candidate.effectiveness
+      };
+    });
   }
 
   /**
@@ -378,31 +526,73 @@ export class EnhancedRecommendationService {
     focusAreas: string[],
     completedIds: string[]
   ): Promise<EnhancedRecommendationItem[]> {
-    const content = await prisma.content.findMany({
+    const normalizedFocusAreas = this.normalizeFocusAreas(focusAreas);
+
+    const candidates = await prisma.content.findMany({
       where: {
         isPublished: true,
         id: { notIn: completedIds },
         approach: { in: [approach, 'hybrid'] }
       },
-      take: 3,
+      take: 80,
       orderBy: { completions: 'desc' }
     });
 
-    return content.map(item => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      type: 'content' as const,
-      contentType: item.type,
-      category: item.category,
-      approach: item.approach,
-      duration: item.duration,
-      difficulty: item.difficulty,
-      url: item.content,
-      reason: 'Popular resource for general wellbeing',
-      source: 'library' as const,
-      priority: 5
-    }));
+    const scored = candidates
+      .map((item) => {
+        if (normalizedFocusAreas.length === 0) {
+          return { item, score: item.completions || 0 };
+        }
+
+        const contentSignals = [
+          item.category || '',
+          item.title || '',
+          item.description || ''
+        ]
+          .join(' ')
+          .toLowerCase();
+        const tags = this.parseStringList(item.tags);
+        const itemFocusAreas = this.parseStringList(item.focusAreas);
+
+        const signalMatches = normalizedFocusAreas.filter((focusArea) =>
+          contentSignals.includes(focusArea) || tags.includes(focusArea) || itemFocusAreas.includes(focusArea)
+        );
+
+        if (signalMatches.length === 0) {
+          return null;
+        }
+
+        return {
+          item,
+          score: signalMatches.length * 3 + (item.effectiveness || 0),
+          signalMatches
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3);
+
+    return scored.map((entry) => {
+      const isFocusDriven = normalizedFocusAreas.length > 0;
+      return {
+        id: entry.item.id,
+        title: entry.item.title,
+        description: entry.item.description,
+        type: 'content' as const,
+        contentType: entry.item.type,
+        category: entry.item.category,
+        approach: entry.item.approach,
+        duration: entry.item.duration,
+        difficulty: entry.item.difficulty,
+        url: entry.item.content,
+        reason: isFocusDriven
+          ? 'Selected for your active focus areas and current wellbeing signals'
+          : 'Popular resource for general wellbeing',
+        source: 'library' as const,
+        priority: isFocusDriven ? 6 : 5,
+        effectiveness: entry.item.effectiveness
+      };
+    });
   }
 
   /**

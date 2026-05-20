@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
+import { Button } from '../../components/ui/button';
 import {
   CommandDialog,
   CommandEmpty,
@@ -27,6 +28,14 @@ import {
   CommandSeparator,
   CommandShortcut
 } from '../../components/ui/command';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -56,6 +65,7 @@ export function CommandPalette({
   currentTheme = 'light'
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('');
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Reset search when dialog closes
   useEffect(() => {
@@ -211,10 +221,7 @@ export function CommandPalette({
       icon: Keyboard,
       shortcut: '?',
       group: 'settings',
-      action: () => runCommand(() => {
-        // Could open a shortcuts modal
-        alert('Keyboard Shortcuts:\n\n⌘K - Command Palette\nG O - Go to Overview\nG U - Go to Users\nG C - Go to Content\nG P - Go to Practices\nG A - Go to Assessments\nG N - Go to Analytics\nT - Toggle Theme\n? - Show Shortcuts');
-      }),
+      action: () => runCommand(() => setShortcutsOpen(true)),
       keywords: ['hotkeys', 'keys', 'bindings']
     },
     {
@@ -232,6 +239,7 @@ export function CommandPalette({
   const settingsCommands = commands.filter(c => c.group === 'settings');
 
   return (
+    <>
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         placeholder="Type a command or search..."
@@ -294,5 +302,38 @@ export function CommandPalette({
         </CommandGroup>
       </CommandList>
     </CommandDialog>
+
+    <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Keyboard shortcuts</DialogTitle>
+          <DialogDescription>
+            Move through admin tasks quickly with these shortcuts.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 text-sm">
+          {[
+            ['⌘K / Ctrl+K', 'Command palette'],
+            ['G O', 'Go to Overview'],
+            ['G U', 'Go to Users'],
+            ['G C', 'Go to Content'],
+            ['G P', 'Go to Practices'],
+            ['G A', 'Go to Assessments'],
+            ['G N', 'Go to Analytics'],
+            ['T', 'Toggle theme'],
+            ['?', 'Show shortcuts'],
+          ].map(([shortcut, description]) => (
+            <div key={shortcut} className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2">
+              <span className="text-muted-foreground">{description}</span>
+              <kbd className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs">{shortcut}</kbd>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button onClick={() => setShortcutsOpen(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

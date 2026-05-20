@@ -11,12 +11,12 @@ const prisma = new PrismaClient();
 
 const THERAPIST_LOGINS = [
   {
-    therapistEmail: 'sarah.johnson@example.com',   // matches seed therapist
+    therapistEmail: 'demo-sarah-johnson@manasarthi.app',   // matches seed therapist
     portalEmail: 'therapist@demo.com',
     portalPassword: 'Therapist@123',
   },
   {
-    therapistEmail: 'michael.chen@example.com',
+    therapistEmail: 'demo-michael-chen@manasarthi.app',
     portalEmail: 'michael.chen@demo.com',
     portalPassword: 'Therapist@123',
   },
@@ -45,7 +45,7 @@ async function main() {
       const hashedPassword = await bcrypt.hash(login.portalPassword, 10);
       await prisma.user.update({
         where: { id: therapist.userId },
-        data: { password: hashedPassword },
+        data: { password: hashedPassword, isEmailVerified: true },
       });
       console.log(`   ✅ Password updated to: ${login.portalPassword}\n`);
       continue;
@@ -59,7 +59,7 @@ async function main() {
       const hashedPassword = await bcrypt.hash(login.portalPassword, 10);
       await prisma.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        data: { password: hashedPassword, isEmailVerified: true },
       });
     } else {
       // Create new user
@@ -69,6 +69,7 @@ async function main() {
           email: login.portalEmail,
           name: therapist.name,
           password: hashedPassword,
+          isEmailVerified: true,
           isOnboarded: true,
         },
       });

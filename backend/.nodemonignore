@@ -1,0 +1,8 @@
+tmp
+tmp/*
+uploads
+dist
+node_modules
+.git
+*.log
+*.tmp

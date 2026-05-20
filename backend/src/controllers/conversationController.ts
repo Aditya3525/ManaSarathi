@@ -334,11 +334,8 @@ export const conversationController = {
       const format = (req.query.format as string) || 'text';
       const includeSystemMessages = req.query.includeSystemMessages !== 'false';
 
-      console.log('[Export] Request:', { userId, conversationId: id, format, includeSystemMessages });
-
       // Validate format
       if (!['pdf', 'text', 'json'].includes(format)) {
-        console.log('[Export] Invalid format:', format);
         return res.status(400).json({
           success: false,
           error: 'Invalid format. Must be pdf, text, or json',
@@ -346,9 +343,7 @@ export const conversationController = {
       }
 
       // Get conversation with messages
-      console.log('[Export] Fetching conversation...');
       const conversation = await conversationService.getConversationWithMessages(id, userId);
-      console.log('[Export] Found:', !!conversation, 'Messages:', conversation?.messages?.length);
       if (!conversation) {
         return res.status(404).json({
           success: false,

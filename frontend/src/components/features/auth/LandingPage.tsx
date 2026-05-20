@@ -1,9 +1,5 @@
 import {
   ArrowRight,
-  BarChart3,
-  CalendarCheck,
-  ChevronLeft,
-  ChevronRight,
   Heart,
   Brain,
   Users,
@@ -18,17 +14,18 @@ import {
   Moon,
   Sun,
   AlertTriangle,
+  Eye,
+  EyeOff,
   Menu,
-  Smile,
-  Star,
   X
 } from 'lucide-react';
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 
 import { getServerBaseUrl } from '../../../config/apiConfig';
 import { useAccessibility } from '../../../contexts/AccessibilityContext';
 import { useAnalytics } from '../../../hooks/use-analytics';
 import { useDevice } from '../../../hooks/use-device';
+import { validateSignupEmail } from '../../../utils/emailValidation';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../ui/accordion';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
@@ -37,35 +34,100 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Separator } from '../../ui/separator';
+import { Switch } from '../../ui/switch';
 
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { HeroSection } from './HeroSection';
 import { MetricsSection } from './MetricsSection';
 import { TestimonialsSection } from './TestimonialsSection';
-import { ImageWithFallback } from '../../common/ImageWithFallback';
+import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD } from './defaultCredentials';
 
 interface LandingPageProps {
-  onSignUp: (userData: { name: string; email: string; password: string }) => void;
+  onSignUp: (userData: { email: string; password: string }) => void;
   onLogin: (credentials: { email: string; password: string }) => void;
   onAdminLogin?: (credentials: { email: string; password: string }) => void;
   authError?: string | null;
-  loginError?: { message?: string } | null;
+  loginError?: { message?: string; error?: string; suggestion?: string; verificationUrl?: string } | null;
+  onChooseLoginAsUser?: (rememberChoice?: boolean) => Promise<void> | void;
+  onChooseLoginAsAdmin?: (rememberChoice?: boolean) => Promise<void> | void;
   onNavigate?: (page: string) => void;
 }
 
-export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginError, onNavigate }: LandingPageProps) {
+type CookiePreferences = {
+  analytics: boolean;
+  personalization: boolean;
+  marketing: boolean;
+};
+
+type InfoDialogContent = {
+  title: string;
+  description: string;
+};
+
+const COOKIE_PREFERENCES_KEY = 'mw-cookie-preferences-v1';
+const NEWSLETTER_INTEREST_KEY = 'mw-newsletter-interest-v1';
+const DEFAULT_COOKIE_PREFERENCES: CookiePreferences = {
+  analytics: true,
+  personalization: true,
+  marketing: false,
+};
+
+export function LandingPage({
+  onSignUp,
+  onLogin,
+  onAdminLogin,
+  authError,
+  loginError,
+  onChooseLoginAsUser,
+  onChooseLoginAsAdmin,
+  onNavigate
+}: LandingPageProps) {
   const device = useDevice();
   const analytics = useAnalytics();
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+
   const [password, setPassword] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [loginEmail, setLoginEmail] = useState(DEMO_LOGIN_EMAIL);
+  const [loginPassword, setLoginPassword] = useState(DEMO_LOGIN_PASSWORD);
+  const [adminEmail, setAdminEmail] = useState(DEMO_LOGIN_EMAIL);
+  const [adminPassword, setAdminPassword] = useState(DEMO_LOGIN_PASSWORD);
   const [activeModal, setActiveModal] = useState<null | 'start' | 'signup' | 'login' | 'admin'>(null);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [signupValidationError, setSignupValidationError] = useState<string | null>(null);
+  const [rememberAdminDestinationChoice, setRememberAdminDestinationChoice] = useState(false);
+  const [isCookieDialogOpen, setIsCookieDialogOpen] = useState(false);
+  const [infoDialog, setInfoDialog] = useState<InfoDialogContent | null>(null);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMessage, setNewsletterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences>(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_COOKIE_PREFERENCES;
+    }
+
+    try {
+      const storedPreferences = localStorage.getItem(COOKIE_PREFERENCES_KEY);
+      return storedPreferences
+        ? { ...DEFAULT_COOKIE_PREFERENCES, ...JSON.parse(storedPreferences) }
+        : DEFAULT_COOKIE_PREFERENCES;
+    } catch {
+      return DEFAULT_COOKIE_PREFERENCES;
+    }
+  });
+
+  const passwordChecks = {
+    minLength: password.length >= 8,
+    lower: /[a-z]/.test(password),
+    upper: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z\d]/.test(password),
+  };
+  const isStrongSignupPassword = Object.values(passwordChecks).every(Boolean);
+  const signupEmailValidation = validateSignupEmail(email);
+  const isValidSignupEmail = signupEmailValidation.isValid;
 
   // Carousel state for features section
   const [activeFeaturesIndex, setActiveFeaturesIndex] = useState(0);
@@ -78,11 +140,31 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
   const isLoginOpen = activeModal === 'login';
   const isAdminOpen = activeModal === 'admin';
 
+  useEffect(() => {
+    if (isLoginOpen) {
+      setLoginEmail(DEMO_LOGIN_EMAIL);
+      setLoginPassword(DEMO_LOGIN_PASSWORD);
+    }
+  }, [isLoginOpen]);
+
+  useEffect(() => {
+    if (isAdminOpen) {
+      setAdminEmail(DEMO_LOGIN_EMAIL);
+      setAdminPassword(DEMO_LOGIN_PASSWORD);
+    }
+  }, [isAdminOpen]);
+
+  useEffect(() => {
+    if (loginError?.suggestion !== 'choose_admin_or_user') {
+      setRememberAdminDestinationChoice(false);
+    }
+  }, [loginError?.suggestion]);
+
   const { settings: accessibilitySettings, setSetting: setAccessibilitySetting } = useAccessibility();
 
   // Sticky header on scroll + scroll depth tracking
   useEffect(() => {
-    let scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
+    const scrollDepthTracked = { 25: false, 50: false, 75: false, 100: false };
 
     const handleScroll = () => {
       setIsHeaderSticky(window.scrollY > 100);
@@ -110,6 +192,42 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
     setActiveModal(modal);
     setMobileMenuOpen(false); // Close mobile menu when opening a modal
     analytics.trackButtonClick(`open_${modal}_modal`, 'landing_page');
+  };
+  const updateCookiePreference = (key: keyof CookiePreferences, value: boolean) => {
+    setCookiePreferences((current) => ({ ...current, [key]: value }));
+  };
+  const saveCookiePreferences = () => {
+    localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(cookiePreferences));
+    setIsCookieDialogOpen(false);
+  };
+  const acceptAllCookies = () => {
+    const acceptedPreferences: CookiePreferences = {
+      analytics: true,
+      personalization: true,
+      marketing: true,
+    };
+    setCookiePreferences(acceptedPreferences);
+    localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(acceptedPreferences));
+    setIsCookieDialogOpen(false);
+  };
+  const showInfoDialog = (title: string, description: string) => {
+    setInfoDialog({ title, description });
+  };
+  const handleNewsletterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedEmail = newsletterEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setNewsletterMessage({ type: 'error', text: 'Enter a valid email address to subscribe.' });
+      return;
+    }
+
+    localStorage.setItem(NEWSLETTER_INTEREST_KEY, trimmedEmail);
+    setNewsletterEmail('');
+    setNewsletterMessage({
+      type: 'success',
+      text: 'Thanks — your interest is saved and newsletter delivery will be connected before launch.',
+    });
   };
 
   const differentiators = useMemo(
@@ -164,19 +282,100 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
     []
   );
 
+  const featureHighlights = useMemo(
+    () => [
+      {
+        icon: MessageCircle,
+        title: 'AI Therapist Chat',
+        description: '24/7 conversational support with empathetic, clinically informed AI guidance.',
+        ctaLabel: 'Start a guided chat'
+      },
+      {
+        icon: TrendingUp,
+        title: 'Progress Tracking',
+        description: 'Monitor your wellbeing journey with trendlines, streaks, and progress reflections.',
+        ctaLabel: 'Track your progress'
+      },
+      {
+        icon: Heart,
+        title: 'Mindful Practices',
+        description: 'Guided meditation, yoga, and breathing sessions curated for your current energy.',
+        ctaLabel: 'Explore practices'
+      },
+      {
+        icon: Users,
+        title: 'Expert Content',
+        description: 'A curated library of therapeutic videos and articles authored with clinicians.',
+        ctaLabel: 'Discover expert guides'
+      }
+    ],
+    []
+  );
+
+  const scrollToFeature = useCallback((index: number) => {
+    const container = featuresContainerRef.current;
+    const child = container?.children[index] as HTMLElement | undefined;
+
+    if (!container || !child) return;
+
+    container.scrollTo({
+      left: child.offsetLeft - container.offsetLeft,
+      behavior: 'smooth'
+    });
+    setActiveFeaturesIndex(index);
+  }, []);
+
+  const handleFeatureLearnMore = (featureTitle: string) => {
+    analytics.trackButtonClick(`feature_${featureTitle.toLowerCase().replace(/\s+/g, '_')}`, 'landing_page');
+    openModal('start');
+  };
+
+  useEffect(() => {
+    const container = featuresContainerRef.current;
+    if (!container || !device.isMobile) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Array.from(container.children).indexOf(entry.target);
+            if (index !== -1) {
+              setActiveFeaturesIndex(index);
+            }
+          }
+        });
+      },
+      { root: container, threshold: 0.6 }
+    );
+
+    Array.from(container.children).forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+  }, [device.isMobile]);
+
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && email && password) {
+    if (email && password) {
+      if (!isValidSignupEmail) {
+        setSignupValidationError(signupEmailValidation.message || 'Please enter a valid email address.');
+        analytics.trackFormSubmit('signup', false);
+        return;
+      }
+      if (!isStrongSignupPassword) {
+        setSignupValidationError('Use at least 8 characters with uppercase, lowercase, number, and special character.');
+        analytics.trackFormSubmit('signup', false);
+        return;
+      }
+      setSignupValidationError(null);
       analytics.trackFormSubmit('signup', true);
-      onSignUp({ name, email, password });
+      onSignUp({ email, password });
     }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && loginPassword) {
+    if (loginEmail && loginPassword) {
       analytics.trackFormSubmit('login', true);
-      onLogin({ email, password: loginPassword });
+      onLogin({ email: loginEmail, password: loginPassword });
     }
   };
 
@@ -190,8 +389,8 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
 
   const handleGoogleAuth = () => {
     analytics.trackButtonClick('google_oauth', 'landing_page');
-    // Redirect to Google OAuth endpoint - use smart URL detection
-    window.location.href = `${getServerBaseUrl()}/api/auth/google`;
+    const frontendOrigin = encodeURIComponent(window.location.origin);
+    window.location.href = `${getServerBaseUrl()}/api/auth/google?frontend_origin=${frontendOrigin}`;
   };
 
   const handleToggleDarkMode = () => {
@@ -222,7 +421,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
             <Badge variant="secondary" className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-primary sm:px-3">
-              MaanSarathi
+              ManaSarathi
             </Badge>
             <span className="hidden text-xs text-muted-foreground sm:text-sm lg:inline-flex">
               Guided support for calmer days
@@ -350,7 +549,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             </div>
 
             {/* Mobile: Vertical List with Connector Line */}
-            <ol className="relative space-y-8 md:hidden" role="list">
+            <ol className="relative space-y-8 md:hidden">
               {/* Connector Line */}
               <div
                 className="absolute left-6 top-10 bottom-10 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-primary/20"
@@ -473,208 +672,107 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 role="region"
                 aria-label="Features carousel"
               >
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      24/7 conversational support with empathetic, clinically informed AI guidance.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      Guided meditation, yoga, and breathing sessions curated for your current energy.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary">
-                  <CardContent className="space-y-3 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                      <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                    <p className="text-base leading-relaxed text-foreground/70">
-                      A curated library of therapeutic videos and articles authored with clinicians.
-                    </p>
-                    <button className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80">
-                      Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </CardContent>
-                </Card>
+                {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }, index) => (
+                  <Card
+                    key={title}
+                    className="group min-w-[88vw] flex-shrink-0 snap-center border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary"
+                    role="group"
+                    aria-roledescription="slide"
+                    aria-label={`Feature ${index + 1} of ${featureHighlights.length}: ${title}`}
+                  >
+                    <CardContent className="space-y-3 p-6">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                        <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                      </div>
+                      <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                      <p className="text-base leading-relaxed text-foreground/70">{description}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleFeatureLearnMore(title)}
+                        className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                      >
+                        {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
 
               {/* Progress Indicators */}
-              <div className="mt-6 flex justify-center gap-2" role="tablist" aria-label="Features pagination">
-                {[0, 1, 2, 3].map((index) => (
-                  <div
-                    key={index}
-                    role="tab"
-                    aria-selected={activeFeaturesIndex === index}
-                    className={`h-2 rounded-full transition-all duration-300 ${activeFeaturesIndex === index
-                      ? 'w-8 bg-primary'
-                      : 'w-2 bg-muted-foreground/30'
-                      }`}
-                    aria-label={`Feature ${index + 1} of 4`}
-                  />
-                ))}
+              <div className="mt-6 space-y-3">
+                <p className="text-center text-xs font-medium text-muted-foreground">
+                  Feature {activeFeaturesIndex + 1} of {featureHighlights.length}
+                </p>
+                <div className="flex justify-center gap-2" role="tablist" aria-label="Features pagination">
+                  {featureHighlights.map((feature, index) => (
+                    <button
+                      key={feature.title}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeFeaturesIndex === index}
+                      aria-label={`View ${feature.title}`}
+                      onClick={() => scrollToFeature(index)}
+                      className={`h-2 rounded-full transition-all duration-300 ${activeFeaturesIndex === index
+                        ? 'w-8 bg-primary'
+                        : 'w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                        }`}
+                    />
+                  ))}
+                </div>
+                <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  Showing feature {activeFeaturesIndex + 1}: {featureHighlights[activeFeaturesIndex]?.title}
+                </div>
               </div>
             </div>
 
             {/* Tablet: 2x2 Grid */}
             <div className="hidden gap-6 md:grid md:grid-cols-2 lg:hidden">
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                  <p className="text-base text-foreground/70">
-                    24/7 conversational support with empathetic, clinically informed AI guidance.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                  <p className="text-base text-foreground/70">
-                    Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                  <p className="text-base text-foreground/70">
-                    Guided meditation, yoga, and breathing sessions curated for your current energy.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                  <p className="text-base text-foreground/70">
-                    A curated library of therapeutic videos and articles authored with clinicians.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
+              {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }) => (
+                <Card
+                  key={title}
+                  className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2"
+                >
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                    <p className="text-base text-foreground/70">{description}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleFeatureLearnMore(title)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             {/* Desktop: 4-column Grid */}
             <div className="hidden gap-6 lg:grid lg:grid-cols-4">
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <MessageCircle className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">AI Therapist Chat</h3>
-                  <p className="text-base text-foreground/70">
-                    24/7 conversational support with empathetic, clinically informed AI guidance.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Progress Tracking</h3>
-                  <p className="text-base text-foreground/70">
-                    Monitor your wellbeing journey with trendlines, streaks, and progress reflections.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Heart className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Mindful Practices</h3>
-                  <p className="text-base text-foreground/70">
-                    Guided meditation, yoga, and breathing sessions curated for your current energy.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
-
-              <Card className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
-                    <Users className="h-6 w-6 text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Expert Content</h3>
-                  <p className="text-base text-foreground/70">
-                    A curated library of therapeutic videos and articles authored with clinicians.
-                  </p>
-                  <button className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Learn more <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </CardContent>
-              </Card>
+              {featureHighlights.map(({ icon: Icon, title, description, ctaLabel }) => (
+                <Card
+                  key={title}
+                  className="group border-2 shadow-md transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2"
+                >
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-transform duration-300 group-hover:scale-110">
+                      <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                    <p className="text-base text-foreground/70">{description}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleFeatureLearnMore(title)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      {ctaLabel} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </section>
@@ -682,7 +780,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
         <section className="bg-muted/20 px-6 py-16 lg:py-24">
           <div className="mx-auto max-w-7xl space-y-12">
             <div className="space-y-3 text-center">
-              <h2 className="text-3xl lg:text-4xl">Why people choose MaanSarathi</h2>
+              <h2 className="text-3xl lg:text-4xl">Why people choose ManaSarathi</h2>
               <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
                 Built alongside psychologists, coaches, and neurodiverse advocates to support modern wellbeing needs.
               </p>
@@ -766,7 +864,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                 Frequently asked questions
               </h2>
               <p className="mt-3 text-base font-medium text-foreground/70 sm:text-lg">
-                Still wondering if MaanSarathi is right for you? We&apos;ve got answers.
+                Still wondering if ManaSarathi is right for you? We&apos;ve got answers.
               </p>
             </div>
 
@@ -894,7 +992,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
             <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary" />
-                <span className="text-lg font-semibold text-foreground">MaanSarathi</span>
+                <span className="text-lg font-semibold text-foreground">ManaSarathi</span>
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground max-w-xs">
                 Evidence-based wellbeing support, anytime, anywhere.
@@ -1004,9 +1102,13 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   </a>
                 </li>
                 <li>
-                  <a href="/pricing" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Pricing', 'ManaSarathi is free during early access. If paid plans are introduced later, pricing will be shared clearly before any charge.')}
+                  >
                     Pricing
-                  </a>
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -1016,29 +1118,49 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               <h4 id="footer-company" className="text-sm font-semibold text-foreground">Company</h4>
               <ul className="space-y-1 text-sm text-foreground/70">
                 <li>
-                  <a href="/about" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('About ManaSarathi', 'ManaSarathi is a mental wellbeing platform combining assessments, mindful practices, journaling, and supportive AI guidance.')}
+                  >
                     About us
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/careers" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Careers', 'We are not hiring right now, but future opportunities will be shared here as the platform grows.')}
+                  >
                     Careers
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/blog" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Blog', 'Wellbeing articles and product updates are coming soon.')}
+                  >
                     Blog
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/press" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Press Kit', 'A public press kit is being prepared. For now, please use the product overview on this page.')}
+                  >
                     Press Kit
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/partners" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Partners', 'Partnership information is coming soon. We are focused on thoughtful, safety-first wellbeing collaborations.')}
+                  >
                     Partners
-                  </a>
+                  </button>
                 </li>
               </ul>
             </nav>
@@ -1053,22 +1175,34 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   </a>
                 </li>
                 <li>
-                  <a href="/contact" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Contact Support', 'For urgent safety concerns, use crisis resources immediately. General support contact options will be available as the platform expands.')}
+                  >
                     Contact Support
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/privacy" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Privacy Policy', 'ManaSarathi is designed around consent, minimal data collection, and user privacy controls. Signed-in users can manage sharing and privacy settings from their profile.')}
+                  >
                     Privacy Policy
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/terms" className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline">
+                  <button
+                    type="button"
+                    className="inline-flex items-center py-2 transition-colors hover:text-primary underline-offset-4 hover:underline"
+                    onClick={() => showInfoDialog('Terms of Service', 'ManaSarathi provides wellbeing support and education, not emergency care or a replacement for professional medical advice.')}
+                  >
                     Terms of Service
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="/crisis" className="inline-flex items-center py-2 text-red-600 transition-colors hover:text-red-700 underline-offset-4 hover:underline">
+                  <a href="tel:988" className="inline-flex items-center py-2 text-red-600 transition-colors hover:text-red-700 underline-offset-4 hover:underline">
                     Crisis Resources
                   </a>
                 </li>
@@ -1108,10 +1242,7 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               </p>
               <form
                 className="space-y-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  // Form validation and submission logic would go here
-                }}
+                onSubmit={handleNewsletterSubmit}
               >
                 <div className="space-y-2">
                   <Label htmlFor="newsletter-email" className="text-xs text-foreground/70">
@@ -1126,6 +1257,11 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                     aria-describedby="newsletter-consent"
                     inputMode="email"
                     autoComplete="email"
+                    value={newsletterEmail}
+                    onChange={(event) => {
+                      setNewsletterEmail(event.target.value);
+                      setNewsletterMessage(null);
+                    }}
                     required
                   />
                 </div>
@@ -1142,6 +1278,15 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
                   </a>
                   . Unsubscribe anytime.
                 </p>
+                {newsletterMessage && (
+                  <p
+                    className={`text-xs ${newsletterMessage.type === 'success' ? 'text-emerald-600' : 'text-destructive'}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {newsletterMessage.text}
+                  </p>
+                )}
               </form>
             </div>
           </div>
@@ -1164,33 +1309,46 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           {/* Bottom Bar - Legal & Copyright */}
           <div className="flex flex-col gap-4 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
             <p className="flex items-center gap-1">
-              © {new Date().getFullYear()} MaanSarathi. All rights reserved.
+              © {new Date().getFullYear()} ManaSarathi. All rights reserved.
             </p>
 
             {/* Legal Links */}
             <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 md:gap-x-6" aria-label="Legal and compliance links">
-              <a href="/privacy" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
-                Privacy
-              </a>
-              <a href="/terms" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
-                Terms
-              </a>
-              <a href="/cookies" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
-                Cookies
-              </a>
               <button
                 type="button"
                 className="transition-colors hover:text-foreground hover:underline underline-offset-4"
-                onClick={() => {
-                  // Cookie preferences modal would open here
-                  console.log('Manage cookie preferences');
-                }}
+                onClick={() => showInfoDialog('Privacy Policy', 'ManaSarathi is designed around consent, minimal data collection, and user privacy controls. Signed-in users can manage sharing and privacy settings from their profile.')}
+              >
+                Privacy
+              </button>
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => showInfoDialog('Terms of Service', 'ManaSarathi provides wellbeing support and education, not emergency care or a replacement for professional medical advice.')}
+              >
+                Terms
+              </button>
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => setIsCookieDialogOpen(true)}
+              >
+                Cookies
+              </button>
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => setIsCookieDialogOpen(true)}
               >
                 Manage Cookies
               </button>
-              <a href="/accessibility" className="transition-colors hover:text-foreground hover:underline underline-offset-4">
+              <button
+                type="button"
+                className="transition-colors hover:text-foreground hover:underline underline-offset-4"
+                onClick={() => showInfoDialog('Accessibility', 'ManaSarathi includes theme, font, motion, and readability controls inside the app experience to support different access needs.')}
+              >
                 Accessibility
-              </a>
+              </button>
             </nav>
 
             <p className="flex items-center gap-1.5">
@@ -1234,24 +1392,63 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
           </DialogHeader>
           <form onSubmit={handleSignUp} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="signup-name">Full name</Label>
-              <Input id="signup-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" required />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="signup-email">Email</Label>
-              <Input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" required />
+              <Input
+                id="signup-email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (signupValidationError) setSignupValidationError(null);
+                }}
+                placeholder="Enter your email"
+                required
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="signup-password">Password</Label>
-              <Input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" minLength={6} required />
+              <div className="relative">
+                <Input
+                  id="signup-password"
+                  type={showSignupPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (signupValidationError) setSignupValidationError(null);
+                  }}
+                  placeholder="Create a strong password"
+                  minLength={8}
+                  className="pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowSignupPassword((prev) => !prev)}
+                  aria-label={showSignupPassword ? 'Hide signup password' : 'Show signup password'}
+                >
+                  {showSignupPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                <p className="mb-1 font-medium text-foreground">Password must include:</p>
+                <ul className="space-y-1">
+                  <li className="flex items-center gap-2">{passwordChecks.minLength ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} 8+ characters</li>
+                  <li className="flex items-center gap-2">{passwordChecks.upper ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Uppercase letter</li>
+                  <li className="flex items-center gap-2">{passwordChecks.lower ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Lowercase letter</li>
+                  <li className="flex items-center gap-2">{passwordChecks.number ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Number</li>
+                  <li className="flex items-center gap-2">{passwordChecks.special ? <CheckCircle className="h-3 w-3 text-green-600" /> : <span className="h-3 w-3 rounded-full border border-muted-foreground" />} Special character</li>
+                </ul>
+              </div>
             </div>
 
-            {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
+            {(signupValidationError || authError) && <p className="text-sm text-destructive" role="alert">{signupValidationError || authError}</p>}
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={!isStrongSignupPassword || !isValidSignupEmail}>
                 Get started
               </Button>
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>
@@ -1293,26 +1490,80 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               <Input
                 id="login-email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder={DEMO_LOGIN_EMAIL}
                 autoComplete="email"
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="login-password">Password</Label>
-              <Input
-                id="login-password"
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="login-password"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  className="pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowLoginPassword((prev) => !prev)}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </div>
             </div>
-            {authError && <p className="text-sm text-destructive" role="alert">{authError}</p>}
+            {(loginError?.error || loginError?.message || authError) && (
+              <div className="space-y-2 text-sm text-destructive" role="alert">
+                <p>{loginError?.error || loginError?.message || authError}</p>
+                {loginError?.suggestion === 'choose_admin_or_user' && (
+                  <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
+                    <p className="text-sm font-semibold text-foreground">Choose your destination</p>
+                    <p className="text-xs text-muted-foreground">
+                      {loginError?.message || 'This account can access both user and admin areas. Select where to continue.'}
+                    </p>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={rememberAdminDestinationChoice}
+                        onChange={(event) => setRememberAdminDestinationChoice(event.target.checked)}
+                      />
+                      Remember my choice on this device
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onChooseLoginAsUser?.(rememberAdminDestinationChoice)}
+                        disabled={!onChooseLoginAsUser}
+                      >
+                        Login as User
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onChooseLoginAsAdmin?.(rememberAdminDestinationChoice)}
+                        disabled={!onChooseLoginAsAdmin}
+                      >
+                        Open Admin Dashboard
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button type="submit" className="flex-1">
                 Log in
@@ -1403,6 +1654,62 @@ export function LandingPage({ onSignUp, onLogin, onAdminLogin, authError, loginE
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCookieDialogOpen} onOpenChange={setIsCookieDialogOpen}>
+        <DialogContent className="max-w-[22rem] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cookie preferences</DialogTitle>
+            <DialogDescription>
+              Essential cookies stay on for security. Choose the optional cookies ManaSarathi can use.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/40 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Essential</p>
+                  <p className="text-sm text-muted-foreground">Required for sign-in, security, and app stability.</p>
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Always on</span>
+              </div>
+            </div>
+            {([
+              ['analytics', 'Analytics', 'Helps us understand app performance and improve important flows.'],
+              ['personalization', 'Personalization', 'Keeps helpful preferences like language, accessibility, and experience settings.'],
+              ['marketing', 'Marketing', 'Allows optional campaign and outreach measurement.'],
+            ] as const).map(([key, title, description]) => (
+              <div key={key} className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                <div className="space-y-1">
+                  <Label htmlFor={`cookie-${key}`} className="font-medium">{title}</Label>
+                  <p className="text-sm text-muted-foreground">{description}</p>
+                </div>
+                <Switch
+                  id={`cookie-${key}`}
+                  checked={cookiePreferences[key]}
+                  onCheckedChange={(checked) => updateCookiePreference(key, checked)}
+                  aria-label={`${title} cookies`}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={saveCookiePreferences}>Save choices</Button>
+            <Button onClick={acceptAllCookies}>Accept all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(infoDialog)} onOpenChange={(open) => !open && setInfoDialog(null)}>
+        <DialogContent className="max-w-[22rem] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{infoDialog?.title}</DialogTitle>
+            <DialogDescription>{infoDialog?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setInfoDialog(null)}>Got it</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
