@@ -614,7 +614,7 @@ function AppInner() {
     }
   };
 
-  const signUp = async (userData: { email: string; password: string }) => {
+  const signUp = async (userData: { name: string; email: string; password: string }) => {
     try {
       setAuthError(null);
 

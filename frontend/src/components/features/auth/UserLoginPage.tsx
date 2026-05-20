@@ -14,7 +14,7 @@ import { DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD } from './defaultCredentials';
 
 interface UserLoginPageProps {
   onLogin: (credentials: { email: string; password: string }) => Promise<void> | void;
-  onSignUp: (userData: { email: string; password: string }) => Promise<void> | void;
+  onSignUp: (userData: { name: string; email: string; password: string }) => Promise<void> | void;
   authError?: string | null;
   loginError?: { message?: string; error?: string; suggestion?: string; verificationUrl?: string } | null;
   onChooseLoginAsUser?: (rememberChoice?: boolean) => Promise<void> | void;
@@ -40,6 +40,7 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [signupEmail, setSignupEmail] = useState('');
+  const [signupName, setSignupName] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -74,6 +75,11 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
   const handleSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!signupName.trim()) {
+      setSignupValidationError('Name is required.');
+      return;
+    }
+
     if (!signupEmail || !signupPassword) {
       return;
     }
@@ -91,7 +97,7 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
     setSignupValidationError(null);
     setIsCreatingAccount(true);
     try {
-      await Promise.resolve(onSignUp({ email: signupEmail, password: signupPassword }));
+      await Promise.resolve(onSignUp({ name: signupName.trim(), email: signupEmail, password: signupPassword }));
     } finally {
       setIsCreatingAccount(false);
     }
@@ -209,6 +215,22 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
 
                 <form className="space-y-4" onSubmit={handleSignUp} noValidate>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-name">Name</Label>
+                    <Input
+                      id="signup-name"
+                      type="text"
+                      value={signupName}
+                      onChange={(event) => {
+                        setSignupName(event.target.value);
+                        if (signupValidationError) setSignupValidationError(null);
+                      }}
+                      placeholder="Enter your name"
+                      autoComplete="name"
+                      required
+                    />
+                  </div>
+
 
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
@@ -264,7 +286,7 @@ export const UserLoginPage: React.FC<UserLoginPageProps> = ({
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={isCreatingAccount || !signupEmail || !signupPassword || !isStrongSignupPassword || !isValidSignupEmail}>
+                  <Button type="submit" className="w-full" disabled={isCreatingAccount || !signupName.trim() || !signupEmail || !signupPassword || !isStrongSignupPassword || !isValidSignupEmail}>
                     {isCreatingAccount ? 'Creating account…' : 'Create account'}
                   </Button>
                 </form>

@@ -17,6 +17,7 @@ import { STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_REGEX, isStrongPassword } from
 
 // Validation schemas
 const registerSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(50).required(),
   email: Joi.string().email().required(),
   password: Joi.string().pattern(STRONG_PASSWORD_REGEX).required().messages({
     'string.pattern.base': STRONG_PASSWORD_MESSAGE,
@@ -253,7 +254,7 @@ export const register = async (req: Request, res: Response) => {
       throw new BadRequestError(error.details[0].message);
     }
 
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
     const emailValidation = validateRegistrationEmail(email);
     if (!emailValidation.isValid) {
       throw new BadRequestError(emailValidation.message || 'Invalid email address');
@@ -274,12 +275,10 @@ export const register = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const name = normalizedEmail.split('@')[0];
-
     // Create user
     const createdUser = await prisma.user.create({
       data: {
-        name,
+        name: name.trim(),
         email: normalizedEmail,
         password: hashedPassword,
         isEmailVerified: true,

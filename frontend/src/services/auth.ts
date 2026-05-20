@@ -145,6 +145,7 @@ export async function loginUser(credentials: {
  * Returns `{ user, token }` on success; throws on failure.
  */
 export async function registerUser(userData: {
+  name: string;
   email: string;
   password: string;
 }): Promise<RegisterResult> {
