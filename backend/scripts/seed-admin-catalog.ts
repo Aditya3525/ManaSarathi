@@ -375,7 +375,37 @@ const contentVideoByIndex = [
 
 function bodyForContent(template: ContentTemplate, title: string) {
   if (template.type === 'story') {
-    return `${title}\n\nRead the story slowly. Notice the emotion it brings up, the interpretation your mind adds, and one gentler way to respond. This is a reflective wellness exercise, not clinical advice.`;
+    const storyBodies: Record<string, string> = {
+      'The Empty Boat Reflection': [
+        'A monk was crossing a river in a small boat when another boat drifted into him and nearly tipped him over. Angry, he shouted at the other traveler for being careless. The mist lifted a little, and he saw the boat was empty. No one had been steering it at all; it had simply drifted with the current.',
+        '',
+        'The monk sat back down, embarrassed by how quickly his mind had filled the empty boat with an enemy. The river had not wronged him. The other boat had not wronged him. His suffering came from the story he added in the moment.',
+        '',
+        'He watched the water and thought, "How often do I do this in daily life? I assume intention, assign blame, and carry anger long after the event has passed." From then on, whenever irritation rose, he tried to pause and ask whether there was really a driver, or only an empty boat moving through the river of life.',
+        '',
+        'Reflection: Some of our strongest reactions come from the meaning we add, not from the event itself. This story invites you to separate what happened from what your mind assumed about it.'
+      ].join('\n'),
+      'Two Arrows Reflection': [
+        'A student received disappointing news and felt the sharp pain of sadness and fear. The first arrow had landed: the loss, the criticism, the difficult moment itself. It hurt, but it was real and finite.',
+        '',
+        'Then the student began to think, "Why does everything go wrong for me? I cannot handle this. This will never improve." Those thoughts became a second arrow, adding shame, panic, and hopelessness to the original pain.',
+        '',
+        'An elder later explained that life may send the first arrow, but the second arrow often comes from resistance, self-judgment, and repeated worry. We cannot always stop the first arrow, but we can learn to notice the second before it deepens the wound.',
+        '',
+        'Reflection: Pain is sometimes unavoidable, but suffering often grows when the mind keeps firing additional arrows. This story encourages noticing the extra story you are telling yourself and responding with steadiness instead of self-attack.'
+      ].join('\n'),
+      'The Guest House Reflection': [
+        'Imagine your heart as a guest house, open at all hours. Some guests arrive with joy, some with fear, some with anger, and some with grief. They do not always knock politely, and they rarely stay as long as we want.',
+        '',
+        'One day a heavy guest arrived and the host wanted to slam the door. "Not now," the host said. "You are too messy." But the guest only stood outside longer, growing louder in the hall. The wiser response was not to fight the guest, but to acknowledge it and make space.',
+        '',
+        'The host learned that each visitor had a message. Joy brought warmth. Fear asked for protection. Anger pointed to a boundary. Grief asked to be honored. None of them defined the house forever; they were simply passing through.',
+        '',
+        'Reflection: Emotions are temporary visitors, not permanent residents. This story invites acceptance, naming, and curiosity so you can notice what is present without becoming overwhelmed by it.'
+      ].join('\n')
+    };
+
+    return storyBodies[title] || `${title}\n\nA reflective story about noticing what your mind adds to an experience, meeting emotion with curiosity, and choosing a gentler response. This is a wellness reflection, not clinical advice.`;
   }
   if (template.contentType === ContentType.JOURNAL_PROMPT) {
     return `Prompt: ${title}\n\n1. What am I noticing right now?\n2. What emotion or need is underneath it?\n3. What is one small action that would support me today?`;
