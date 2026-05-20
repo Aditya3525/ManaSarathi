@@ -67,17 +67,18 @@ export function OAuthCallback({ onAuthSuccess, onAuthError }: OAuthCallbackProps
           throw new Error('Token validation failed');
         }
 
-        const userData = await response.json();
+        const validationResponse = await response.json();
+        const validatedUser = validationResponse?.data?.user ?? validationResponse?.user ?? validationResponse;
 
         // Merge with Google user data if available
         const enhancedUserData = {
-          ...userData,
+          ...validatedUser,
           ...(googleUserData || {}),
           token,
           needsSetup,
           needsPassword: redirectTo === 'setup-password',
           isGoogleUser: !!googleUserData,
-          hasPassword: userData.hasPassword !== undefined ? userData.hasPassword : !!userData.password,
+          hasPassword: validatedUser?.hasPassword !== undefined ? validatedUser.hasPassword : !!validatedUser?.password,
           justCreated: googleUserData?.justCreated
         };
 

@@ -455,18 +455,20 @@ async function seedCatalog() {
   console.log(`Created ${contents.length} content items across ${contentTemplates.length} admin content types.`);
 }
 
-async function main() {
+export async function seedAdminCatalog() {
   console.log('Replacing admin practice/content catalog...');
   await clearCurrentCatalog();
   await seedCatalog();
   console.log('Admin catalog seed complete.');
 }
 
-main()
-  .catch((error) => {
-    console.error('Admin catalog seed failed:', error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  seedAdminCatalog()
+    .catch((error) => {
+      console.error('Admin catalog seed failed:', error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
